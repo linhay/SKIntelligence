@@ -15,7 +15,11 @@ import JSONSchemaBuilder
 public struct SKIToolTavilySearch: SKITool {
    
     public var name: String = "tavily-search"
-    public var description: String = "Tavily 搜索工具，提供基于 Tavily API 的搜索功能。"
+    public var description: String =
+    """
+    Tavily 搜索工具，提供基于 Tavily API 的搜索功能。
+    查询内容推荐英文可以提高准备度. 
+    """
     
     /// Tavily 搜索参数结构体。
     @Schemable

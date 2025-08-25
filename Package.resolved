@@ -1,6 +1,15 @@
 {
-  "originHash" : "2bc10d5c6f18e772acbe7ef2decac7cf865be91d537070c378e82dccc9eadfec",
+  "originHash" : "9ec7137fe4ecf91657a8a140210d9eadfc8f093c71c16c0dbc241f01508097f8",
   "pins" : [
+    {
+      "identity" : "stjson",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/linhay/STJSON",
+      "state" : {
+        "revision" : "7e43080b7b51c87f36d2a57b4c189fc212adf580",
+        "version" : "1.3.1"
+      }
+    },
     {
       "identity" : "swift-asn1",
       "kind" : "remoteSourceControl",

@@ -73,8 +73,8 @@ public extension SKILanguageModelSession {
                                                     ]))
                     body.messages.append(.tool(content: .text(toolOutput), toolCallID: toolCall.id))
                     body.tools = enabledTools()
-                    response = try await client.respond(body)
                 }
+                response = try await client.respond(body)
             } else {
                 break
             }

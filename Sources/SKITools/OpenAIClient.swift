@@ -10,25 +10,24 @@ import SKIntelligence
 import HTTPTypes
 import HTTPTypesFoundation
 
-public struct OpenAIClient: SKILanguageModelClient {
+public class OpenAIClient: SKILanguageModelClient {
     
-    public let token: String
-    public let url: URL
-    public let model: String
+    public enum EmbeddedURL: String {
+        case openai   = "https://api.openai.com/v1/chat/completions"
+        case deepseek = "https://api.deepseek.com/v1/chat/completions"
+    }
+    
+    public enum EmbeddedModel: String {
+        case deepseek_reasoner = "deepseek-reasoner"
+        case deepseek_chat     = "deepseek-chat"
+    }
+    
+    public var token: String = ""
+    public var url: URL = URL(string: EmbeddedURL.openai.rawValue)!
+    public var model: String = ""
     public var headerFields: HTTPFields = .init()
     
-    public init(url: String, token: String, model: String) throws {
-        self.token = token
-        self.model = model
-        
-        if let url = URL(string: url) {
-            self.url = url
-        } else {
-            throw URLError(.badURL)
-        }
-        headerFields[.contentType] = "application/json"
-        headerFields[.authorization] = "Bearer \(token)"
-    }
+    public init() {}
     
     public func editRequestBody(_ body: inout ChatRequestBody) {
         body.model = model
@@ -42,4 +41,38 @@ public struct OpenAIClient: SKILanguageModelClient {
         return try .init(httpResponse: response, data: data)
     }
 
+}
+
+public extension OpenAIClient {
+    
+    func url(_ value: String) throws -> OpenAIClient {
+        if let url = URL(string: value) {
+            self.url = url
+        } else {
+            throw URLError(.badURL)
+        }
+        return self
+    }
+    
+    func url(_ value: EmbeddedURL) -> OpenAIClient {
+        return try! url(value.rawValue)
+    }
+    
+    func token(_ value: String) -> OpenAIClient {
+        self.token = value
+        headerFields[.contentType] = "application/json"
+        headerFields[.authorization] = "Bearer \(token)"
+        return self
+    }
+    
+    func model(_ value: String) -> OpenAIClient {
+        self.model = value
+        return self
+    }
+    
+    func model(_ value: EmbeddedModel) -> OpenAIClient {
+        self.model = value.rawValue
+        return self
+    }
+    
 }
