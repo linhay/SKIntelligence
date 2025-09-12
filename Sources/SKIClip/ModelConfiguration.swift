@@ -7,7 +7,7 @@
 
 import Foundation
 
-public protocol ModelConfigurationProtocol {
+public protocol ModelConfigurationProtocol: Sendable {
     var name: String { get }
     var factory: () -> CLIPEncoder { get }
 }

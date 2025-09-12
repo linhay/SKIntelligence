@@ -6,7 +6,6 @@
 //
 
 import CoreML
-import SectionKit
 import Foundation
 
 public protocol CLIPEncoder: Sendable {
@@ -55,23 +54,21 @@ public extension CLIPEncoder {
         image: CIImage,
         context: CIContext
     ) async throws -> MLMultiArray? {
-       try await SKPerformance.shared.duration {
-            guard let image = image.cropToSquare()?.resize(size: targetImageSize) else { return nil }
-            
-            // output buffer
-            let extent = image.extent
-            let pixelFormat = kCVPixelFormatType_32ARGB
-            var output: CVPixelBuffer?
-            CVPixelBufferCreate(nil, Int(extent.width), Int(extent.height), pixelFormat, nil, &output)
-
-            guard let output else {
-                print("[\(id)] failed to create output CVPixelBuffer")
-                return nil
-            }
-
-            context.render(image, to: output)
-            return try await encode(image: output)
+        guard let image = image.cropToSquare()?.resize(size: targetImageSize) else { return nil }
+        
+        // output buffer
+        let extent = image.extent
+        let pixelFormat = kCVPixelFormatType_32ARGB
+        var output: CVPixelBuffer?
+        CVPixelBufferCreate(nil, Int(extent.width), Int(extent.height), pixelFormat, nil, &output)
+        
+        guard let output else {
+            print("[\(id)] failed to create output CVPixelBuffer")
+            return nil
         }
+        
+        context.render(image, to: output)
+        return try await encode(image: output)
     }
 
     

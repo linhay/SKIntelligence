@@ -15,11 +15,16 @@ public class OpenAIClient: SKILanguageModelClient {
     public enum EmbeddedURL: String {
         case openai   = "https://api.openai.com/v1/chat/completions"
         case deepseek = "https://api.deepseek.com/v1/chat/completions"
+        case moonshot = "https://api.moonshot.cn/v1//chat/completions"
+        case gemini   = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     }
     
     public enum EmbeddedModel: String {
         case deepseek_reasoner = "deepseek-reasoner"
         case deepseek_chat     = "deepseek-chat"
+        case gemini_2_5_pro        = "gemini-2.5-pro"
+        case gemini_2_5_flash      = "gemini-2.5-flash"
+        case gemini_2_5_flash_lite = "gemini-2.5-flash-lite"
     }
     
     public var token: String = ""

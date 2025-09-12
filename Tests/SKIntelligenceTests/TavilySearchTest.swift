@@ -5,8 +5,10 @@ import SKIntelligence
 import SKITools
 
 @Test func test_tavily_search_tool() async throws {
-    let client = try OpenAIClient(url: "https://api.deepseek.com/v1/chat/completions",
-                                  token: Keys.deepseek)
+    let client = OpenAIClient()
+        .model(.deepseek_chat)
+        .token(Keys.deepseek)
+        .url(.deepseek)
     let session = SKILanguageModelSession(client: client,
                                           tools: [
                                             SKIToolLocalDate(),

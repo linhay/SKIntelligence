@@ -93,7 +93,10 @@ class SKIQuestFetchTool: SKITool {
 
 
 @Test func game() async throws {
-    let client = try OpenAIClient(url: "https://api.deepseek.com/v1/chat/completions", token: Keys.deepseek)
+    let client = OpenAIClient()
+        .model(.deepseek_chat)
+        .token(Keys.deepseek)
+        .url(.deepseek)
     let session = SKILanguageModelSession(client: client,
                                           tools: [
                                             SKIToolQueryCalendar(),
@@ -117,7 +120,10 @@ class SKIQuestFetchTool: SKITool {
 
 
 @Test func calendar() async throws {
-    let client = try OpenAIClient(url: "https://api.deepseek.com/v1/chat/completions", token: Keys.deepseek)
+    let client = OpenAIClient()
+        .model(.deepseek_chat)
+        .token(Keys.deepseek)
+        .url(.deepseek)
     let session = SKILanguageModelSession(client: client,
                                           tools: [
                                             SKIToolQueryCalendar(),
@@ -130,8 +136,7 @@ class SKIQuestFetchTool: SKITool {
 }
 
 @Test func translate() async throws {
-    let authentication = SKIBaiduTranslateAuthentication()
-    let tool = SKIToolBaiduTranslate(authentication: authentication)
+    let tool = SKIToolBaiduTranslate(authentication: Keys.baiduAuthentication)
     let response = try await tool.call(.init(q: "测试", from: .auto, to: .en))
     print(response)
 }
