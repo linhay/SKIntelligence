@@ -7,8 +7,62 @@ import CoreML
 import CoreImage
 import QuartzCore
 
-public extension Array where Element == Float {
+public extension String {
     
+    /// 计算两个字符串的 Levenshtein 距离
+    func levenshteinDistance(to other: String) -> Int {
+        let a = Array(self)
+        let b = Array(other)
+        var dp = Array(repeating: Array(repeating: 0, count: b.count + 1), count: a.count + 1)
+        
+        for i in 0...a.count { dp[i][0] = i }
+        for j in 0...b.count { dp[0][j] = j }
+        
+        for i in 1...a.count {
+            for j in 1...b.count {
+                if a[i-1] == b[j-1] {
+                    dp[i][j] = dp[i-1][j-1]
+                } else {
+                    dp[i][j] = min(dp[i-1][j-1], min(dp[i-1][j], dp[i][j-1])) + 1
+                }
+            }
+        }
+        return dp[a.count][b.count]
+    }
+    
+}
+
+public extension Data {
+    
+    /// 从 Data 转换成 [Element]
+    func bindMemory<V>(to element: V.Type) -> [V] {
+        let count = self.count / MemoryLayout<V>.size
+        return self.withUnsafeBytes { rawBuffer in
+            let buffer = rawBuffer.bindMemory(to: V.self)
+            return Array(buffer.prefix(count))
+        }
+    }
+    
+    /// 从 Data 转换成 [Element]
+    func bindMemoryToFloat() -> [Float] {
+        bindMemory(to: Float.self)
+    }
+    
+    
+}
+
+public extension Array {
+    
+    /// 把 [Element] 转换成 Data
+    func toData() -> Data {
+        return withUnsafeBufferPointer { buffer in
+            Data(buffer: buffer)
+        }
+    }
+    
+}
+
+public extension Array where Element == Float {
     func cosineSimilarity(_ e2: [Float]) -> Float {
         // read the values out of the MLMultiArray in bulk
         let e1 = self
@@ -23,7 +77,6 @@ public extension Array where Element == Float {
         let similarity = dotProduct / (magnitude1 * magnitude2)
         return similarity
     }
-    
 }
 
 public extension MLMultiArray {
@@ -32,10 +85,6 @@ public extension MLMultiArray {
         self.withUnsafeBufferPointer(ofType: Float.self) { ptr in
             Array(ptr)
         }
-    }
-    
-    func cosineSimilarity(_ other: MLMultiArray) -> Float {
-        return floats.cosineSimilarity(other.floats)
     }
     
 }

@@ -6,17 +6,17 @@
 import Foundation
 
 /// Asynchronous factory for slow-to-load types.
-public actor AsyncFactory<T: Sendable> {
+public actor AsyncFactory<T: Sendable>: Sendable {
 
     private enum State {
-        case idle( @Sendable () -> T)
+        case idle( @Sendable () async -> T)
         case initializing(Task<T, Never>)
         case initialized(T)
     }
 
     private var state: State
 
-    public init(factory: @Sendable @escaping () -> T) {
+    public init(factory: @Sendable @escaping () async -> T) {
         self.state = .idle(factory)
     }
 
@@ -24,7 +24,7 @@ public actor AsyncFactory<T: Sendable> {
         switch state {
         case .idle(let factory):
             let task = Task {
-                factory()
+               await factory()
             }
             self.state = .initializing(task)
             let value = await task.value
