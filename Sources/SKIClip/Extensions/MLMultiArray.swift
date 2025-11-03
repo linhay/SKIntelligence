@@ -9,10 +9,12 @@ import QuartzCore
 
 public extension String {
     
-    /// 计算两个字符串的 Levenshtein 距离
     func levenshteinDistance(to other: String) -> Int {
         let a = Array(self)
         let b = Array(other)
+        if a.isEmpty { return b.count }
+        if b.isEmpty { return a.count }
+        
         var dp = Array(repeating: Array(repeating: 0, count: b.count + 1), count: a.count + 1)
         
         for i in 0...a.count { dp[i][0] = i }
@@ -20,10 +22,10 @@ public extension String {
         
         for i in 1...a.count {
             for j in 1...b.count {
-                if a[i-1] == b[j-1] {
-                    dp[i][j] = dp[i-1][j-1]
+                if a[i - 1] == b[j - 1] {
+                    dp[i][j] = dp[i - 1][j - 1]
                 } else {
-                    dp[i][j] = min(dp[i-1][j-1], min(dp[i-1][j], dp[i][j-1])) + 1
+                    dp[i][j] = min(dp[i - 1][j - 1], min(dp[i - 1][j], dp[i][j - 1])) + 1
                 }
             }
         }
