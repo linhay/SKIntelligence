@@ -16,6 +16,7 @@ public class OpenAIClient: SKILanguageModelClient {
         case openai   = "https://api.openai.com/v1/chat/completions"
         case deepseek = "https://api.deepseek.com/v1/chat/completions"
         case moonshot = "https://api.moonshot.cn/v1//chat/completions"
+        /// https://aistudio.google.com/apikey
         case gemini   = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     }
     

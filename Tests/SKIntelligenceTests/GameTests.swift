@@ -94,10 +94,12 @@ class SKIQuestFetchTool: SKITool {
 
 @Test func game() async throws {
     let client = OpenAIClient()
-        .model(.deepseek_chat)
-        .token(Keys.deepseek)
-        .url(.deepseek)
+        .model(.gemini_2_5_flash)
+        .token(Keys.google)
+        .url(.gemini)
+    let transcript = SKITranscript()
     let session = SKILanguageModelSession(client: client,
+                                          transcript: transcript,
                                           tools: [
                                             SKIToolQueryCalendar(),
                                             SKIToolLocalDate(),
@@ -121,10 +123,12 @@ class SKIQuestFetchTool: SKITool {
 
 @Test func calendar() async throws {
     let client = OpenAIClient()
-        .model(.deepseek_chat)
-        .token(Keys.deepseek)
-        .url(.deepseek)
+        .model(.gemini_2_5_flash)
+        .token(Keys.google)
+        .url(.gemini)
+    let transcript = SKITranscript()
     let session = SKILanguageModelSession(client: client,
+                                          transcript: transcript,
                                           tools: [
                                             SKIToolQueryCalendar(),
                                             SKIToolLocalDate()
