@@ -15,6 +15,7 @@ import JSONSchemaBuilder
 public struct SKIToolTavilySearch: SKITool {
    
     public var name: String = "tavily-search"
+    public var shortDescription: String = "Web搜索工具"
     public var description: String =
     """
     Tavily 搜索工具，提供基于 Tavily API 的搜索功能。

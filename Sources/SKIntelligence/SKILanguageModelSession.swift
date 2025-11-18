@@ -9,7 +9,6 @@ import Foundation
 
 public class SKILanguageModelSession: SKIChatSection {
 
-    
     public var isResponding: Bool = false
     public let client: SKILanguageModelClient
     public var transcript: SKITranscript
@@ -32,10 +31,14 @@ public extension SKILanguageModelSession {
     func respond(to prompt: String) async throws -> sending String {
        try await respond(to: SKIPrompt.init(stringLiteral: prompt))
     }
-    
-    func respond(to prompt: SKIPrompt) async throws -> sending String {
+
+    func respond<T>(to prompt: SKIPrompt, stopWhen: (SKITranscript.Entry) -> T?) async throws -> sending T? {
         var body = ChatRequestBody(messages: [])
-        await transcript.append(prompt: .user(content: .text(prompt.value), name: nil))
+        
+        var entry = SKITranscript.Entry.prompt(.user(content: .text(prompt.value), name: nil))
+        try await transcript.append(entry: entry)
+        if let value = stopWhen(entry) { return value }
+        
         body.messages = try await transcript.messages()
         body.tools = enabledTools()
         
@@ -43,7 +46,7 @@ public extension SKILanguageModelSession {
         var response = try await client.respond(body)
         var responseMessage: ChoiceMessage?
         
-        while true {
+        while responseMessage == nil {
             guard let message = response.content.choices.first?.message else {
                 break
             }
@@ -54,9 +57,59 @@ public extension SKILanguageModelSession {
                         continue
                     }
                     let toolCall = ChatRequestBody.Message.ToolCall(id: toolCall.id, function: .init(name: tool.name, arguments: arguments))
-                    await transcript.append(toolCalls: toolCall)
+                    
+                    entry = .toolCalls(toolCall)
+                    try await transcript.append(entry: entry)
+                    if let value = stopWhen(entry) { return value }
+                    
                     let toolOutput = try await tool.call(arguments)
-                    await transcript.append(toolOutput: .init(content: .text(toolOutput), toolCall: toolCall))
+                    entry = .toolOutput(.init(content: .text(toolOutput), toolCall: toolCall))
+                    try await transcript.append(entry: entry)
+                    if let value = stopWhen(entry) { return value }
+                }
+                
+                body.tools = enabledTools()
+                body.messages = try await transcript.messages()
+                try await transcript.runOrganizeEntries()
+                response = try await client.respond(body)
+            } else {
+                responseMessage = message
+            }
+        }
+        
+        let result = extractReasoningContent(from: responseMessage)?.content ?? ""
+        
+        entry = .message(.assistant(content: .text(result)))
+        try await transcript.append(entry: entry)
+        if let value = stopWhen(entry) { return value }
+        
+        return nil
+    }
+
+    func respond(to prompt: SKIPrompt) async throws -> sending String {
+        var body = ChatRequestBody(messages: [])
+        try await transcript.append(prompt: .user(content: .text(prompt.value), name: nil))
+        body.messages = try await transcript.messages()
+        body.tools = enabledTools()
+        
+        client.editRequestBody(&body)
+        var response = try await client.respond(body)
+        var responseMessage: ChoiceMessage?
+        
+        while responseMessage == nil {
+            guard let message = response.content.choices.first?.message else {
+                break
+            }
+            if let toolCalls = message.toolCalls {
+                for toolCall in toolCalls {
+                    guard let arguments = toolCall.function.argumentsRaw,
+                          let tool = self.tools[toolCall.function.name] else {
+                        continue
+                    }
+                    let toolCall = ChatRequestBody.Message.ToolCall(id: toolCall.id, function: .init(name: tool.name, arguments: arguments))
+                    try await transcript.append(toolCalls: toolCall)
+                    let toolOutput = try await tool.call(arguments)
+                    try await transcript.append(toolOutput: .init(content: .text(toolOutput), toolCall: toolCall))
                 }
                 body.tools = enabledTools()
                 body.messages = try await transcript.messages()
@@ -68,7 +121,7 @@ public extension SKILanguageModelSession {
         }
         
         let result = extractReasoningContent(from: responseMessage)?.content ?? ""
-        await transcript.append(response: .assistant(content: .text(result)))
+        try await transcript.append(response: .assistant(content: .text(result)))
         try await transcript.runOrganizeEntries()
         return result
     }

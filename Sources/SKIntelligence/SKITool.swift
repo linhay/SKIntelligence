@@ -15,13 +15,20 @@ public protocol SKITool {
     associatedtype Arguments: Schemable where Arguments.Schema.Output == Arguments
     var name: String { get }
     var description: String { get }
+    var shortDescription: String { get }
     var isEnabled: Bool { get }
     func call(_ arguments: Arguments) async throws -> ToolOutput
+    
 }
 
 public extension SKITool {
     
+    var shortDescription: String { description }
     var isEnabled: Bool { true }
+    
+    static func arguments(from instance: String) throws -> Arguments {
+        try Arguments.schema.parseAndValidate(instance: instance)
+    }
     
     func call(_ instance: String) async throws -> String {
         let arguments = try Arguments.schema.parseAndValidate(instance: instance)

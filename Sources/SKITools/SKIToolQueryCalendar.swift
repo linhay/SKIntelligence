@@ -13,6 +13,7 @@ import EventKit
 public struct SKIToolQueryCalendar: SKITool {
   
     public let name: String = "query_calendar_events"
+    public var shortDescription: String = "Query calendar events from the user's system calendars for a specific date or date range."
     public let description: String = """
                     Query events from the user's system calendars for a specific date or date range. 
                     The date range cannot exceed 7 consecutive days. Results will be returned in the user's local time format.

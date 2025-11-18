@@ -358,13 +358,13 @@ public extension ChatRequestBody.Message.ContentPart {
 public extension ChatRequestBody.Message {
     struct ToolCall: Sendable, Encodable {
         /// The ID of the tool call.
-        let id: String
+        public let id: String
 
         /// The type of the tool. Currently, only `function` is supported.
-        let type = "function"
+        public let type = "function"
 
         /// The function that the model called
-        let function: Function
+        public let function: Function
 
         public init(
             id: String,

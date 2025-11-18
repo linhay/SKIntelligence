@@ -15,7 +15,9 @@ public class OpenAIClient: SKILanguageModelClient {
     public enum EmbeddedURL: String {
         case openai   = "https://api.openai.com/v1/chat/completions"
         case deepseek = "https://api.deepseek.com/v1/chat/completions"
-        case moonshot = "https://api.moonshot.cn/v1//chat/completions"
+        case moonshot = "https://api.moonshot.cn/v1/chat/completions"
+        /// https://openrouter.ai/docs/quickstart
+        case openrouter = "https://openrouter.ai/api/v1/chat/completions"
         /// https://aistudio.google.com/apikey
         case gemini   = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
     }

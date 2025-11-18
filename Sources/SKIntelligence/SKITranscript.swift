@@ -9,11 +9,17 @@ import Foundation
 
 public actor SKITranscript {
     
-    public typealias OrganizeEntriesAction = (_ entries: [Entry]) async throws -> [Entry]
-    
+    public typealias OrganizeEntriesAction = @Sendable (_ entries: [Entry]) async throws -> [Entry]
+    public typealias ObserveNewEntry = @Sendable (_ entry: Entry) async throws -> Void
+
     public struct ToolOutput {
-        let content: ChatRequestBody.Message.MessageContent<String, [String]>
-        let toolCall: ChatRequestBody.Message.ToolCall
+        public let content: ChatRequestBody.Message.MessageContent<String, [String]>
+        public let toolCall: ChatRequestBody.Message.ToolCall
+        
+        public init(content: ChatRequestBody.Message.MessageContent<String, [String]>, toolCall: ChatRequestBody.Message.ToolCall) {
+            self.content = content
+            self.toolCall = toolCall
+        }
     }
     
     public enum Entry {
@@ -27,12 +33,16 @@ public actor SKITranscript {
     
     public private(set) var entries: [Entry] = []
     public private(set) var organizeEntries: OrganizeEntriesAction?
-    
+    public private(set) var observeNewEntry: ObserveNewEntry?
     public init() {}
     
 }
 
 public extension SKITranscript {
+    
+    func replaceEntries(_ newEntries: [Entry]) {
+        entries = newEntries
+    }
     
     func runOrganizeEntries() async throws {
         if let entries = try await organizeEntries?(entries) {
@@ -43,6 +53,15 @@ public extension SKITranscript {
     /// 整理记录
     func setOrganizeEntries(_ block: OrganizeEntriesAction?) {
         organizeEntries = block
+    }
+    
+    func runObserveNewEntry(_ entry: Entry) async throws {
+        try await observeNewEntry?(entry)
+    }
+    
+    /// 监听新记录
+    func setObserveNewEntry(_ block: ObserveNewEntry?) {
+        observeNewEntry = block
     }
     
 }
@@ -69,34 +88,35 @@ public extension SKITranscript {
 public extension SKITranscript {
     
     /// Appends a single entry to the transcript.
-    func append(entry: Entry) {
+    func append(entry: Entry) async throws {
         entries.append(entry)
+        try await runObserveNewEntry(entry)
     }
     
-    func append(toolOutput entry: ToolOutput) {
-        append(entry: .toolOutput(entry))
+    func append(toolOutput entry: ToolOutput) async throws  {
+        try await append(entry: .toolOutput(entry))
     }
     
-    func append(toolCalls entry: ChatRequestBody.Message.ToolCall) {
-        append(entry: .toolCalls(entry))
+    func append(toolCalls entry: ChatRequestBody.Message.ToolCall) async throws {
+        try await append(entry: .toolCalls(entry))
     }
     
-    func append(message entry: ChatRequestBody.Message) {
-        append(entry: .message(entry))
+    func append(message entry: ChatRequestBody.Message) async throws {
+        try await append(entry: .message(entry))
     }
     
-    func append(prompt entry: ChatRequestBody.Message) {
-        append(entry: .prompt(entry))
+    func append(prompt entry: ChatRequestBody.Message) async throws {
+        try await append(entry: .prompt(entry))
     }
     
-    func append(response entry: ChatRequestBody.Message) {
-        append(entry: .response(entry))
+    func append(response entry: ChatRequestBody.Message) async throws {
+        try await append(entry: .response(entry))
     }
     
     /// Appends multiple entries to the transcript.
-    func append<S>(contentsOf newEntries: S) where S: Sequence, S.Element == Entry {
+    func append<S>(contentsOf newEntries: S) async throws where S: Sequence, S.Element == Entry {
         for entry in newEntries {
-            append(entry: entry)
+            try await append(entry: entry)
         }
     }
     

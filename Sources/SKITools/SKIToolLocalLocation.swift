@@ -57,6 +57,7 @@ public struct SKIToolLocalLocation: SKITool {
     }
 
     public let name: String = "getCurrentLocation"
+    public var shortDescription: String = "获取当前地理位置"
     public let description: String = "返回当前地理位置的经纬度坐标，可选返回详细地址信息。"
     private let coordinate = LocationCoordinate()
     private let reverseGeocode = SKIToolReverseGeocode()
