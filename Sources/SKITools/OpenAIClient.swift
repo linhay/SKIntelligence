@@ -34,20 +34,26 @@ public class OpenAIClient: SKILanguageModelClient {
     public var url: URL = URL(string: EmbeddedURL.openai.rawValue)!
     public var model: String = ""
     public var headerFields: HTTPFields = .init()
+    public var responseFormat: ChatRequestBody.ResponseFormat?
+    public var session: URLSession
     
-    public init() {}
+    public init(session: URLSession = .tools) {
+        self.session = session
+    }
     
     public func editRequestBody(_ body: inout ChatRequestBody) {
         body.model = model
         body.stream = false
+        body.responseFormat = responseFormat
     }
         
     public func respond(_ body: ChatRequestBody) async throws -> sending SKIResponse<ChatResponseBody> {
         let request = HTTPRequest(method: .post, url: url, headerFields: headerFields)
         let body = try JSONEncoder().encode(body)
-        let (data, response) = try await URLSession.tools.upload(for: request, from: body)
+        let (data, response) = try await session.upload(for: request, from: body)
         return try .init(httpResponse: response, data: data)
     }
+    
 
 }
 

@@ -48,7 +48,7 @@ public struct ChatRequestBody: Sendable, Encodable {
     public let presencePenalty: Double?
 
     /// Specifies the format that the model must output. Please see the docstring on `ResponseFormat` for important usage information
-    public let responseFormat: ResponseFormat?
+    public var responseFormat: ResponseFormat?
 
     /// This feature is in Beta. If specified, our system will make a best effort to sample deterministically, such that repeated requests with the same `seed` and parameters should return the same result. Determinism is not guaranteed, and you should refer to the `systemFingerprint` response parameter to monitor changes in the backend.
     public let seed: Int?
