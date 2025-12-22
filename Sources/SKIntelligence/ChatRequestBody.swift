@@ -236,7 +236,7 @@ public extension ChatRequestBody {
             name: String? = nil
         )
 
-        var role: String {
+       public var role: String {
             switch self {
             case .assistant: "assistant"
             case .developer: "developer"

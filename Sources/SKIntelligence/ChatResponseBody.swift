@@ -143,10 +143,10 @@ public struct Function: Decodable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
-        if let argumentsRaw = try? container.decode(String.self, forKey: .arguments) {
+        if let argumentsRaw = try? container.decode(String.self, forKey: .arguments),
+           let data = argumentsRaw.data(using: .utf8) {
             self.argumentsRaw = argumentsRaw
-            let data = argumentsRaw.data(using: .utf8)!
-            arguments = try (JSONDecoder().decode([String: JSONValue].self, from: data)).untypedDictionary
+            arguments = try? (JSONDecoder().decode([String: JSONValue].self, from: data)).untypedDictionary
         } else {
             argumentsRaw = nil
             arguments = nil

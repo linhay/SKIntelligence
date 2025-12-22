@@ -7,6 +7,8 @@
 
 import Foundation
 
-public protocol SKIChatSection {
-    func respond(to prompt: SKIPrompt) async throws -> sending String
+/// Protocol for chat session implementations.
+public protocol SKIChatSection: Actor {
+    /// Responds to a prompt and returns the model's response.
+    nonisolated func respond(to prompt: SKIPrompt) async throws -> sending String
 }

@@ -10,6 +10,74 @@ import SKIntelligence
 import HTTPTypes
 import HTTPTypesFoundation
 
+// MARK: - Retry Configuration
+
+/// Configuration for retry behavior with exponential backoff.
+public struct RetryConfiguration: Sendable {
+    /// Maximum number of retry attempts (not including the initial attempt)
+    public var maxRetries: Int
+    
+    /// Base delay for exponential backoff (in seconds)
+    public var baseDelay: TimeInterval
+    
+    /// Maximum delay between retries (in seconds)
+    public var maxDelay: TimeInterval
+    
+    /// HTTP status codes that should trigger a retry
+    public var retryableStatusCodes: Set<Int>
+    
+    /// Whether to use jitter to randomize delays
+    public var useJitter: Bool
+    
+    /// Default retry configuration
+    public static let `default` = RetryConfiguration(
+        maxRetries: 3,
+        baseDelay: 1.0,
+        maxDelay: 20.0,
+        retryableStatusCodes: [429, 500, 502, 503, 504],
+        useJitter: true
+    )
+    
+    /// No retry configuration
+    public static let none = RetryConfiguration(
+        maxRetries: 0,
+        baseDelay: 0,
+        maxDelay: 0,
+        retryableStatusCodes: [],
+        useJitter: false
+    )
+    
+    public init(
+        maxRetries: Int = 3,
+        baseDelay: TimeInterval = 1.0,
+        maxDelay: TimeInterval = 20.0,
+        retryableStatusCodes: Set<Int> = [429, 500, 502, 503, 504],
+        useJitter: Bool = true
+    ) {
+        self.maxRetries = maxRetries
+        self.baseDelay = baseDelay
+        self.maxDelay = maxDelay
+        self.retryableStatusCodes = retryableStatusCodes
+        self.useJitter = useJitter
+    }
+    
+    /// Calculates delay for the given attempt using exponential backoff with optional jitter.
+    /// Based on AWS/Google Cloud "full jitter" algorithm.
+    func delay(forAttempt attempt: Int) -> TimeInterval {
+        // Exponential: baseDelay * 2^attempt
+        let exponentialDelay = baseDelay * pow(2.0, Double(attempt))
+        let cappedDelay = min(exponentialDelay, maxDelay)
+        
+        if useJitter {
+            // Full jitter: random value between 0 and cappedDelay
+            return Double.random(in: 0...cappedDelay)
+        }
+        return cappedDelay
+    }
+}
+
+// MARK: - OpenAI Client
+
 public class OpenAIClient: SKILanguageModelClient {
     
     public enum EmbeddedURL: String {
@@ -30,6 +98,8 @@ public class OpenAIClient: SKILanguageModelClient {
         case gemini_2_5_flash_lite = "gemini-2.5-flash-lite"
     }
     
+    // MARK: - Properties
+    
     public var token: String = ""
     public var url: URL = URL(string: EmbeddedURL.openai.rawValue)!
     public var model: String = ""
@@ -37,9 +107,19 @@ public class OpenAIClient: SKILanguageModelClient {
     public var responseFormat: ChatRequestBody.ResponseFormat?
     public var session: URLSession
     
+    /// Request timeout in seconds
+    public var timeoutInterval: TimeInterval = 60
+    
+    /// Retry configuration
+    public var retryConfiguration: RetryConfiguration = .default
+    
+    // MARK: - Initialization
+    
     public init(session: URLSession = .tools) {
         self.session = session
     }
+    
+    // MARK: - SKILanguageModelClient
     
     public func editRequestBody(_ body: inout ChatRequestBody) {
         body.model = model
@@ -48,14 +128,87 @@ public class OpenAIClient: SKILanguageModelClient {
     }
         
     public func respond(_ body: ChatRequestBody) async throws -> sending SKIResponse<ChatResponseBody> {
-        let request = HTTPRequest(method: .post, url: url, headerFields: headerFields)
-        let body = try JSONEncoder().encode(body)
-        let (data, response) = try await session.upload(for: request, from: body)
-        return try .init(httpResponse: response, data: data)
+        var lastError: Error?
+        
+        for attempt in 0...retryConfiguration.maxRetries {
+            do {
+                try Task.checkCancellation()
+                return try await performRequest(body)
+            } catch {
+                lastError = error
+                
+                // Check if we should retry
+                if attempt < retryConfiguration.maxRetries && shouldRetry(error: error) {
+                    let delay = retryConfiguration.delay(forAttempt: attempt)
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    continue
+                }
+                
+                throw error
+            }
+        }
+        
+        // Should not reach here, but just in case
+        throw lastError ?? SKIToolError.retryExhausted(attempts: retryConfiguration.maxRetries + 1, lastError: URLError(.unknown))
     }
     
-
+    // MARK: - Private Methods
+    
+    private func performRequest(_ body: ChatRequestBody) async throws -> SKIResponse<ChatResponseBody> {
+        let request = HTTPRequest(method: .post, url: url, headerFields: headerFields)
+        let bodyData = try JSONEncoder().encode(body)
+        
+        // Create a task with timeout
+        return try await withThrowingTaskGroup(of: SKIResponse<ChatResponseBody>.self) { group in
+            group.addTask {
+                let (data, response) = try await self.session.upload(for: request, from: bodyData)
+                
+                // Check for HTTP errors
+                let statusCode = response.status.code
+                if statusCode >= 400 {
+                    let message = String(data: data, encoding: .utf8)
+                    if statusCode == 429 {
+                        throw SKIToolError.rateLimitExceeded(retryAfter: nil)
+                    }
+                    throw SKIToolError.serverError(statusCode: Int(statusCode), message: message)
+                }
+                
+                return try .init(httpResponse: response, data: data)
+            }
+            
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(self.timeoutInterval * 1_000_000_000))
+                throw SKIToolError.timeout(self.timeoutInterval)
+            }
+            
+            // Return the first completed task, cancel the other
+            guard let result = try await group.next() else {
+                throw SKIToolError.networkUnavailable
+            }
+            group.cancelAll()
+            return result
+        }
+    }
+    
+    private func shouldRetry(error: Error) -> Bool {
+        if let skiError = error as? SKIToolError {
+            return skiError.isRetryable
+        }
+        
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut, .networkConnectionLost, .notConnectedToInternet:
+                return true
+            default:
+                return false
+            }
+        }
+        
+        return false
+    }
 }
+
+// MARK: - Builder Pattern
 
 public extension OpenAIClient {
     
@@ -89,4 +242,14 @@ public extension OpenAIClient {
         return self
     }
     
+    func timeout(_ interval: TimeInterval) -> OpenAIClient {
+        self.timeoutInterval = interval
+        return self
+    }
+    
+    func retry(_ configuration: RetryConfiguration) -> OpenAIClient {
+        self.retryConfiguration = configuration
+        return self
+    }
 }
+

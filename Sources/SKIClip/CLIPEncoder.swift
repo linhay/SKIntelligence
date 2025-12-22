@@ -12,6 +12,8 @@ public protocol CLIPEncoder: Sendable {
     var id: String { get }
     var name: String { get }
     var targetImageSize: CGSize { get }
+    func unlinkImageEncoderModel() async throws
+    func unlinkTextEncoderModel() async throws
     func encode(image: CVPixelBuffer) async throws -> MLMultiArray
     func encode(text: MLMultiArray) async throws -> MLMultiArray
 }

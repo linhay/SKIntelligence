@@ -59,21 +59,25 @@ public struct SKIToolLocalLocation: SKITool {
     public let name: String = "getCurrentLocation"
     public var shortDescription: String = "获取当前地理位置"
     public let description: String = "返回当前地理位置的经纬度坐标，可选返回详细地址信息。"
-    private let coordinate = LocationCoordinate()
     private let reverseGeocode = SKIToolReverseGeocode()
         
     public init() {}
 
     public func call(_ arguments: Arguments) async throws -> ToolOutput {
-        let location = try await withUnsafeThrowingContinuation { continuation in
-            coordinate.current(desiredAccuracy: arguments.desiredAccuracy.flatMap(CLLocationAccuracy.init), completion: { result in
-                do {
-                    continuation.resume(returning: try result.get())
-                } catch {
+        let location = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<CLLocation, Error>) in
+            let coordinator = LocationCoordinator()
+            coordinator.requestLocation(
+                desiredAccuracy: arguments.desiredAccuracy.flatMap(CLLocationAccuracy.init)
+            ) { result in
+                switch result {
+                case .success(let location):
+                    continuation.resume(returning: location)
+                case .failure(let error):
                     continuation.resume(throwing: error)
                 }
-            })
+            }
         }
+        
         if arguments.includeAddress ?? false {
             let address = try await reverseGeocode.call(.init(latitude: location.coordinate.latitude,
                                                               longitude: location.coordinate.longitude)).address
@@ -97,61 +101,108 @@ public struct SKIToolLocalLocation: SKITool {
 
 }
 
-enum LocationError: Error {
+// MARK: - Location Errors
+
+public enum LocationError: Error, LocalizedError {
     case denied
     case unavailable
     case timeout
     case geocodingFailed
+    case unknown(Error)
+    
+    public var errorDescription: String? {
+        switch self {
+        case .denied:
+            return "Location access denied"
+        case .unavailable:
+            return "Location services unavailable"
+        case .timeout:
+            return "Location request timed out"
+        case .geocodingFailed:
+            return "Geocoding failed"
+        case .unknown(let error):
+            return "Location error: \(error.localizedDescription)"
+        }
+    }
 }
 
-class LocationCoordinate: NSObject, CLLocationManagerDelegate {
+// MARK: - Location Coordinator
+
+/// Thread-safe location coordinator that handles a single location request.
+/// Each instance should only be used for one request.
+private final class LocationCoordinator: NSObject, CLLocationManagerDelegate, @unchecked Sendable {
     
-    private var locationManager = CLLocationManager()
+    private let locationManager: CLLocationManager
     private var completion: ((Result<CLLocation, Error>) -> Void)?
+    private let lock = NSLock()
+    private var hasCompleted = false
     
     override init() {
+        self.locationManager = CLLocationManager()
         super.init()
         self.locationManager.delegate = self
     }
     
-    func current(desiredAccuracy: CLLocationAccuracy? = nil,
-                 completion: @escaping (Result<CLLocation, Error>) -> Void) {
-        locationManager.desiredAccuracy = desiredAccuracy ?? .zero
+    func requestLocation(
+        desiredAccuracy: CLLocationAccuracy? = nil,
+        completion: @escaping (Result<CLLocation, Error>) -> Void
+    ) {
+        lock.lock()
         self.completion = completion
+        lock.unlock()
+        
+        locationManager.desiredAccuracy = desiredAccuracy ?? kCLLocationAccuracyBest
+        
         let authStatus = locationManager.authorizationStatus
         switch authStatus {
         case .authorizedWhenInUse, .authorizedAlways:
-            self.locationManager.startUpdatingLocation()
+            locationManager.requestLocation()
         case .notDetermined:
-            self.locationManager.requestWhenInUseAuthorization()
+            locationManager.requestWhenInUseAuthorization()
         default:
-            self.completion?(.failure(LocationError.denied))
-            self.completion = nil
+            completeOnce(with: .failure(LocationError.denied))
         }
     }
+    
+    private func completeOnce(with result: Result<CLLocation, Error>) {
+        lock.lock()
+        guard !hasCompleted, let completion = self.completion else {
+            lock.unlock()
+            return
+        }
+        hasCompleted = true
+        self.completion = nil
+        lock.unlock()
         
+        completion(result)
+    }
+    
+    // MARK: - CLLocationManagerDelegate
+    
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        completion?(.success(location))
-        completion = nil
-        locationManager.stopUpdatingLocation()
+        completeOnce(with: .success(location))
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        completion?(.failure(error))
+        completeOnce(with: .failure(LocationError.unknown(error)))
     }
     
-    func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
-        switch status {
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
-            if completion != nil {
-                self.locationManager.startUpdatingLocation()
+            lock.lock()
+            let hasPendingRequest = completion != nil && !hasCompleted
+            lock.unlock()
+            
+            if hasPendingRequest {
+                manager.requestLocation()
             }
         case .denied, .restricted:
-            self.completion?(.failure(LocationError.denied))
-            self.completion = nil
+            completeOnce(with: .failure(LocationError.denied))
         default:
             break
         }
     }
 }
+

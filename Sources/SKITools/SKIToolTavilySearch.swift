@@ -124,14 +124,25 @@ public struct SKIToolTavilySearch: SKITool {
         )
         request.headerFields[.contentType] = "application/json"
         request.headerFields[.authorization] = "Bearer \(apiKey)"
+        
         // 3. 发出请求
         let (responseBody, response) = try await URLSession.tools.upload(for: request, from: bodyData)
-        // 4. 解析响应
+        
+        // 4. 检查响应状态
+        let statusCode = response.status.code
         guard response.status.kind == .successful else {
-            String(data: responseBody, encoding: .utf8).map { print("Response body: \($0)") }
-            throw URLError(.badServerResponse)
+            let message = String(data: responseBody, encoding: .utf8)
+            if statusCode == 429 {
+                throw SKIToolError.rateLimitExceeded(retryAfter: nil)
+            }
+            throw SKIToolError.serverError(statusCode: Int(statusCode), message: message)
         }
 
-        return try JSONDecoder().decode(ToolOutput.self, from: responseBody)
+        // 5. 解析响应
+        do {
+            return try JSONDecoder().decode(ToolOutput.self, from: responseBody)
+        } catch {
+            throw SKIToolError.decodingFailed(error)
+        }
     }
 }
