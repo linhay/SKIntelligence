@@ -20,9 +20,9 @@ public actor SKITranscript {
                 switch entry {
                 case .message(let content):
                     Swift.print("\(prefixStr)[message] \(content)")
-                case .prompt(let content):
+                case .prompt(_):
                     break
-//                    Swift.print("\(prefixStr)[prompt] \(content)")
+                //                    Swift.print("\(prefixStr)[prompt] \(content)")
                 case .response(let content):
                     Swift.print("\(prefixStr)[response] \(content)")
                 case .toolCalls(let call):

@@ -1,3 +1,4 @@
+#if canImport(CoreML)
 //
 // For licensing see accompanying LICENSE file.
 // Copyright (C) 2024 Apple Inc. All Rights Reserved.
@@ -38,3 +39,4 @@ extension CIImage {
         return self.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
     }
 }
+#endif

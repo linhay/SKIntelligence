@@ -10,6 +10,10 @@ import HTTPTypes
 import HTTPTypesFoundation
 import SKIntelligence
 
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
+
 // MARK: - Retry Configuration
 
 /// Configuration for retry behavior with exponential backoff.

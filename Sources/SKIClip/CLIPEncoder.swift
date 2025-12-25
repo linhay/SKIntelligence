@@ -1,3 +1,4 @@
+#if canImport(CoreML)
 //
 //  CLIPEncoder.swift
 //  SKIntelligence
@@ -75,3 +76,4 @@ public extension CLIPEncoder {
 
     
 }
+#endif

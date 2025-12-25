@@ -1,3 +1,4 @@
+#if canImport(CoreML)
 //
 //  CosineSimilarityMatrix.swift
 //  SKIntelligence
@@ -81,3 +82,4 @@ struct CosineSimilarityMatrixFloat {
     }
     
 }
+#endif

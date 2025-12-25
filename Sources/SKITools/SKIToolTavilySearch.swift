@@ -8,20 +8,24 @@
 import Foundation
 import HTTPTypes
 import HTTPTypesFoundation
-import SKIntelligence
 import JSONSchemaBuilder
+import SKIntelligence
+
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
 
 /// TavilySearch 封装了 Tavily API 的搜索功能。
 public struct SKIToolTavilySearch: SKITool {
-   
+
     public var name: String = "tavily-search"
     public var shortDescription: String = "Web搜索工具"
     public var description: String =
-    """
-    Tavily 搜索工具，提供基于 Tavily API 的搜索功能。
-    查询内容推荐英文可以提高准备度. 
-    """
-    
+        """
+        Tavily 搜索工具，提供基于 Tavily API 的搜索功能。
+        查询内容推荐英文可以提高准备度. 
+        """
+
     /// Tavily 搜索参数结构体。
     @Schemable
     public struct Arguments: Codable {
@@ -51,7 +55,7 @@ public struct SKIToolTavilySearch: SKITool {
         public enum SearchDepth: String, Codable {
             case basic, advanced
         }
-        
+
         /// Tavily 搜索参数初始化方法。
         /// - Parameters:
         ///   - query: 查询内容
@@ -61,13 +65,15 @@ public struct SKIToolTavilySearch: SKITool {
         ///   - max_results: 最大结果数
         ///   - include_answer: 是否包含答案
         ///   - include_raw_content: 是否包含原始内容
-        public init(query: String,
-             topic: Topic? = nil,
-             search_depth: SearchDepth? = nil,
-             chunks_per_source: Int? = nil,
-             max_results: Int? = nil,
-             include_answer: Bool? = true,
-             include_raw_content: Bool? = true) {
+        public init(
+            query: String,
+            topic: Topic? = nil,
+            search_depth: SearchDepth? = nil,
+            chunks_per_source: Int? = nil,
+            max_results: Int? = nil,
+            include_answer: Bool? = true,
+            include_raw_content: Bool? = true
+        ) {
             self.query = query
             self.topic = topic
             self.search_depth = search_depth
@@ -77,7 +83,7 @@ public struct SKIToolTavilySearch: SKITool {
             self.include_raw_content = include_raw_content
         }
     }
-    
+
     /// Tavily API 响应结构体。
     @Schemable
     public struct ToolOutput: Codable, Sendable {
@@ -89,7 +95,7 @@ public struct SKIToolTavilySearch: SKITool {
         /// 搜索结果数组。
         @SchemaOptions(.description("搜索结果数组"))
         public let results: [Result]
-        
+
         /// 单条搜索结果。
         @Schemable
         public struct Result: Codable, Sendable {
@@ -107,11 +113,11 @@ public struct SKIToolTavilySearch: SKITool {
 
     /// API 密钥。
     public var apiKey: String
-    
+
     public init(apiKey: String) {
         self.apiKey = apiKey
     }
-    
+
     public func call(_ arguments: Arguments) async throws -> ToolOutput {
         // 1. 构造 URL 和 JSON 请求体
         let url = URL(string: "https://api.tavily.com/search")!
@@ -124,10 +130,11 @@ public struct SKIToolTavilySearch: SKITool {
         )
         request.headerFields[.contentType] = "application/json"
         request.headerFields[.authorization] = "Bearer \(apiKey)"
-        
+
         // 3. 发出请求
-        let (responseBody, response) = try await URLSession.tools.upload(for: request, from: bodyData)
-        
+        let (responseBody, response) = try await URLSession.tools.upload(
+            for: request, from: bodyData)
+
         // 4. 检查响应状态
         let statusCode = response.status.code
         guard response.status.kind == .successful else {

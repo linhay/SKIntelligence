@@ -1,3 +1,4 @@
+#if canImport(CoreML)
 //
 //  ModelConfiguration.swift
 //  SKIntelligence
@@ -60,3 +61,4 @@ public struct ModelConfiguration: ModelConfigurationProtocol {
     }
 
 }
+#endif

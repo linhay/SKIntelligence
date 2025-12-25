@@ -1,3 +1,4 @@
+#if canImport(CoreML)
 import Accelerate
 import Foundation
 
@@ -217,3 +218,4 @@ private extension SKISimilarityIndex {
         return normalized
     }
 }
+#endif

@@ -32,24 +32,24 @@ let package = Package(
             name: "SKITools",
             dependencies: [
                 "SKIntelligence",
-                "STJSON"
+                "STJSON",
             ]
         ),
         .target(
             name: "SKIClip",
             dependencies: [
-                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "Crypto", package: "swift-crypto")
             ],
             resources: [
                 .process("Resources/clip-merges.txt"),
-                .process("Resources/clip-vocab.json")
+                .process("Resources/clip-vocab.json"),
             ],
             cSettings: [
                 .define("ACCELERATE_NEW_LAPACK")
             ],
             swiftSettings: [
                 .define("ACCELERATE_NEW_LAPACK")
-            ]
+            ],
         ),
         .testTarget(
             name: "SKIntelligenceTests",

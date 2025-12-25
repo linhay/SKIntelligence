@@ -1,3 +1,4 @@
+#if canImport(CoreML)
 //
 //  SKIVectorObject.swift
 //  SKIntelligence
@@ -40,3 +41,4 @@ public extension SKISimilarityIndex {
     }
     
 }
+#endif

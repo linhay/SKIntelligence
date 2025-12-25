@@ -7,11 +7,15 @@
 
 import Foundation
 
-public extension URLSession {
-    
-    static let tools = {
+#if canImport(FoundationNetworking)
+    import FoundationNetworking
+#endif
+
+extension URLSession {
+
+    public static let tools = {
         let config = URLSessionConfiguration.default
         return URLSession(configuration: config)
     }()
-    
+
 }

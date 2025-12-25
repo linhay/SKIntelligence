@@ -1,3 +1,4 @@
+#if canImport(CoreML)
 import Foundation
 
 /// 文本查询的辅助结构（不需要 ID）
@@ -514,3 +515,4 @@ private extension SKITextIndexObject {
             .folding(options: .diacriticInsensitive, locale: .current)
     }
 }
+#endif
