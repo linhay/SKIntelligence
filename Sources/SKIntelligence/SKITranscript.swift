@@ -8,67 +8,101 @@
 import Foundation
 
 public actor SKITranscript {
-    
+
     public typealias OrganizeEntriesAction = @Sendable (_ entries: [Entry]) async throws -> [Entry]
-    public typealias ObserveNewEntry = @Sendable (_ entry: Entry) async throws -> Void
+    public typealias ObserveNewEntryBlock = @Sendable (_ entry: Entry) async throws -> Void
+
+    public struct ObserveNewEntry {
+
+        public static func print(prefix: String = "") -> ObserveNewEntry {
+            .init { entry in
+                let prefixStr = prefix.isEmpty ? "" : "[\(prefix)] "
+                switch entry {
+                case .message(let content):
+                    Swift.print("\(prefixStr)[message] \(content)")
+                case .prompt(let content):
+                    break
+//                    Swift.print("\(prefixStr)[prompt] \(content)")
+                case .response(let content):
+                    Swift.print("\(prefixStr)[response] \(content)")
+                case .toolCalls(let call):
+                    Swift.print(
+                        "\(prefixStr)[toolCall] id: \(call.id), function: \(call.function.name), arguments: \(call.function.arguments ?? "")"
+                    )
+                case .toolOutput(let output):
+                    Swift.print(
+                        "\(prefixStr)[toolOutput] toolCallId: \(output.toolCall.id), content: \(output.content)"
+                    )
+                }
+            }
+        }
+
+        public let block: ObserveNewEntryBlock
+        public init(block: @escaping ObserveNewEntryBlock) {
+            self.block = block
+        }
+    }
 
     public struct ToolOutput {
         public let content: ChatRequestBody.Message.MessageContent<String, [String]>
         public let toolCall: ChatRequestBody.Message.ToolCall
-        
-        public init(content: ChatRequestBody.Message.MessageContent<String, [String]>, toolCall: ChatRequestBody.Message.ToolCall) {
+
+        public init(
+            content: ChatRequestBody.Message.MessageContent<String, [String]>,
+            toolCall: ChatRequestBody.Message.ToolCall
+        ) {
             self.content = content
             self.toolCall = toolCall
         }
     }
-    
+
     public enum Entry {
         case prompt(ChatRequestBody.Message)
         case message(ChatRequestBody.Message)
         case response(ChatRequestBody.Message)
-        
+
         case toolCalls(ChatRequestBody.Message.ToolCall)
         case toolOutput(ToolOutput)
     }
-    
+
     public private(set) var entries: [Entry] = []
     public private(set) var organizeEntries: OrganizeEntriesAction?
     public private(set) var observeNewEntry: ObserveNewEntry?
     public init() {}
-    
+
 }
 
-public extension SKITranscript {
-    
-    func replaceEntries(_ newEntries: [Entry]) {
+extension SKITranscript {
+
+    public func replaceEntries(_ newEntries: [Entry]) {
         entries = newEntries
     }
-    
-    func runOrganizeEntries() async throws {
+
+    public func runOrganizeEntries() async throws {
         if let entries = try await organizeEntries?(entries) {
             self.entries = entries
         }
     }
-    
+
     /// 整理记录
-    func setOrganizeEntries(_ block: OrganizeEntriesAction?) {
+    public func setOrganizeEntries(_ block: OrganizeEntriesAction?) {
         organizeEntries = block
     }
-    
-    func runObserveNewEntry(_ entry: Entry) async throws {
-        try await observeNewEntry?(entry)
+
+    public func runObserveNewEntry(_ entry: Entry) async throws {
+        try await observeNewEntry?.block(entry)
     }
-    
+
     /// 监听新记录
-    func setObserveNewEntry(_ block: ObserveNewEntry?) {
+    public func setObserveNewEntry(_ block: ObserveNewEntry?) {
         observeNewEntry = block
     }
-    
+
 }
 
-public extension SKITranscript {
-    
-    func messages() async throws -> [ChatRequestBody.Message] {
+extension SKITranscript {
+
+    public func messages() async throws -> [ChatRequestBody.Message] {
         var list = [ChatRequestBody.Message]()
         for entry in self.entries {
             switch entry {
@@ -82,58 +116,59 @@ public extension SKITranscript {
         }
         return list
     }
-    
+
 }
 
-public extension SKITranscript {
-    
+extension SKITranscript {
+
     /// Appends a single entry to the transcript.
-    func append(entry: Entry) async throws {
+    public func append(entry: Entry) async throws {
         entries.append(entry)
         try await runObserveNewEntry(entry)
     }
-    
-    func append(toolOutput entry: ToolOutput) async throws  {
+
+    public func append(toolOutput entry: ToolOutput) async throws {
         try await append(entry: .toolOutput(entry))
     }
-    
-    func append(toolCalls entry: ChatRequestBody.Message.ToolCall) async throws {
+
+    public func append(toolCalls entry: ChatRequestBody.Message.ToolCall) async throws {
         try await append(entry: .toolCalls(entry))
     }
-    
-    func append(message entry: ChatRequestBody.Message) async throws {
+
+    public func append(message entry: ChatRequestBody.Message) async throws {
         try await append(entry: .message(entry))
     }
-    
-    func append(prompt entry: ChatRequestBody.Message) async throws {
+
+    public func append(prompt entry: ChatRequestBody.Message) async throws {
         try await append(entry: .prompt(entry))
     }
-    
-    func append(response entry: ChatRequestBody.Message) async throws {
+
+    public func append(response entry: ChatRequestBody.Message) async throws {
         try await append(entry: .response(entry))
     }
-    
+
     /// Appends multiple entries to the transcript.
-    func append<S>(contentsOf newEntries: S) async throws where S: Sequence, S.Element == Entry {
+    public func append<S>(contentsOf newEntries: S) async throws
+    where S: Sequence, S.Element == Entry {
         for entry in newEntries {
             try await append(entry: entry)
         }
     }
-    
+
 }
 
 extension SKITranscript {
-    
+
     public subscript(_ index: Int) -> Entry {
         entries[index]
     }
-    
+
     public var startIndex: Int {
         entries.startIndex
     }
-    
+
     public var endIndex: Int {
         entries.endIndex
     }
-    
+
 }

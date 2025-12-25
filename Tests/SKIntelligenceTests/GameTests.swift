@@ -240,11 +240,18 @@ struct GameTests {
     /// Default client configuration for game tests
     private var client: OpenAIClient {
         OpenAIClient()
-            .timeout(120)
             .model("nex-agi/deepseek-v3.1-nex-n1:free")
             .model("xiaomi/mimo-v2-flash:free")
             .token(Keys.openrouter)
             .url(.openrouter)
+    }
+    
+    private var transcript: SKITranscript {
+        get async {
+            let transcript = SKITranscript()
+            await transcript.setObserveNewEntry(.print())
+            return transcript
+        }
     }
     
     // MARK: - RPG Scenario Tests
@@ -252,9 +259,9 @@ struct GameTests {
     /// Test: Complete RPG scenario with NPC and quest interactions
     @Test("RPG scenario with NPC recruitment and quest progression")
     func rpgScenario() async throws {
-        let session = SKILanguageModelSession(
+        let session = await SKILanguageModelSession(
             client: client,
-            transcript: SKITranscript(),
+            transcript: transcript,
             tools: [
                 SKIToolLocalDate(),
                 GameTools.NPCManager(),
@@ -287,9 +294,11 @@ struct GameTests {
     /// Test: Quest management workflow
     @Test("Quest management with multiple queries")
     func questManagement() async throws {
-        let session = SKILanguageModelSession(
+
+        
+        let session = await SKILanguageModelSession(
             client: client,
-            transcript: SKITranscript(),
+            transcript: transcript,
             tools: [GameTools.QuestManager()]
         )
         

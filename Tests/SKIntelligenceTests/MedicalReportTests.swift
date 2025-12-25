@@ -16,26 +16,33 @@ import SKITools
 struct MedicalReportTests {
     
     // MARK: - Test: Medical Report Image Analysis
-    let imageURL = URL(string: "https://img1p.dxycdn.com/p/s115/2025/1022/933/8212768101915001891.jpg%21q70?Expires=1766400049&OSSAccessKeyId=LTAI5t8gdqA59d55WCEDtWsJ&Signature=2vGVzkoZnqiB%2BbEwc6vYVwXKn9U%3D")
+    let imageURL = URL(string: "https://img1p.dxycdn.com/p/s115/2025/1022/933/8212768101915001891.jpg%21q70?Expires=1766569966&OSSAccessKeyId=LTAI5t8gdqA59d55WCEDtWsJ&Signature=WWSuDHoN7UeyhiTy%2FidyGodTs4Q%3D")
     
     // 配置客户端
     let client = OpenAIClient()
-        .timeout(120)
-        .model("nvidia/nemotron-nano-12b-v2-vl:free")
         .model("google/gemma-3-27b-it:free")
         .model("qwen/qwen-2.5-vl-7b-instruct:free")
+        .model("nvidia/nemotron-nano-12b-v2-vl:free")
         .token(Keys.openrouter)
         .url(.openrouter)
 //        .model(.gemini_2_5_flash)
 //        .token(Keys.google)
 //        .url(.gemini)
     
+    private var transcript: SKITranscript {
+        get async {
+            let transcript = SKITranscript()
+            await transcript.setObserveNewEntry(.print())
+            return transcript
+        }
+    }
+    
     /// 测试使用图片URL进行医疗报告识别
     @Test("Analyze medical report from image URL")
     func analyzeReportFromURL() async throws {
-        let session = SKILanguageModelSession(
+        let session = await SKILanguageModelSession(
             client: client,
-            transcript: SKITranscript()
+            transcript: transcript
         )
         
         // 使用公开可用的血常规报告样例图片
@@ -74,9 +81,9 @@ struct MedicalReportTests {
     @Test("Analyze medical report from image data")
     func analyzeReportFromData() async throws {
         
-        let session = SKILanguageModelSession(
+        let session = await SKILanguageModelSession(
             client: client,
-            transcript: SKITranscript()
+            transcript: transcript
         )
         
 
