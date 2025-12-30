@@ -109,7 +109,6 @@ public class OpenAIClient: SKILanguageModelClient {
     public var url: URL = URL(string: EmbeddedURL.openai.rawValue)!
     public var model: String = ""
     public var headerFields: HTTPFields = .init()
-    public var responseFormat: ChatRequestBody.ResponseFormat?
     public var session: URLSession
 
     /// Request timeout in seconds (nil means no timeout)
@@ -126,16 +125,11 @@ public class OpenAIClient: SKILanguageModelClient {
 
     // MARK: - SKILanguageModelClient
 
-    public func editRequestBody(_ body: inout ChatRequestBody) {
+    public func respond(_ body: ChatRequestBody) async throws -> sending SKIResponse<ChatResponseBody> {
+        var lastError: Error?
+        var body = body
         body.model = model
         body.stream = false
-        body.responseFormat = responseFormat
-    }
-
-    public func respond(_ body: ChatRequestBody) async throws
-        -> sending SKIResponse<ChatResponseBody>
-    {
-        var lastError: Error?
 
         for attempt in 0...retryConfiguration.maxRetries {
             do {

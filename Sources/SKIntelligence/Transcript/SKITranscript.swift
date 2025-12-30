@@ -54,6 +54,16 @@ public actor SKITranscript {
             self.content = content
             self.toolCall = toolCall
         }
+
+        /// Extracts string content from the tool output.
+        public var contentString: String {
+            switch content {
+            case .text(let text):
+                return text
+            case .parts(let parts):
+                return parts.joined(separator: "\n")
+            }
+        }
     }
 
     public enum Entry {
@@ -63,11 +73,33 @@ public actor SKITranscript {
 
         case toolCalls(ChatRequestBody.Message.ToolCall)
         case toolOutput(ToolOutput)
+
+        /// Converts this entry to a SKIMemoryMessage.
+        ///
+        /// - Returns: The equivalent memory message, or nil if conversion is not applicable.
+        public func toMemoryMessage() -> SKIMemoryMessage? {
+            switch self {
+            case .prompt(let msg), .message(let msg), .response(let msg):
+                return SKIMemoryMessage(from: msg)
+            case .toolCalls(let call):
+                return .tool(
+                    "Tool call: \(call.function.name)(\(call.function.arguments ?? ""))",
+                    toolName: call.function.name)
+            case .toolOutput(let output):
+                return .tool(output.contentString, toolName: output.toolCall.function.name)
+            }
+        }
     }
 
     public private(set) var entries: [Entry] = []
     public private(set) var organizeEntries: OrganizeEntriesAction?
     public private(set) var observeNewEntry: ObserveNewEntry?
+
+    /// Optional memory for persisting conversation history.
+    public internal(set) var memory: (any SKIMemory)?
+    /// Whether to automatically sync entries to memory.
+    public var syncToMemory: Bool = true
+
     public init() {}
 
 }
@@ -125,6 +157,11 @@ extension SKITranscript {
     public func append(entry: Entry) async throws {
         entries.append(entry)
         try await runObserveNewEntry(entry)
+
+        // Sync to memory if enabled
+        if syncToMemory, let memory = memory, let memoryMessage = entry.toMemoryMessage() {
+            await memory.add(memoryMessage)
+        }
     }
 
     public func append(toolOutput entry: ToolOutput) async throws {

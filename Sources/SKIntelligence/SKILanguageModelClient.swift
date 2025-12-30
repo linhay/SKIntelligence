@@ -8,7 +8,6 @@
 import Foundation
 
 public protocol SKILanguageModelClient {
-    func editRequestBody(_ body: inout ChatRequestBody)
     func respond(_ body: ChatRequestBody) async throws -> sending SKIResponse<ChatResponseBody>
 }
 

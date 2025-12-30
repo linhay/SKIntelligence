@@ -42,45 +42,36 @@ extension SKILanguageModelSession {
         try await respond(to: SKIPrompt(stringLiteral: prompt))
     }
 
-    /// Responds to a prompt with a custom stop condition.
-    ///
-    /// - Parameters:
-    ///   - prompt: The user prompt.
-    ///   - stopWhen: A closure that evaluates each transcript entry. If it returns a non-nil value,
-    ///               the generation loop stops and returns that value.
-    /// - Returns: The value returned by `stopWhen`, or `nil` if generation completed normally.
-    public nonisolated func respond<T>(
-        to prompt: SKIPrompt, stopWhen: @Sendable @escaping (SKITranscript.Entry) -> T?
-    ) async throws -> sending T? {
-        try Task.checkCancellation()
-
-        let entry = SKITranscript.Entry.prompt(prompt.message)
-        try await appendEntry(entry)
-        if let value = stopWhen(entry) { return value }
-
-        return try await runGenerationLoop(
-            onEntry: { entry in
-                if let value = stopWhen(entry) {
-                    return .stop(value)
-                }
-                return .continue
-            },
-            finalizeTranscript: false
-        )
-    }
-
     /// Responds to a prompt and returns the model's response.
-    public nonisolated func respond(to prompt: SKIPrompt) async throws -> sending String {
+    public nonisolated func respond(
+        to prompt: SKIPrompt
+    ) async throws -> sending String {
         try Task.checkCancellation()
-
         try await appendEntry(.prompt(prompt.message))
-
         let result: String? = try await runGenerationLoop(
-            onEntry: { _ in .continue },
-            finalizeTranscript: true
+            beforeRequests: nil,
+            onEntry: { _ in .continue }
         )
-
         return result ?? ""
+    }
+    
+    /// Responds to a prompt and returns the model's response.
+    public nonisolated func respond<Response: Codable>(
+        to prompt: SKIPrompt,
+        type: Response.Type,
+        decoder: JSONDecoder = JSONDecoder()
+    ) async throws -> sending Response {
+        try Task.checkCancellation()
+        try await appendEntry(.prompt(prompt.message))
+        let result: String? = try await runGenerationLoop { body in
+            body.responseFormat = .jsonObject
+        } onEntry: { entry in
+            return .continue
+        }
+        guard let result = result, let data = result.data(using: .utf8) else {
+            throw SKIToolError.serverError(statusCode: 400, message: "Empty response")
+        }
+        return try decoder.decode(type, from: data)
     }
 
     /// Clears the conversation history while preserving system messages.
@@ -133,8 +124,11 @@ extension SKILanguageModelSession {
 
 extension SKILanguageModelSession {
 
+    public typealias BeforeRequests = @Sendable (_ body: inout ChatRequestBody) async throws -> Void
+    public typealias OnEntry<T> = @Sendable (SKITranscript.Entry) async throws -> EntryProcessingResult<T>
+
     /// Result of processing a transcript entry during generation.
-    fileprivate enum EntryProcessingResult<T> {
+    public enum EntryProcessingResult<T> {
         case `continue`
         case stop(T)
     }
@@ -144,6 +138,8 @@ extension SKILanguageModelSession {
         try await transcript.append(entry: entry)
     }
 
+
+    
     /// The core generation loop that handles tool calls and response extraction.
     ///
     /// This method encapsulates the shared logic between different `respond` variants.
@@ -152,15 +148,14 @@ extension SKILanguageModelSession {
     ///   - onEntry: Called for each new transcript entry. Returns whether to continue or stop.
     ///   - finalizeTranscript: Whether to run `organizeEntries` after completion.
     /// - Returns: Either the stop value from `onEntry`, or the final response string.
-    fileprivate func runGenerationLoop<T>(
-        onEntry: @Sendable @escaping (SKITranscript.Entry) async throws -> EntryProcessingResult<T>,
-        finalizeTranscript: Bool
+    private func runGenerationLoop<T>(
+        beforeRequests: BeforeRequests?,
+        onEntry: @escaping OnEntry<T>
     ) async throws -> T? {
         var body = ChatRequestBody(messages: [])
         body.messages = try await transcript.messages()
         body.tools = enabledTools()
-
-        client.editRequestBody(&body)
+        try await beforeRequests?(&body)
         var response = try await client.respond(body)
         var responseMessage: ChoiceMessage?
 
@@ -216,7 +211,6 @@ extension SKILanguageModelSession {
 
                 body.tools = enabledTools()
                 body.messages = try await transcript.messages()
-                try await transcript.runOrganizeEntries()
                 response = try await client.respond(body)
             } else {
                 responseMessage = message
@@ -230,10 +224,6 @@ extension SKILanguageModelSession {
 
         if case .stop(let value) = try await onEntry(responseEntry) {
             return value
-        }
-
-        if finalizeTranscript {
-            try await transcript.runOrganizeEntries()
         }
 
         // For the simple respond case, we return the result as T (which is String)
