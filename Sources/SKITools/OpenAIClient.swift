@@ -240,32 +240,20 @@ public class OpenAIClient: SKILanguageModelClient {
             urlRequest.timeoutInterval = timeout
         }
 
-        // Capture self weakly for the stream closure
+        // Capture session for the stream closure
         let session = self.session
 
         return SKIResponseStream { [urlRequest] in
             AsyncThrowingStream { continuation in
                 let task = Task {
                     do {
-                        let (bytes, response) = try await session.bytes(for: urlRequest)
-
-                        // Check HTTP status
-                        if let httpResponse = response as? HTTPURLResponse {
-                            let statusCode = httpResponse.statusCode
-                            if statusCode >= 400 {
-                                if statusCode == 429 {
-                                    throw SKIToolError.rateLimitExceeded(retryAfter: nil)
-                                }
-                                throw SKIToolError.serverError(
-                                    statusCode: statusCode, message: "HTTP \(statusCode)")
-                            }
-                        }
-
                         var parser = ServerEventParser()
                         let decoder = JSONDecoder()
 
-                        // Read line by line from the byte stream
-                        for try await line in bytes.lines {
+                        // Use cross-platform HTTPLineStream
+                        let lineStream = session.lineStream(for: urlRequest)
+
+                        for try await line in lineStream {
                             try Task.checkCancellation()
 
                             guard let lineData = (line + "\n\n").data(using: .utf8) else {
