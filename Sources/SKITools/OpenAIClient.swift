@@ -125,7 +125,9 @@ public class OpenAIClient: SKILanguageModelClient {
 
     // MARK: - SKILanguageModelClient
 
-    public func respond(_ body: ChatRequestBody) async throws -> sending SKIResponse<ChatResponseBody> {
+    public func respond(_ body: ChatRequestBody) async throws
+        -> sending SKIResponse<ChatResponseBody>
+    {
         var lastError: Error?
         var body = body
         body.model = model
@@ -213,6 +215,106 @@ public class OpenAIClient: SKILanguageModelClient {
         }
 
         return false
+    }
+
+    // MARK: - Streaming
+
+    public func streamingRespond(_ body: ChatRequestBody) async throws -> SKIResponseStream {
+        var body = body
+        body.model = model
+        body.stream = true
+
+        let bodyData = try JSONEncoder().encode(body)
+
+        // Build URLRequest for streaming
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        for field in headerFields {
+            urlRequest.setValue(field.value, forHTTPHeaderField: field.name.rawName)
+        }
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        urlRequest.httpBody = bodyData
+
+        if let timeout = timeoutInterval {
+            urlRequest.timeoutInterval = timeout
+        }
+
+        // Capture self weakly for the stream closure
+        let session = self.session
+
+        return SKIResponseStream { [urlRequest] in
+            AsyncThrowingStream { continuation in
+                let task = Task {
+                    do {
+                        let (bytes, response) = try await session.bytes(for: urlRequest)
+
+                        // Check HTTP status
+                        if let httpResponse = response as? HTTPURLResponse {
+                            let statusCode = httpResponse.statusCode
+                            if statusCode >= 400 {
+                                if statusCode == 429 {
+                                    throw SKIToolError.rateLimitExceeded(retryAfter: nil)
+                                }
+                                throw SKIToolError.serverError(
+                                    statusCode: statusCode, message: "HTTP \(statusCode)")
+                            }
+                        }
+
+                        var parser = ServerEventParser()
+                        let decoder = JSONDecoder()
+
+                        // Read line by line from the byte stream
+                        for try await line in bytes.lines {
+                            try Task.checkCancellation()
+
+                            guard let lineData = (line + "\n\n").data(using: .utf8) else {
+                                continue
+                            }
+
+                            let events = parser.parse(lineData)
+
+                            for event in events {
+                                // Skip [DONE] signal
+                                if event.isDone {
+                                    continuation.finish()
+                                    return
+                                }
+
+                                guard let dataString = event.data,
+                                    let jsonData = dataString.data(using: .utf8)
+                                else {
+                                    continue
+                                }
+
+                                do {
+                                    let chunk = try decoder.decode(
+                                        ChatStreamResponseChunk.self, from: jsonData)
+
+                                    for choice in chunk.choices {
+                                        // Yield raw chunks (including tool call deltas)
+                                        let responseChunk = SKIResponseChunk(from: choice)
+                                        continuation.yield(responseChunk)
+                                    }
+                                } catch {
+                                    // Skip malformed JSON chunks
+                                    continue
+                                }
+                            }
+                        }
+
+                        continuation.finish()
+                    } catch {
+                        continuation.finish(throwing: error)
+                    }
+                }
+
+                continuation.onTermination = { @Sendable _ in
+                    task.cancel()
+                }
+            }
+        }
+
     }
 }
 

@@ -54,7 +54,7 @@ extension SKILanguageModelSession {
         )
         return result ?? ""
     }
-    
+
     /// Responds to a prompt and returns the model's response.
     public nonisolated func respond<Response: Codable>(
         to prompt: SKIPrompt,
@@ -74,7 +74,152 @@ extension SKILanguageModelSession {
         return try decoder.decode(type, from: data)
     }
 
+    /// Responds to a simple string prompt with streaming output.
+    ///
+    /// Usage:
+    /// ```swift
+    /// for try await chunk in try await session.streamResponse(to: "Hello") {
+    ///     print(chunk.text ?? "")
+    /// }
+    /// ```
+    public nonisolated func streamResponse(to prompt: String) async throws -> SKIResponseStream {
+        try await streamResponse(to: SKIPrompt(stringLiteral: prompt))
+    }
+
+    /// Responds to a prompt with streaming output.
+    ///
+    /// Returns an `SKIResponseStream` that yields chunks as they are generated.
+    /// Tool calls are automatically executed, and the model continues generating.
+    /// - Parameter prompt: The prompt to respond to
+    /// - Returns: A stream of response chunks
+    public nonisolated func streamResponse(to prompt: SKIPrompt) async throws -> SKIResponseStream {
+        try Task.checkCancellation()
+        try await appendEntry(.prompt(prompt.message))
+
+        // Capture session reference for the streaming closure
+        let session = self
+
+        return SKIResponseStream {
+            AsyncThrowingStream { continuation in
+                Task {
+                    do {
+                        try await session.runStreamingGenerationLoop(continuation: continuation)
+                    } catch {
+                        continuation.finish(throwing: error)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Internal streaming generation loop that handles tool execution.
+    private func runStreamingGenerationLoop(
+        continuation: AsyncThrowingStream<SKIResponseChunk, Error>.Continuation
+    ) async throws {
+        var body = ChatRequestBody(messages: [])
+        body.messages = try await transcript.messages()
+        body.tools = enabledTools()
+
+        var shouldContinue = true
+
+        while shouldContinue {
+            try Task.checkCancellation()
+
+            let rawStream = try await client.streamingRespond(body)
+            let toolCollector = ToolCallCollector()
+            var accumulatedText = ""
+
+            // Process the stream
+            for try await chunk in rawStream {
+                // Accumulate tool call deltas
+                if let deltas = chunk.toolCallDeltas {
+                    for delta in deltas {
+                        toolCollector.submit(delta: delta)
+                    }
+                }
+
+                // Yield text/reasoning chunks immediately
+                if chunk.text != nil || chunk.reasoning != nil {
+                    let cleanChunk = SKIResponseChunk(
+                        text: chunk.text,
+                        reasoning: chunk.reasoning,
+                        finishReason: chunk.finishReason,
+                        role: chunk.role
+                    )
+                    continuation.yield(cleanChunk)
+
+                    if let text = chunk.text {
+                        accumulatedText += text
+                    }
+                }
+            }
+
+            // Finalize tool calls
+            toolCollector.finalizeCurrentToolCall()
+
+            if !toolCollector.pendingRequests.isEmpty {
+                // Execute tools and continue
+                for toolRequest in toolCollector.pendingRequests {
+                    try Task.checkCancellation()
+
+                    guard let tool = self.tools[toolRequest.name] else {
+                        continue
+                    }
+
+                    // Yield tool request info to stream
+                    let toolChunk = SKIResponseChunk(
+                        toolRequests: [toolRequest]
+                    )
+                    continuation.yield(toolChunk)
+
+                    // Add tool call to transcript
+                    let requestToolCall = ChatRequestBody.Message.ToolCall(
+                        id: toolRequest.id ?? UUID().uuidString,
+                        function: .init(name: toolRequest.name, arguments: toolRequest.arguments)
+                    )
+                    let toolCallEntry = SKITranscript.Entry.toolCalls(requestToolCall)
+                    try await transcript.append(entry: toolCallEntry)
+
+                    // Execute tool with error handling
+                    let toolOutput: String
+                    do {
+                        toolOutput = try await tool.call(toolRequest.arguments)
+                    } catch {
+                        toolOutput = """
+                            {"error": "Tool execution failed", "tool": "\(tool.name)", "message": "\(error.localizedDescription)"}
+                            """
+                    }
+
+                    // Add tool output to transcript
+                    let outputEntry = SKITranscript.Entry.toolOutput(
+                        .init(content: .text(toolOutput), toolCall: requestToolCall)
+                    )
+                    try await transcript.append(entry: outputEntry)
+                }
+
+                // Continue with new request
+                body.tools = enabledTools()
+                body.messages = try await transcript.messages()
+                shouldContinue = true
+            } else {
+                // No tool calls - we're done
+                shouldContinue = false
+
+                // Add final response to transcript
+                if !accumulatedText.isEmpty {
+                    let responseEntry = SKITranscript.Entry.message(
+                        .assistant(content: .text(accumulatedText))
+                    )
+                    try await transcript.append(entry: responseEntry)
+                }
+            }
+        }
+
+        continuation.finish()
+    }
+
     /// Clears the conversation history while preserving system messages.
+
     public func clear() async {
         let systemEntries = await transcript.entries.filter { entry in
             if case .message(let msg) = entry, msg.role == "system" {
@@ -125,7 +270,8 @@ extension SKILanguageModelSession {
 extension SKILanguageModelSession {
 
     public typealias BeforeRequests = @Sendable (_ body: inout ChatRequestBody) async throws -> Void
-    public typealias OnEntry<T> = @Sendable (SKITranscript.Entry) async throws -> EntryProcessingResult<T>
+    public typealias OnEntry<T> =
+        @Sendable (SKITranscript.Entry) async throws -> EntryProcessingResult<T>
 
     /// Result of processing a transcript entry during generation.
     public enum EntryProcessingResult<T> {
@@ -138,8 +284,6 @@ extension SKILanguageModelSession {
         try await transcript.append(entry: entry)
     }
 
-
-    
     /// The core generation loop that handles tool calls and response extraction.
     ///
     /// This method encapsulates the shared logic between different `respond` variants.
