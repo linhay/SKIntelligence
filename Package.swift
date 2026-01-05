@@ -17,6 +17,7 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "602.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.3.0"),
         .package(url: "https://github.com/linhay/STJSON", from: "1.3.1"),
+        .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.11.0")),
     ],
     targets: [
         .target(
@@ -33,6 +34,7 @@ let package = Package(
             dependencies: [
                 "SKIntelligence",
                 "STJSON",
+                .product(name: "Alamofire", package: "Alamofire"),
             ]
         ),
         .target(

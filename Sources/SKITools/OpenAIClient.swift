@@ -5,14 +5,10 @@
 //  Created by linhey on 6/14/25.
 //
 
+import Alamofire
 import Foundation
 import HTTPTypes
-import HTTPTypesFoundation
 import SKIntelligence
-
-#if canImport(FoundationNetworking)
-    import FoundationNetworking
-#endif
 
 // MARK: - Retry Configuration
 
@@ -109,7 +105,7 @@ public class OpenAIClient: SKILanguageModelClient {
     public var url: URL = URL(string: EmbeddedURL.openai.rawValue)!
     public var model: String = ""
     public var headerFields: HTTPFields = .init()
-    public var session: URLSession
+    public var session: Session
 
     /// Request timeout in seconds (nil means no timeout)
     public var timeoutInterval: TimeInterval? = nil
@@ -119,7 +115,7 @@ public class OpenAIClient: SKILanguageModelClient {
 
     // MARK: - Initialization
 
-    public init(session: URLSession = .tools) {
+    public init(session: Session = .default) {
         self.session = session
     }
 
@@ -162,41 +158,56 @@ public class OpenAIClient: SKILanguageModelClient {
     private func performRequest(_ body: ChatRequestBody) async throws -> SKIResponse<
         ChatResponseBody
     > {
-        let request = HTTPRequest(method: .post, url: url, headerFields: headerFields)
         let bodyData = try JSONEncoder().encode(body)
+        var httpHeaders = HTTPHeaders()
+        for field in headerFields {
+            httpHeaders.add(name: field.name.rawName, value: field.value)
+        }
 
-        // Create a task with optional timeout
-        return try await withThrowingTaskGroup(of: SKIResponse<ChatResponseBody>.self) { group in
-            group.addTask {
-                let (data, response) = try await self.session.upload(for: request, from: bodyData)
+        return try await withCheckedThrowingContinuation { continuation in
+            let request = session.request(
+                url,
+                method: .post,
+                headers: httpHeaders
+            ) { urlRequest in
+                urlRequest.httpBody = bodyData
+                urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                if let timeout = self.timeoutInterval {
+                    urlRequest.timeoutInterval = timeout
+                }
+            }
 
-                // Check for HTTP errors
-                let statusCode = response.status.code
-                if statusCode >= 400 {
-                    let message = String(data: data, encoding: .utf8)
-                    if statusCode == 429 {
-                        throw SKIToolError.rateLimitExceeded(retryAfter: nil)
+            request.responseData { response in
+                switch response.result {
+                case .success(let data):
+                    // Check for HTTP errors
+                    if let statusCode = response.response?.statusCode, statusCode >= 400 {
+                        let message = String(data: data, encoding: .utf8)
+                        if statusCode == 429 {
+                            continuation.resume(
+                                throwing: SKIToolError.rateLimitExceeded(retryAfter: nil))
+                        } else {
+                            continuation.resume(
+                                throwing: SKIToolError.serverError(
+                                    statusCode: statusCode, message: message))
+                        }
+                        return
                     }
-                    throw SKIToolError.serverError(statusCode: Int(statusCode), message: message)
+
+                    do {
+                        let httpResponse = HTTPResponse(
+                            status: .init(code: response.response?.statusCode ?? 200))
+                        let result = try SKIResponse<ChatResponseBody>(
+                            httpResponse: httpResponse, data: data)
+                        continuation.resume(returning: result)
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
+
+                case .failure(let error):
+                    continuation.resume(throwing: error)
                 }
-
-                return try .init(httpResponse: response, data: data)
             }
-
-            // Only add timeout task if timeoutInterval is set
-            if let timeout = self.timeoutInterval {
-                group.addTask {
-                    try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    throw SKIToolError.timeout(timeout)
-                }
-            }
-
-            // Return the first completed task, cancel the other
-            guard let result = try await group.next() else {
-                throw SKIToolError.networkUnavailable
-            }
-            group.cancelAll()
-            return result
         }
     }
 
@@ -205,12 +216,16 @@ public class OpenAIClient: SKILanguageModelClient {
             return skiError.isRetryable
         }
 
-        if let urlError = error as? URLError {
-            switch urlError.code {
-            case .timedOut, .networkConnectionLost, .notConnectedToInternet:
-                return true
-            default:
-                return false
+        if let afError = error as? AFError {
+            if case .sessionTaskFailed(let underlyingError) = afError,
+                let urlError = underlyingError as? URLError
+            {
+                switch urlError.code {
+                case .timedOut, .networkConnectionLost, .notConnectedToInternet:
+                    return true
+                default:
+                    return false
+                }
             }
         }
 
@@ -226,83 +241,91 @@ public class OpenAIClient: SKILanguageModelClient {
 
         let bodyData = try JSONEncoder().encode(body)
 
-        // Build URLRequest for streaming
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = "POST"
+        var httpHeaders = HTTPHeaders()
         for field in headerFields {
-            urlRequest.setValue(field.value, forHTTPHeaderField: field.name.rawName)
+            httpHeaders.add(name: field.name.rawName, value: field.value)
         }
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        urlRequest.httpBody = bodyData
+        httpHeaders.add(name: "Content-Type", value: "application/json")
+        httpHeaders.add(name: "Accept", value: "text/event-stream")
 
-        if let timeout = timeoutInterval {
-            urlRequest.timeoutInterval = timeout
-        }
-
-        // Capture session for the stream closure
         let session = self.session
+        let url = self.url
+        let timeout = self.timeoutInterval
+        let headers = httpHeaders  // Capture as let for Sendable
 
-        return SKIResponseStream { [urlRequest] in
+        return SKIResponseStream {
             AsyncThrowingStream { continuation in
-                let task = Task {
-                    do {
-                        var parser = ServerEventParser()
-                        let decoder = JSONDecoder()
-
-                        // Use cross-platform HTTPLineStream
-                        let lineStream = session.lineStream(for: urlRequest)
-
-                        for try await line in lineStream {
-                            try Task.checkCancellation()
-
-                            guard let lineData = (line + "\n\n").data(using: .utf8) else {
-                                continue
-                            }
-
-                            let events = parser.parse(lineData)
-
-                            for event in events {
-                                // Skip [DONE] signal
-                                if event.isDone {
-                                    continuation.finish()
-                                    return
-                                }
-
-                                guard let dataString = event.data,
-                                    let jsonData = dataString.data(using: .utf8)
-                                else {
-                                    continue
-                                }
-
-                                do {
-                                    let chunk = try decoder.decode(
-                                        ChatStreamResponseChunk.self, from: jsonData)
-
-                                    for choice in chunk.choices {
-                                        // Yield raw chunks (including tool call deltas)
-                                        let responseChunk = SKIResponseChunk(from: choice)
-                                        continuation.yield(responseChunk)
-                                    }
-                                } catch {
-                                    // Skip malformed JSON chunks
-                                    continue
-                                }
-                            }
-                        }
-
-                        continuation.finish()
-                    } catch {
-                        continuation.finish(throwing: error)
+                let streamRequest = session.streamRequest(
+                    url,
+                    method: .post,
+                    headers: headers
+                ) { urlRequest in
+                    urlRequest.httpBody = bodyData
+                    if let timeout = timeout {
+                        urlRequest.timeoutInterval = timeout
                     }
                 }
 
+                var parser = ServerEventParser()
+                let decoder = JSONDecoder()
+
+                streamRequest
+                    .validate(statusCode: 200..<300)
+                    .responseStreamString { stream in
+                        switch stream.event {
+                        case .stream(let result):
+                            switch result {
+                            case .success(let string):
+                                // Parse SSE events from the string
+                                guard let data = string.data(using: .utf8) else { return }
+                                let events = parser.parse(data)
+
+                                for event in events {
+                                    // Skip [DONE] signal
+                                    if event.isDone {
+                                        continuation.finish()
+                                        return
+                                    }
+
+                                    guard let dataString = event.data,
+                                        let jsonData = dataString.data(using: .utf8)
+                                    else {
+                                        continue
+                                    }
+
+                                    do {
+                                        let chunk = try decoder.decode(
+                                            ChatStreamResponseChunk.self, from: jsonData)
+
+                                        for choice in chunk.choices {
+                                            let responseChunk = SKIResponseChunk(from: choice)
+                                            continuation.yield(responseChunk)
+                                        }
+                                    } catch {
+                                        // Skip malformed JSON chunks
+                                        continue
+                                    }
+                                }
+
+                            case .failure(_):
+                                // Ignore individual chunk failures
+                                break
+                            }
+
+                        case .complete(let completion):
+                            if let error = completion.error {
+                                continuation.finish(throwing: error)
+                            } else {
+                                continuation.finish()
+                            }
+                        }
+                    }
+
                 continuation.onTermination = { @Sendable _ in
-                    task.cancel()
+                    streamRequest.cancel()
                 }
             }
         }
-
     }
 }
 
@@ -347,6 +370,11 @@ extension OpenAIClient {
 
     public func retry(_ configuration: RetryConfiguration) -> OpenAIClient {
         self.retryConfiguration = configuration
+        return self
+    }
+
+    public func session(_ value: Session) -> OpenAIClient {
+        self.session = value
         return self
     }
 }
