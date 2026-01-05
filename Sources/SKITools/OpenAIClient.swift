@@ -164,51 +164,39 @@ public class OpenAIClient: SKILanguageModelClient {
             httpHeaders.add(name: field.name.rawName, value: field.value)
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let request = session.request(
-                url,
-                method: .post,
-                headers: httpHeaders
-            ) { urlRequest in
-                urlRequest.httpBody = bodyData
-                urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                if let timeout = self.timeoutInterval {
-                    urlRequest.timeoutInterval = timeout
-                }
-            }
-
-            request.responseData { response in
-                switch response.result {
-                case .success(let data):
-                    // Check for HTTP errors
-                    if let statusCode = response.response?.statusCode, statusCode >= 400 {
-                        let message = String(data: data, encoding: .utf8)
-                        if statusCode == 429 {
-                            continuation.resume(
-                                throwing: SKIToolError.rateLimitExceeded(retryAfter: nil))
-                        } else {
-                            continuation.resume(
-                                throwing: SKIToolError.serverError(
-                                    statusCode: statusCode, message: message))
-                        }
-                        return
-                    }
-
-                    do {
-                        let httpResponse = HTTPResponse(
-                            status: .init(code: response.response?.statusCode ?? 200))
-                        let result = try SKIResponse<ChatResponseBody>(
-                            httpResponse: httpResponse, data: data)
-                        continuation.resume(returning: result)
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
-
-                case .failure(let error):
-                    continuation.resume(throwing: error)
-                }
+        let request = session.request(
+            url,
+            method: .post,
+            headers: httpHeaders
+        ) { urlRequest in
+            urlRequest.httpBody = bodyData
+            if let timeout = self.timeoutInterval {
+                urlRequest.timeoutInterval = timeout
             }
         }
+
+        let response = await request.serializingData().response
+
+        // Check for errors
+        if let error = response.error {
+            throw error
+        }
+
+        guard let data = response.data else {
+            throw SKIToolError.networkUnavailable
+        }
+
+        // Check for HTTP errors
+        if let statusCode = response.response?.statusCode, statusCode >= 400 {
+            let message = String(data: data, encoding: .utf8)
+            if statusCode == 429 {
+                throw SKIToolError.rateLimitExceeded(retryAfter: nil)
+            }
+            throw SKIToolError.serverError(statusCode: statusCode, message: message)
+        }
+
+        let httpResponse = HTTPResponse(status: .init(code: response.response?.statusCode ?? 200))
+        return try SKIResponse<ChatResponseBody>(httpResponse: httpResponse, data: data)
     }
 
     private func shouldRetry(error: Error) -> Bool {
@@ -248,24 +236,19 @@ public class OpenAIClient: SKILanguageModelClient {
         httpHeaders.add(name: "Content-Type", value: "application/json")
         httpHeaders.add(name: "Accept", value: "text/event-stream")
 
-        let session = self.session
-        let url = self.url
-        let timeout = self.timeoutInterval
-        let headers = httpHeaders  // Capture as let for Sendable
+        let streamRequest = session.streamRequest(
+            url,
+            method: .post,
+            headers: httpHeaders
+        ) { [timeoutInterval] urlRequest in
+            urlRequest.httpBody = bodyData
+            if let timeout = timeoutInterval {
+                urlRequest.timeoutInterval = timeout
+            }
+        }
 
         return SKIResponseStream {
             AsyncThrowingStream { continuation in
-                let streamRequest = session.streamRequest(
-                    url,
-                    method: .post,
-                    headers: headers
-                ) { urlRequest in
-                    urlRequest.httpBody = bodyData
-                    if let timeout = timeout {
-                        urlRequest.timeoutInterval = timeout
-                    }
-                }
-
                 var parser = ServerEventParser()
                 let decoder = JSONDecoder()
 
@@ -274,42 +257,25 @@ public class OpenAIClient: SKILanguageModelClient {
                     .responseStreamString { stream in
                         switch stream.event {
                         case .stream(let result):
-                            switch result {
-                            case .success(let string):
-                                // Parse SSE events from the string
+                            if case .success(let string) = result {
                                 guard let data = string.data(using: .utf8) else { return }
-                                let events = parser.parse(data)
 
-                                for event in events {
-                                    // Skip [DONE] signal
+                                for event in parser.parse(data) {
                                     if event.isDone {
                                         continuation.finish()
                                         return
                                     }
 
                                     guard let dataString = event.data,
-                                        let jsonData = dataString.data(using: .utf8)
-                                    else {
-                                        continue
-                                    }
-
-                                    do {
-                                        let chunk = try decoder.decode(
+                                        let jsonData = dataString.data(using: .utf8),
+                                        let chunk = try? decoder.decode(
                                             ChatStreamResponseChunk.self, from: jsonData)
+                                    else { continue }
 
-                                        for choice in chunk.choices {
-                                            let responseChunk = SKIResponseChunk(from: choice)
-                                            continuation.yield(responseChunk)
-                                        }
-                                    } catch {
-                                        // Skip malformed JSON chunks
-                                        continue
+                                    for choice in chunk.choices {
+                                        continuation.yield(SKIResponseChunk(from: choice))
                                     }
                                 }
-
-                            case .failure(_):
-                                // Ignore individual chunk failures
-                                break
                             }
 
                         case .complete(let completion):
