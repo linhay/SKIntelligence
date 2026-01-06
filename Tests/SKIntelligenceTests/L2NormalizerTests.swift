@@ -6,7 +6,9 @@
 //
 
 import XCTest
-import SKIClip 
+import SKIClip
+
+#if canImport(CoreML) 
 
 // MARK: - L2Normalizer 单元测试
 final class L2NormalizerTests: XCTestCase {
@@ -62,3 +64,5 @@ final class L2NormalizerTests: XCTestCase {
         XCTAssertEqual(normalizedVector[1], 4 / 5.0, accuracy: 1e-10)
     }
 }
+
+#endif

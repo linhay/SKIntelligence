@@ -4,6 +4,8 @@ import JSONSchemaBuilder
 import SKIntelligence
 import SKITools
 
+#if canImport(CoreLocation)
+
 @Test func test_tavily_search_tool() async throws {
     let client = OpenAIClient()
         .model(.deepseek_chat)
@@ -23,3 +25,5 @@ import SKITools
     print(response)
     
 }
+
+#endif

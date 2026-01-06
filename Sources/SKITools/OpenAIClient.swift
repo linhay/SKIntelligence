@@ -6,6 +6,7 @@
 //
 
 import Alamofire
+import EventSource
 import Foundation
 import HTTPTypes
 import SKIntelligence
@@ -229,66 +230,64 @@ public class OpenAIClient: SKILanguageModelClient {
 
         let bodyData = try JSONEncoder().encode(body)
 
-        var httpHeaders = HTTPHeaders()
-        for field in headerFields {
-            httpHeaders.add(name: field.name.rawName, value: field.value)
-        }
-        httpHeaders.add(name: "Content-Type", value: "application/json")
-        httpHeaders.add(name: "Accept", value: "text/event-stream")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = bodyData
 
-        let streamRequest = session.streamRequest(
-            url,
-            method: .post,
-            headers: httpHeaders
-        ) { [timeoutInterval] urlRequest in
-            urlRequest.httpBody = bodyData
-            if let timeout = timeoutInterval {
-                urlRequest.timeoutInterval = timeout
-            }
+        for field in headerFields {
+            request.setValue(field.value, forHTTPHeaderField: field.name.rawName)
         }
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+
+        if let timeout = timeoutInterval {
+            request.timeoutInterval = timeout
+        }
+
+        let finalRequest = request
 
         return SKIResponseStream {
             AsyncThrowingStream { continuation in
-                var parser = ServerEventParser()
+                let eventSource = EventSource(request: finalRequest)
                 let decoder = JSONDecoder()
 
-                streamRequest
-                    .validate(statusCode: 200..<300)
-                    .responseStreamString { stream in
-                        switch stream.event {
-                        case .stream(let result):
-                            if case .success(let string) = result {
-                                guard let data = string.data(using: .utf8) else { return }
+                eventSource.onOpen = { @Sendable in
+                    // Connection opened
+                }
 
-                                for event in parser.parse(data) {
-                                    if event.isDone {
-                                        continuation.finish()
-                                        return
-                                    }
+                eventSource.onError = { @Sendable error in
+                    if let error {
+                        continuation.finish(throwing: error)
+                    } else {
+                        // Reconnection attempt or close
+                    }
+                }
 
-                                    guard let dataString = event.data,
-                                        let jsonData = dataString.data(using: .utf8),
-                                        let chunk = try? decoder.decode(
-                                            ChatStreamResponseChunk.self, from: jsonData)
-                                    else { continue }
-
-                                    for choice in chunk.choices {
-                                        continuation.yield(SKIResponseChunk(from: choice))
-                                    }
-                                }
-                            }
-
-                        case .complete(let completion):
-                            if let error = completion.error {
-                                continuation.finish(throwing: error)
-                            } else {
-                                continuation.finish()
-                            }
-                        }
+                eventSource.onMessage = { @Sendable event in
+                    if event.data == "[DONE]" {
+                        await eventSource.close()
+                        continuation.finish()
+                        return
                     }
 
+                    guard let jsonData = event.data.data(using: .utf8),
+                        let chunk = try? decoder.decode(
+                            ChatStreamResponseChunk.self, from: jsonData)
+                    else {
+                        return
+                    }
+
+                    for choice in chunk.choices {
+                        continuation.yield(SKIResponseChunk(from: choice))
+                    }
+                }
+
+                // Connect implicitly via init
+
                 continuation.onTermination = { @Sendable _ in
-                    streamRequest.cancel()
+                    Task {
+                        await eventSource.close()
+                    }
                 }
             }
         }

@@ -1,6 +1,8 @@
 import XCTest
 @testable import SKIClip
 
+#if canImport(CoreML)
+
 final class SKITextIndexPerformanceTests: XCTestCase {
     
     var textIndex: SKITextIndex<String>!
@@ -232,3 +234,5 @@ final class SKITextIndexPerformanceTests: XCTestCase {
         return Date().timeIntervalSince(start)
     }
 }
+
+#endif

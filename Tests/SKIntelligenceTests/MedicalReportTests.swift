@@ -10,6 +10,8 @@ import Foundation
 import SKIntelligence
 import SKITools
 
+#if !os(Linux)
+
 /// 医疗报告识别测试用例
 /// Medical Report Recognition Test Cases
 @Suite("Medical Report Recognition")
@@ -124,3 +126,5 @@ struct MedicalReportTests {
         #expect(jpegURL?.absoluteString.hasPrefix("data:image/jpeg;base64,") == true)
     }
 }
+
+#endif

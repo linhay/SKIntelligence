@@ -18,6 +18,7 @@ public actor SKILanguageModelSession: SKIChatSection {
     public var transcript: SKITranscript
 
     private var tools = [String: any SKITool]()
+    private var mcpTools = [String: SKIMCPTool]()
 
     public init(
         client: SKILanguageModelClient,
@@ -162,7 +163,10 @@ extension SKILanguageModelSession {
                 for toolRequest in toolCollector.pendingRequests {
                     try Task.checkCancellation()
 
-                    guard let tool = self.tools[toolRequest.name] else {
+                    guard
+                        self.tools[toolRequest.name] != nil
+                            || self.mcpTools[toolRequest.name] != nil
+                    else {
                         continue
                     }
 
@@ -183,10 +187,17 @@ extension SKILanguageModelSession {
                     // Execute tool with error handling
                     let toolOutput: String
                     do {
-                        toolOutput = try await tool.call(toolRequest.arguments)
+                        if let tool = self.tools[toolRequest.name] {
+                            toolOutput = try await tool.call(toolRequest.arguments)
+                        } else if let mcpTool = self.mcpTools[toolRequest.name] {
+                            let args = try? toolRequest.argumentsDictionary()
+                            toolOutput = try await mcpTool.call(args)
+                        } else {
+                            toolOutput = ""
+                        }
                     } catch {
                         toolOutput = """
-                            {"error": "Tool execution failed", "tool": "\(tool.name)", "message": "\(error.localizedDescription)"}
+                            {"error": "Tool execution failed", "tool": "\(toolRequest.name)", "message": "\(error.localizedDescription)"}
                             """
                     }
 
@@ -243,6 +254,16 @@ extension SKILanguageModelSession {
         tools[tool.name] = tool
     }
 
+    public func register(mcpTool: SKIMCPTool) {
+        mcpTools[mcpTool.name] = mcpTool
+    }
+
+    public func register(mcpTools: [SKIMCPTool]) {
+        for tool in mcpTools {
+            register(mcpTool: tool)
+        }
+    }
+
     /// Unregisters a tool by name.
     public func unregister(toolNamed name: String) {
         tools.removeValue(forKey: name)
@@ -259,6 +280,9 @@ extension SKILanguageModelSession {
                     parameters: tool.schemaParameters,
                     strict: true
                 ))
+        }
+        for tool in self.mcpTools.values {
+            result.append(tool.definition)
         }
         return result.isEmpty ? nil : result
     }
@@ -315,14 +339,15 @@ extension SKILanguageModelSession {
                     try Task.checkCancellation()
 
                     guard let arguments = toolCall.function.argumentsRaw,
-                        let tool = self.tools[toolCall.function.name]
+                        self.tools[toolCall.function.name] != nil
+                            || self.mcpTools[toolCall.function.name] != nil
                     else {
                         continue
                     }
 
                     let requestToolCall = ChatRequestBody.Message.ToolCall(
                         id: toolCall.id,
-                        function: .init(name: tool.name, arguments: arguments)
+                        function: .init(name: toolCall.function.name, arguments: arguments)
                     )
 
                     let toolCallEntry = SKITranscript.Entry.toolCalls(requestToolCall)
@@ -335,11 +360,17 @@ extension SKILanguageModelSession {
                     // Execute tool with error handling
                     let toolOutput: String
                     do {
-                        toolOutput = try await tool.call(arguments)
+                        if let tool = self.tools[toolCall.function.name] {
+                            toolOutput = try await tool.call(arguments)
+                        } else if let mcpTool = self.mcpTools[toolCall.function.name] {
+                            toolOutput = try await mcpTool.call(toolCall.function.arguments)
+                        } else {
+                            toolOutput = ""
+                        }
                     } catch {
                         // Return error information to the model instead of failing
                         toolOutput = """
-                            {"error": "Tool execution failed", "tool": "\(tool.name)", "message": "\(error.localizedDescription)"}
+                            {"error": "Tool execution failed", "tool": "\(toolCall.function.name)", "message": "\(error.localizedDescription)"}
                             """
                     }
 

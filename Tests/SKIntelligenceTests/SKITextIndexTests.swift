@@ -1,6 +1,8 @@
 import XCTest
 @testable import SKIClip
 
+#if canImport(CoreML)
+
 final class SKITextIndexTests: XCTestCase {
     
     var textIndex: SKITextIndex<String>!
@@ -289,3 +291,5 @@ final class SKITextIndexTests: XCTestCase {
         }
     }
 }
+
+#endif

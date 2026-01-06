@@ -8,6 +8,8 @@
 import Testing
 import SKIClip
 
+#if canImport(CoreML)
+
 struct CosineSimilarityMatrixTests {
 
     @Test("Basic case - values between 0 and 1")
@@ -46,3 +48,5 @@ struct CosineSimilarityMatrixTests {
         #expect(abs(result.first! - 1.0) < 1e-6)
     }
 }
+
+#endif
