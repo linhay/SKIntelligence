@@ -111,6 +111,10 @@ public struct SKIToolTavilySearch: SKITool {
         }
     }
 
+    public func displayName(for arguments: Arguments) async -> String {
+        return "搜索 [\(arguments.query)]"
+    }
+
     /// API 密钥。
     public var apiKey: String
 
