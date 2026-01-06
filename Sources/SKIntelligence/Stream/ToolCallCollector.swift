@@ -13,12 +13,15 @@ public struct SKIToolRequest: Sendable, Equatable {
     public let id: String?
     /// The function name to call
     public let name: String
+    /// User-friendly display name with context (e.g., "查询 [白细胞计数] 趋势")
+    public var displayName: String?
     /// The JSON arguments string
     public let arguments: String
 
-    public init(id: String? = nil, name: String, arguments: String) {
+    public init(id: String? = nil, name: String, displayName: String? = nil, arguments: String) {
         self.id = id
         self.name = name
+        self.displayName = displayName
         self.arguments = arguments
     }
 

@@ -170,9 +170,14 @@ extension SKILanguageModelSession {
                         continue
                     }
 
-                    // Yield tool request info to stream
+                    // Yield tool request info to stream with enriched displayName
+                    var enrichedRequest = toolRequest
+                    if let tool = self.tools[toolRequest.name] {
+                        enrichedRequest.displayName = try await tool.displayName(
+                            for: toolRequest.arguments)
+                    }
                     let toolChunk = SKIResponseChunk(
-                        toolRequests: [toolRequest]
+                        toolRequests: [enrichedRequest]
                     )
                     continuation.yield(toolChunk)
 

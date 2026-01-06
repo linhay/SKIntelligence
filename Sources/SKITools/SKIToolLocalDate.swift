@@ -38,6 +38,13 @@ public struct SKIToolLocalDate: SKITool {
     public var description: String =
         "获取当前日期和时间。支持自定义格式（默认为 yyyy-MM-dd）。例如：如果要获取具体时间，可以使用 'HH:mm:ss' 或 'yyyy-MM-dd HH:mm:ss'。"
 
+    public func displayName(for arguments: Arguments) async -> String {
+        if let format = arguments.format {
+            return "查询时间 [\(format)]"
+        }
+        return "查询当前时间"
+    }
+
     public init() {}
 
     public func call(_ arguments: Arguments) async throws -> ToolOutput {
