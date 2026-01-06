@@ -11,7 +11,7 @@ import JSONSchemaBuilder
 
 public protocol SKITool {
 
-    associatedtype ToolOutput: Encodable
+    associatedtype ToolOutput: Codable
     associatedtype Arguments: Schemable where Arguments.Schema.Output == Arguments
     var name: String { get }
     var description: String { get }
@@ -22,7 +22,10 @@ public protocol SKITool {
     /// - Returns: 包含参数上下文的显示名称，如 "查询 [白血病] 详情"
     func displayName(for arguments: Arguments) async -> String
     func call(_ arguments: Arguments) async throws -> ToolOutput
-
+    /// 从工具输出中提取引用链接
+    /// - Parameter output: 工具输出
+    /// - Returns: 引用链接数组
+    func references(from output: ToolOutput) -> [SKIReference]
 }
 
 extension SKITool {
@@ -37,6 +40,8 @@ extension SKITool {
 
     public func displayName(for arguments: Arguments) async -> String { name }
 
+    public func references(from output: ToolOutput) -> [SKIReference] { [] }
+
     public static func arguments(from instance: String) throws -> Arguments {
         try Arguments.schema.parseAndValidate(instance: instance)
     }
@@ -47,6 +52,14 @@ extension SKITool {
         let encode = try JSONEncoder().encode(out)
         let jsonString = String(data: encode, encoding: .utf8) ?? ""
         return jsonString
+    }
+
+    /// 从工具输出 JSON 字符串中提取引用链接
+    public func references(from outputString: String) -> [SKIReference] {
+        guard let data = outputString.data(using: .utf8),
+            let output = try? JSONDecoder().decode(ToolOutput.self, from: data)
+        else { return [] }
+        return references(from: output)
     }
 
 }

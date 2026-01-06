@@ -211,6 +211,15 @@ extension SKILanguageModelSession {
                         .init(content: .text(toolOutput), toolCall: requestToolCall)
                     )
                     try await transcript.append(entry: outputEntry)
+
+                    // Extract references from tool output (if tool provides them)
+                    if let tool = self.tools[toolRequest.name] {
+                        let references = tool.references(from: toolOutput)
+                        if !references.isEmpty {
+                            let refsChunk = SKIResponseChunk(references: references)
+                            continuation.yield(refsChunk)
+                        }
+                    }
                 }
 
                 // Continue with new request

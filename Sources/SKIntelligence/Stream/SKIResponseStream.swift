@@ -29,13 +29,17 @@ public struct SKIResponseChunk: Sendable {
     /// Role of the message (usually only in first chunk)
     public let role: String?
 
+    /// References from search tools (title, url pairs)
+    public let references: [SKIReference]?
+
     public init(
         text: String? = nil,
         reasoning: String? = nil,
         toolCallDeltas: [ToolCallDelta]? = nil,
         toolRequests: [SKIToolRequest]? = nil,
         finishReason: String? = nil,
-        role: String? = nil
+        role: String? = nil,
+        references: [SKIReference]? = nil
     ) {
         self.text = text
         self.reasoning = reasoning
@@ -43,6 +47,7 @@ public struct SKIResponseChunk: Sendable {
         self.toolRequests = toolRequests
         self.finishReason = finishReason
         self.role = role
+        self.references = references
     }
 
     /// Create from a streaming delta (includes raw tool call deltas)
@@ -53,6 +58,7 @@ public struct SKIResponseChunk: Sendable {
         self.toolRequests = nil
         self.finishReason = finishReason
         self.role = delta.role
+        self.references = nil
     }
 
     /// Create from a complete stream choice
