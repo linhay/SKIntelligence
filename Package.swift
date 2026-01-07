@@ -23,6 +23,13 @@ let package = Package(
         .package(url: "https://github.com/mattt/EventSource.git", from: "1.3.0"),
     ],
     targets: [
+        .executableTarget(
+            name: "SKIntelligenceExample",
+            dependencies: [
+                "SKIntelligence",
+                "SKIClients",
+            ]
+        ),
         .target(
             name: "SKIntelligence",
             dependencies: [

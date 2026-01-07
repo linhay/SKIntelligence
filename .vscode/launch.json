@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SKIntelligence}",
+            "name": "Debug SKIntelligenceExample",
+            "target": "SKIntelligenceExample",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug SKIntelligenceExample"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SKIntelligence}",
+            "name": "Release SKIntelligenceExample",
+            "target": "SKIntelligenceExample",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release SKIntelligenceExample"
+        }
+    ]
+}

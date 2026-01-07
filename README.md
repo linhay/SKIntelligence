@@ -6,6 +6,11 @@ SKIntelligence 是一个强大的智能组件库，提供了与大语言模型�
 
 详细文档请参考 `Documentation` 目录：
 
+- [快速上手 (Getting Started)](Documentation/Getting-Started.md)
+  - 从核心类型入口快速跑通：会话、流式、工具、记忆、MCP、CLIP。
+- [CI 自动打 Tag + Bark 通知](Documentation/CI-AutoTag.md)
+  - Swift CI 通过后自动递增语义化版本最后一位并推送 tag，可选 Bark 通知。
+
 ### 核心功能
 
 - [流式输出 (Streaming Output)](Documentation/Streaming.md)
