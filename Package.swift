@@ -70,7 +70,7 @@ let package = Package(
             ],
             swiftSettings: [
                 .define("ACCELERATE_NEW_LAPACK")
-            ],
+            ]
         ),
         .testTarget(
             name: "SKIntelligenceTests",
