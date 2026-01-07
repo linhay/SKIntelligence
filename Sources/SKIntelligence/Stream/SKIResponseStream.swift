@@ -23,6 +23,9 @@ public struct SKIResponseChunk: Sendable {
     /// Complete tool requests (accumulated by session layer)
     public let toolRequests: [SKIToolRequest]?
 
+    /// Tool execution results (tool name and JSON output)
+    public let toolResults: [SKIToolResult]?
+
     /// Finish reason when generation completes
     public let finishReason: String?
 
@@ -37,6 +40,7 @@ public struct SKIResponseChunk: Sendable {
         reasoning: String? = nil,
         toolCallDeltas: [ToolCallDelta]? = nil,
         toolRequests: [SKIToolRequest]? = nil,
+        toolResults: [SKIToolResult]? = nil,
         finishReason: String? = nil,
         role: String? = nil,
         references: [SKIReference]? = nil
@@ -45,6 +49,7 @@ public struct SKIResponseChunk: Sendable {
         self.reasoning = reasoning
         self.toolCallDeltas = toolCallDeltas
         self.toolRequests = toolRequests
+        self.toolResults = toolResults
         self.finishReason = finishReason
         self.role = role
         self.references = references
@@ -56,6 +61,7 @@ public struct SKIResponseChunk: Sendable {
         self.reasoning = delta.reasoningContent
         self.toolCallDeltas = delta.toolCalls
         self.toolRequests = nil
+        self.toolResults = nil
         self.finishReason = finishReason
         self.role = delta.role
         self.references = nil
@@ -64,6 +70,19 @@ public struct SKIResponseChunk: Sendable {
     /// Create from a complete stream choice
     public init(from choice: StreamChoice) {
         self.init(from: choice.delta, finishReason: choice.finishReason)
+    }
+}
+
+/// Represents a tool execution result
+public struct SKIToolResult: Sendable, Codable {
+    public let toolName: String
+    public let toolId: String?
+    public let output: String
+
+    public init(toolName: String, toolId: String?, output: String) {
+        self.toolName = toolName
+        self.toolId = toolId
+        self.output = output
     }
 }
 

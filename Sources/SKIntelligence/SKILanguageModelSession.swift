@@ -212,6 +212,18 @@ extension SKILanguageModelSession {
                     )
                     try await transcript.append(entry: outputEntry)
 
+                    // Yield tool result to stream
+                    let resultChunk = SKIResponseChunk(
+                        toolResults: [
+                            SKIToolResult(
+                                toolName: toolRequest.name,
+                                toolId: toolRequest.id,
+                                output: toolOutput
+                            )
+                        ]
+                    )
+                    continuation.yield(resultChunk)
+
                     // Extract references from tool output (if tool provides them)
                     if let tool = self.tools[toolRequest.name] {
                         let references = tool.references(from: toolOutput)
