@@ -116,7 +116,9 @@ public struct SKIToolTavilySearch: SKITool {
     }
 
     public func references(from output: ToolOutput) -> [SKIReference] {
-        output.results.map { SKIReference(title: $0.title, url: $0.url) }
+        output.results.map {
+            SKIReference(title: $0.title, url: $0.url, type: .web, source: .search)
+        }
     }
 
     /// API 密钥。
