@@ -18,6 +18,7 @@ jobs:
           fetch-depth: 0
 
       - name: Create and push tag
+        id: tagger
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -30,7 +31,10 @@ jobs:
 
           # If this commit already has a semver tag, do nothing (idempotent).
           if git tag --points-at HEAD | grep -Eq "${SEMVER_RE}"; then
-            echo "HEAD already has a semver tag. Skipping."
+            EXISTING_TAG=$(git tag --points-at HEAD | grep -E "${SEMVER_RE}" | sort -V | tail -n 1 || true)
+            echo "HEAD already has a semver tag (${EXISTING_TAG}). Skipping."
+            echo "action=skipped" >> "$GITHUB_OUTPUT"
+            echo "tag=${EXISTING_TAG}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -63,3 +67,37 @@ jobs:
           echo "Creating tag: ${TAG}"
           git tag -a "${TAG}" -m "Auto tag for ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
           git push origin "${TAG}"
+
+          echo "action=created" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Notify Bark
+        if: always()
+        env:
+          BARK_HOST: https://api.day.app
+          BARK_KEY: ${{ secrets.BARK_KEY }}
+          ACTION: ${{ steps.tagger.outputs.action }}
+          TAG: ${{ steps.tagger.outputs.tag }}
+          STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${BARK_KEY:-}" ]]; then
+            echo "BARK_KEY is not configured. Skipping Bark notification."
+            exit 0
+          fi
+
+          ACTION="${ACTION:-unknown}"
+          TAG="${TAG:-}" 
+
+          # Bark uses the path segment as title; avoid spaces/special chars.
+          TITLE="SKIntelligence-${ACTION}-${TAG:-no-tag}"
+          BODY="repo=${GITHUB_REPOSITORY}
+sha=${GITHUB_SHA}
+status=${STATUS}"
+
+          # Do not fail the workflow if notification fails.
+          curl -fsS -G "${BARK_HOST}/${BARK_KEY}/${TITLE}" \
+            --data-urlencode "body=${BODY}" \
+            --data-urlencode "group=github" \
+            || true
