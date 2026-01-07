@@ -37,6 +37,7 @@ let package = Package(
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "JSONSchema", package: "swift-json-schema"),
                 .product(name: "JSONSchemaBuilder", package: "swift-json-schema"),
+                "STJSON",
                 .product(name: "MCP", package: "swift-sdk"),
             ]
         ),
