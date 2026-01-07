@@ -88,13 +88,11 @@ jobs:
           fi
 
           ACTION="${ACTION:-unknown}"
-          TAG="${TAG:-}" 
+          TAG="${TAG:-}"
 
           # Bark uses the path segment as title; avoid spaces/special chars.
           TITLE="SKIntelligence-${ACTION}-${TAG:-no-tag}"
-          BODY="repo=${GITHUB_REPOSITORY}
-sha=${GITHUB_SHA}
-status=${STATUS}"
+          BODY=$(printf 'repo=%s\nsha=%s\nstatus=%s' "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$STATUS")
 
           # Do not fail the workflow if notification fails.
           curl -fsS -G "${BARK_HOST}/${BARK_KEY}/${TITLE}" \
