@@ -1,0 +1,65 @@
+name: Auto Tag on main
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create and push tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          SEMVER_RE='^v?[0-9]+\.[0-9]+\.[0-9]+$'
+
+          # If this commit already has a semver tag, do nothing (idempotent).
+          if git tag --points-at HEAD | grep -Eq "${SEMVER_RE}"; then
+            echo "HEAD already has a semver tag. Skipping."
+            exit 0
+          fi
+
+          # Find latest semver tag (supports both v1.2.3 and 1.2.3) and bump patch (+1).
+          # The next tag will keep the same prefix style as the latest tag.
+          LAST_TAG=$(git tag --list | grep -E "${SEMVER_RE}" | sort -V | tail -n 1 || true)
+
+          if [[ -z "${LAST_TAG}" ]]; then
+            PREFIX="v"
+            MAJOR=0
+            MINOR=0
+            PATCH=0
+          else
+            PREFIX=""
+            if [[ "${LAST_TAG}" == v* ]]; then
+              PREFIX="v"
+            fi
+            IFS='.' read -r MAJOR MINOR PATCH <<< "${LAST_TAG#v}"
+          fi
+
+          PATCH=$((PATCH + 1))
+          TAG="${PREFIX}${MAJOR}.${MINOR}.${PATCH}"
+
+          # If the next tag already exists (e.g. concurrent runs), keep bumping until free.
+          while git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; do
+            PATCH=$((PATCH + 1))
+            TAG="${PREFIX}${MAJOR}.${MINOR}.${PATCH}"
+          done
+
+          echo "Creating tag: ${TAG}"
+          git tag -a "${TAG}" -m "Auto tag for ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
+          git push origin "${TAG}"
