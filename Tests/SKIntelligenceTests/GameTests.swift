@@ -8,6 +8,7 @@
 import Foundation
 import JSONSchemaBuilder
 import SKITools
+import SKIClients
 import SKIntelligence
 import Testing
 

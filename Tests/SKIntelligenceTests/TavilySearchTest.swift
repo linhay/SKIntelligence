@@ -3,6 +3,7 @@ import Foundation
 import JSONSchemaBuilder
 import SKIntelligence
 import SKITools
+import SKIClients
 
 #if canImport(CoreLocation)
 

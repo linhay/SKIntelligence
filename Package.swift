@@ -10,6 +10,7 @@ let package = Package(
         .library(name: "SKIntelligence", targets: ["SKIntelligence"]),
         .library(name: "SKIClip", targets: ["SKIClip"]),
         .library(name: "SKITools", targets: ["SKITools"]),
+        .library(name: "SKIClients", targets: ["SKIClients"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-http-types.git", from: "1.1.0"),
@@ -33,12 +34,19 @@ let package = Package(
             ]
         ),
         .target(
+            name: "SKIClients",
+            dependencies: [
+                "SKIntelligence",
+                .product(name: "HTTPTypes", package: "swift-http-types"),
+                .product(name: "Alamofire", package: "Alamofire"),
+                .product(name: "EventSource", package: "EventSource"),
+            ]
+        ),
+        .target(
             name: "SKITools",
             dependencies: [
                 "SKIntelligence",
                 "STJSON",
-                .product(name: "Alamofire", package: "Alamofire"),
-                .product(name: "EventSource", package: "EventSource"),
             ]
         ),
         .target(
@@ -61,6 +69,7 @@ let package = Package(
             name: "SKIntelligenceTests",
             dependencies: [
                 "SKIntelligence",
+                "SKIClients",
                 "SKITools",
                 "SKIClip",
                 .product(name: "HTTPTypesFoundation", package: "swift-http-types"),

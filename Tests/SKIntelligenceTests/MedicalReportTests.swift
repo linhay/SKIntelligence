@@ -8,7 +8,7 @@
 import Testing
 import Foundation
 import SKIntelligence
-import SKITools
+import SKIClients
 
 #if !os(Linux)
 

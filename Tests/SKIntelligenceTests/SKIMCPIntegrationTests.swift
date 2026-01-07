@@ -6,7 +6,7 @@
 //
 
 import MCP
-import SKITools
+import SKIClients
 import XCTest
 
 @testable import SKIntelligence
