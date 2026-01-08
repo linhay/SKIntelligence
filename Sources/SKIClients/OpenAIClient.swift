@@ -79,7 +79,7 @@ public struct RetryConfiguration: Sendable {
 
 // MARK: - OpenAI Client
 
-public class OpenAIClient: SKILanguageModelClient {
+public class OpenAIClient: SKILanguageModelClient, Sendable {
 
     public enum EmbeddedURL: String {
         case dashscope = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"

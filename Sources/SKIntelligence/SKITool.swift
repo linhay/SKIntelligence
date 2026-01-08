@@ -9,7 +9,7 @@ import Foundation
 import JSONSchema
 import JSONSchemaBuilder
 
-public protocol SKITool {
+public protocol SKITool: Sendable {
 
     associatedtype ToolOutput: Codable
     associatedtype Arguments: Schemable where Arguments.Schema.Output == Arguments
