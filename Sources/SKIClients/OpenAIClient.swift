@@ -108,16 +108,27 @@ public class OpenAIClient: SKILanguageModelClient, Sendable {
     public var headerFields: HTTPFields = .init()
     public var session: Session
 
-    /// Request timeout in seconds (nil means no timeout)
-    public var timeoutInterval: TimeInterval? = nil
+    /// Request timeout in seconds (default: 600 seconds / 10 minutes)
+    public var timeoutInterval: TimeInterval? = 600
+
+    /// Maximum concurrent connections per host (default: 6)
+    public var maxConcurrentConnectionsPerHost: Int = 6
 
     /// Retry configuration
     public var retryConfiguration: RetryConfiguration = .default
 
     // MARK: - Initialization
 
-    public init(session: Session = .default) {
-        self.session = session
+    public init(session: Session? = nil) {
+        if let session = session {
+            self.session = session
+        } else {
+            let configuration = URLSessionConfiguration.default
+            configuration.timeoutIntervalForRequest = 600
+            configuration.timeoutIntervalForResource = 600
+            configuration.httpMaximumConnectionsPerHost = 8
+            self.session = Session(configuration: configuration)
+        }
     }
 
     // MARK: - SKILanguageModelClient
@@ -330,11 +341,32 @@ extension OpenAIClient {
 
     public func timeout(_ interval: TimeInterval) -> OpenAIClient {
         self.timeoutInterval = interval
+        
+        // Always update session configuration
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = interval
+        configuration.timeoutIntervalForResource = interval
+        configuration.httpMaximumConnectionsPerHost = maxConcurrentConnectionsPerHost
+        self.session = Session(configuration: configuration)
+        
         return self
     }
 
     public func retry(_ configuration: RetryConfiguration) -> OpenAIClient {
         self.retryConfiguration = configuration
+        return self
+    }
+
+    public func maxConcurrentConnections(_ count: Int) -> OpenAIClient {
+        self.maxConcurrentConnectionsPerHost = count
+        
+        // Always update session configuration
+        let configuration = URLSessionConfiguration.default
+        configuration.timeoutIntervalForRequest = timeoutInterval ?? 600
+        configuration.timeoutIntervalForResource = timeoutInterval ?? 600
+        configuration.httpMaximumConnectionsPerHost = count
+        self.session = Session(configuration: configuration)
+        
         return self
     }
 
