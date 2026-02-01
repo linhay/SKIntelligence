@@ -121,45 +121,74 @@ public struct SKIToolTavilySearch: SKITool {
         }
     }
 
-    /// API 密钥。
-    public var apiKey: String
+    /// API 密钥（支持多个，打乱后按顺序作为 fallback）。
+    public var apiKeys: [String]
 
     public init(apiKey: String) {
-        self.apiKey = apiKey
+        self.apiKeys = [apiKey]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    public init(apiKeys: [String]) {
+        self.apiKeys = apiKeys
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     public func call(_ arguments: Arguments) async throws -> ToolOutput {
+        let trimmedKeys = apiKeys
+        guard !trimmedKeys.isEmpty else {
+            throw SKIToolError.invalidArguments("Missing Tavily API key(s).")
+        }
+
         // 1. 构造 URL 和 JSON 请求体
         let url = URL(string: "https://api.tavily.com/search")!
         let bodyData = try JSONEncoder().encode(arguments)
 
-        // 2. 构造 HTTP 请求
-        var request = HTTPRequest(
-            method: .post,
-            url: url
-        )
-        request.headerFields[.contentType] = "application/json"
-        request.headerFields[.authorization] = "Bearer \(apiKey)"
+        var lastError: Error?
+        for (index, key) in trimmedKeys.shuffled().enumerated() {
+            // 2. 构造 HTTP 请求
+            var request = HTTPRequest(
+                method: .post,
+                url: url
+            )
+            request.headerFields[.contentType] = "application/json"
+            request.headerFields[.authorization] = "Bearer \(key)"
 
-        // 3. 发出请求
-        let (responseBody, response) = try await URLSession.tools.upload(
-            for: request, from: bodyData)
+            // 3. 发出请求
+            let (responseBody, response) = try await URLSession.tools.upload(
+                for: request, from: bodyData)
 
-        // 4. 检查响应状态
-        let statusCode = response.status.code
-        guard response.status.kind == .successful else {
-            let message = String(data: responseBody, encoding: .utf8)
-            if statusCode == 429 {
-                throw SKIToolError.rateLimitExceeded(retryAfter: nil)
+            // 4. 检查响应状态
+            let statusCode = response.status.code
+            guard response.status.kind == .successful else {
+                let message = String(data: responseBody, encoding: .utf8)
+                if statusCode == 429 {
+                    if index < trimmedKeys.count - 1 {
+                        lastError = SKIToolError.rateLimitExceeded(retryAfter: nil)
+                        continue
+                    }
+                    throw SKIToolError.rateLimitExceeded(retryAfter: nil)
+                }
+                if statusCode == 401 || statusCode == 403 {
+                    if index < trimmedKeys.count - 1 {
+                        lastError = SKIToolError.authenticationFailed
+                        continue
+                    }
+                    throw SKIToolError.authenticationFailed
+                }
+                throw SKIToolError.serverError(statusCode: Int(statusCode), message: message)
             }
-            throw SKIToolError.serverError(statusCode: Int(statusCode), message: message)
+
+            // 5. 解析响应
+            do {
+                return try JSONDecoder().decode(ToolOutput.self, from: responseBody)
+            } catch {
+                throw SKIToolError.decodingFailed(error)
+            }
         }
 
-        // 5. 解析响应
-        do {
-            return try JSONDecoder().decode(ToolOutput.self, from: responseBody)
-        } catch {
-            throw SKIToolError.decodingFailed(error)
-        }
+        throw SKIToolError.retryExhausted(attempts: trimmedKeys.count, lastError: lastError ?? SKIToolError.executionFailed(reason: "Unknown error"))
     }
 }
