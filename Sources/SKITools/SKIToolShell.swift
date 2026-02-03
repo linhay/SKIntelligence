@@ -1,5 +1,6 @@
 import Foundation
 import JSONSchemaBuilder
+import SKProcessRunner
 import SKIntelligence
 
 /// `shell` tool: runs a whitelisted executable with arguments.
@@ -118,16 +119,38 @@ public struct SKIToolShell: SKITool {
             throw SKIToolError.permissionDenied("Executable is not allowed: \(execName)")
         }
 
-        let runner = Runner(
-            exec: execURL,
-            args: execArgs,
-            cwd: cwd,
-            env: env,
-            timeoutMs: timeoutMs,
-            maxOutputBytes: configuration.maxOutputBytes
-        )
+        let result: SKProcessRunner.Result
+        do {
+            result = try await SKProcessRunner.run(
+                executableURL: execURL,
+                arguments: execArgs,
+                configuration: .init(
+                    cwd: cwd,
+                    environment: env,
+                    timeoutMs: timeoutMs,
+                    maxOutputBytes: configuration.maxOutputBytes
+                )
+            )
+        } catch let error as SKProcessRunner.RunError {
+            switch error {
+            case .timedOut(_, let stdoutData, let stderrData, let truncated):
+                return ToolOutput(
+                    stdout: String(data: stdoutData, encoding: .utf8) ?? "",
+                    stderr: String(data: stderrData, encoding: .utf8) ?? "",
+                    exitCode: -1,
+                    timedOut: true,
+                    truncated: truncated
+                )
+            case .executableNotFound, .invalidExecutable:
+                throw SKIToolError.invalidArguments(error.localizedDescription)
+            case .nonZeroExit:
+                // This should never happen because we don't throw on non-zero exit for this tool.
+                throw SKIToolError.executionFailed(reason: error.localizedDescription)
+            }
+        } catch {
+            throw SKIToolError.executionFailed(reason: String(describing: error))
+        }
 
-        let result = try await runner.run()
         return ToolOutput(
             stdout: result.stdout,
             stderr: result.stderr,
@@ -154,7 +177,7 @@ public struct SKIToolShell: SKITool {
                 return (execURL, execURL.lastPathComponent, Array(command.dropFirst()))
             }
 
-            guard let execURL = resolveExecutableInPath(named: exec) else {
+            guard let execURL = SKProcessRunner.resolveExecutableInPath(named: exec) else {
                 throw SKIToolError.invalidArguments("Executable not found in PATH: \(exec)")
             }
             return (execURL, exec, Array(command.dropFirst()))
@@ -170,19 +193,6 @@ public struct SKIToolShell: SKITool {
         }
 
         throw SKIToolError.invalidArguments("Provide either `command` or `script`.")
-    }
-
-    private func resolveExecutableInPath(named name: String) -> URL? {
-        guard !name.isEmpty, !name.contains("/") else { return nil }
-        let pathValue = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
-        for dir in pathValue.split(separator: ":") {
-            let candidate = URL(fileURLWithPath: String(dir), isDirectory: true)
-                .appendingPathComponent(name, isDirectory: false)
-            if FileManager.default.isExecutableFile(atPath: candidate.path) {
-                return candidate.standardizedFileURL
-            }
-        }
-        return nil
     }
 
     private func parseEnv(_ pairs: [String]) -> [String: String] {
@@ -249,139 +259,5 @@ extension SKIToolShell.Configuration {
             allowedExecutables: allowed,
             allowedRoots: Array(Set([cwd, parent].map { $0.standardizedFileURL }))
         )
-    }
-}
-
-private struct Runner {
-    let exec: URL
-    let args: [String]
-    let cwd: URL?
-    let env: [String: String]
-    let timeoutMs: Int
-    let maxOutputBytes: Int
-
-    struct Result: Sendable, Equatable {
-        let stdout: String
-        let stderr: String
-        let exitCode: Int
-        let timedOut: Bool
-        let truncated: Bool
-    }
-
-    func run() async throws -> Result {
-        let process = Process()
-        process.executableURL = exec
-        process.arguments = args
-        process.currentDirectoryURL = cwd
-
-        if !env.isEmpty {
-            var merged = ProcessInfo.processInfo.environment
-            for (k, v) in env { merged[k] = v }
-            process.environment = merged
-        }
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        try process.run()
-
-        return try await withCheckedThrowingContinuation { continuation in
-            let state = RunnerState(maxOutputBytes: maxOutputBytes)
-            stdoutPipe.fileHandleForReading.readabilityHandler = { fh in
-                state.appendStdout(fh.availableData)
-            }
-            stderrPipe.fileHandleForReading.readabilityHandler = { fh in
-                state.appendStderr(fh.availableData)
-            }
-
-            let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
-            timer.schedule(deadline: .now() + .milliseconds(timeoutMs))
-            timer.setEventHandler {
-                guard state.finishIfNeeded() else { return }
-
-                process.terminate()
-                stdoutPipe.fileHandleForReading.readabilityHandler = nil
-                stderrPipe.fileHandleForReading.readabilityHandler = nil
-                state.appendStdout(stdoutPipe.fileHandleForReading.readDataToEndOfFile())
-                state.appendStderr(stderrPipe.fileHandleForReading.readDataToEndOfFile())
-                timer.cancel()
-
-                let out = String(data: state.stdoutData, encoding: .utf8) ?? ""
-                let err = String(data: state.stderrData, encoding: .utf8) ?? ""
-                continuation.resume(returning: .init(
-                    stdout: out,
-                    stderr: err,
-                    exitCode: -1,
-                    timedOut: true,
-                    truncated: state.truncated
-                ))
-            }
-            timer.resume()
-
-            process.terminationHandler = { _ in
-                guard state.finishIfNeeded() else { return }
-
-                stdoutPipe.fileHandleForReading.readabilityHandler = nil
-                stderrPipe.fileHandleForReading.readabilityHandler = nil
-                state.appendStdout(stdoutPipe.fileHandleForReading.readDataToEndOfFile())
-                state.appendStderr(stderrPipe.fileHandleForReading.readDataToEndOfFile())
-                timer.cancel()
-
-                let out = String(data: state.stdoutData, encoding: .utf8) ?? ""
-                let err = String(data: state.stderrData, encoding: .utf8) ?? ""
-                continuation.resume(returning: .init(
-                    stdout: out,
-                    stderr: err,
-                    exitCode: Int(process.terminationStatus),
-                    timedOut: false,
-                    truncated: state.truncated
-                ))
-            }
-        }
-    }
-}
-
-private final class RunnerState: @unchecked Sendable {
-    private let lock = NSLock()
-    private let maxOutputBytes: Int
-    private var isFinished = false
-
-    private(set) var stdoutData = Data()
-    private(set) var stderrData = Data()
-    private(set) var truncated = false
-
-    init(maxOutputBytes: Int) {
-        self.maxOutputBytes = maxOutputBytes
-    }
-
-    func appendStdout(_ data: Data) {
-        lock.lock(); defer { lock.unlock() }
-        appendCapped(data, to: &stdoutData)
-    }
-
-    func appendStderr(_ data: Data) {
-        lock.lock(); defer { lock.unlock() }
-        appendCapped(data, to: &stderrData)
-    }
-
-    func finishIfNeeded() -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        if isFinished { return false }
-        isFinished = true
-        return true
-    }
-
-    private func appendCapped(_ chunk: Data, to buffer: inout Data) {
-        guard !chunk.isEmpty else { return }
-        let remaining = max(0, maxOutputBytes - buffer.count)
-        if remaining == 0 { truncated = true; return }
-        if chunk.count <= remaining {
-            buffer.append(chunk)
-        } else {
-            buffer.append(chunk.prefix(remaining))
-            truncated = true
-        }
     }
 }

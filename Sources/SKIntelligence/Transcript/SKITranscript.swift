@@ -134,6 +134,23 @@ extension SKITranscript {
 
 extension SKITranscript {
 
+    /// Adds an observe block without overwriting an existing observer.
+    ///
+    /// If an observer already exists, this composes them in-order.
+    public func addObserveNewEntry(_ observer: ObserveNewEntry) {
+        if let existing = observeNewEntry {
+            observeNewEntry = .init { entry in
+                try await existing.block(entry)
+                try await observer.block(entry)
+            }
+        } else {
+            observeNewEntry = observer
+        }
+    }
+}
+
+extension SKITranscript {
+
     public func messages() async throws -> [ChatRequestBody.Message] {
         var list = [ChatRequestBody.Message]()
         for entry in self.entries {
@@ -208,4 +225,282 @@ extension SKITranscript {
         entries.endIndex
     }
 
+}
+
+// MARK: - JSONL
+
+extension SKITranscript {
+    /// JSONL (ndjson) encoding/decoding utilities for persisting a transcript.
+    ///
+    /// The format is OpenClaw-compatible:
+    /// - First line: `{"type":"session","version":1,"id":"...","timestamp":"...","cwd":"..."}`
+    /// - Following: `{"message":{...}}`
+    public enum JSONL {}
+}
+
+extension SKITranscript.JSONL {
+    public struct Header: Sendable, Codable, Equatable {
+        public var type: String
+        public var version: Int
+        public var id: String
+        public var timestamp: String?
+        public var cwd: String?
+
+        public init(type: String = "session", version: Int = 1, id: String, timestamp: String? = nil, cwd: String? = nil) {
+            self.type = type
+            self.version = version
+            self.id = id
+            self.timestamp = timestamp
+            self.cwd = cwd
+        }
+    }
+
+    public struct ToolCallFunction: Sendable, Codable, Equatable {
+        public var name: String
+        public var arguments: String?
+
+        public init(name: String, arguments: String? = nil) {
+            self.name = name
+            self.arguments = arguments
+        }
+    }
+
+    public struct ToolCall: Sendable, Codable, Equatable {
+        public var id: String
+        public var type: String?
+        public var function: ToolCallFunction
+
+        public init(id: String, type: String? = "function", function: ToolCallFunction) {
+            self.id = id
+            self.type = type
+            self.function = function
+        }
+    }
+
+    public enum MessageContent: Sendable, Equatable, Codable {
+        case text(String)
+        case parts([TextPart])
+
+        public struct TextPart: Sendable, Equatable, Codable {
+            public var type: String
+            public var text: String?
+
+            public init(type: String = "text", text: String?) {
+                self.type = type
+                self.text = text
+            }
+        }
+
+        public var stringValue: String? {
+            switch self {
+            case .text(let value):
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            case .parts(let parts):
+                let items = parts.compactMap { part -> String? in
+                    guard let t = part.text?.trimmingCharacters(in: .whitespacesAndNewlines), !t.isEmpty else { return nil }
+                    return t
+                }
+                guard !items.isEmpty else { return nil }
+                return items.joined(separator: "\n")
+            }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let str = try? container.decode(String.self) {
+                self = .text(str)
+                return
+            }
+            let parts = try container.decode([TextPart].self)
+            self = .parts(parts)
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.singleValueContainer()
+            switch self {
+            case .text(let value):
+                try container.encode(value)
+            case .parts(let parts):
+                try container.encode(parts)
+            }
+        }
+    }
+
+    public struct Message: Sendable, Codable, Equatable {
+        public var role: String
+        public var content: MessageContent?
+        public var name: String?
+        public var toolCalls: [ToolCall]?
+        public var toolCallId: String?
+
+        public init(
+            role: String,
+            content: MessageContent? = nil,
+            name: String? = nil,
+            toolCalls: [ToolCall]? = nil,
+            toolCallId: String? = nil
+        ) {
+            self.role = role
+            self.content = content
+            self.name = name
+            self.toolCalls = toolCalls
+            self.toolCallId = toolCallId
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case role
+            case content
+            case name
+            case toolCalls = "tool_calls"
+            case toolCallId = "tool_call_id"
+        }
+    }
+
+    public enum Line: Sendable, Equatable, Codable {
+        case header(Header)
+        case message(Message)
+
+        private enum CodingKeys: String, CodingKey {
+            case type
+            case version
+            case id
+            case timestamp
+            case cwd
+            case message
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            if let msg = try container.decodeIfPresent(Message.self, forKey: .message) {
+                self = .message(msg)
+                return
+            }
+            let type = (try? container.decode(String.self, forKey: .type)) ?? "session"
+            let version = (try? container.decode(Int.self, forKey: .version)) ?? 1
+            let id = (try? container.decode(String.self, forKey: .id)) ?? ""
+            let ts = try? container.decodeIfPresent(String.self, forKey: .timestamp)
+            let cwd = try? container.decodeIfPresent(String.self, forKey: .cwd)
+            self = .header(.init(type: type, version: version, id: id, timestamp: ts ?? nil, cwd: cwd ?? nil))
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            switch self {
+            case .message(let msg):
+                try container.encode(msg, forKey: .message)
+            case .header(let header):
+                try container.encode(header.type, forKey: .type)
+                try container.encode(header.version, forKey: .version)
+                try container.encode(header.id, forKey: .id)
+                try container.encodeIfPresent(header.timestamp, forKey: .timestamp)
+                try container.encodeIfPresent(header.cwd, forKey: .cwd)
+            }
+        }
+    }
+}
+
+extension SKITranscript.JSONL {
+    public static func message(from entry: SKITranscript.Entry) -> Message? {
+        switch entry {
+        case .prompt(let msg), .message(let msg), .response(let msg):
+            return Message(chatMessage: msg)
+        case .toolCalls(let toolCall):
+            let call = ToolCall(
+                id: toolCall.id,
+                type: toolCall.type,
+                function: .init(name: toolCall.function.name, arguments: toolCall.function.arguments)
+            )
+            return .init(role: "assistant", content: nil, toolCalls: [call])
+        case .toolOutput(let output):
+            return .init(role: "tool", content: .text(output.contentString), toolCallId: output.toolCall.id)
+        }
+    }
+}
+
+extension SKITranscript.JSONL.Message {
+    public init?(chatMessage: ChatRequestBody.Message) {
+        switch chatMessage {
+        case .assistant(let content, let name, _, let toolCalls):
+            let text = content.map { Self.convertMessageContentToTranscriptContent($0) }
+            let calls = toolCalls?.map {
+                SKITranscript.JSONL.ToolCall(
+                    id: $0.id,
+                    type: $0.type,
+                    function: .init(name: $0.function.name, arguments: $0.function.arguments)
+                )
+            }
+            self = .init(role: "assistant", content: text, name: name, toolCalls: calls)
+        case .developer(let content, let name):
+            self = .init(role: "developer", content: Self.convertMessageContentToTranscriptContent(content), name: name)
+        case .system(let content, let name):
+            self = .init(role: "system", content: Self.convertMessageContentToTranscriptContent(content), name: name)
+        case .tool(let content, let toolCallId):
+            self = .init(role: "tool", content: Self.convertMessageContentToTranscriptContent(content), toolCallId: toolCallId)
+        case .user(let content, let name):
+            self = .init(role: "user", content: Self.convertMessageContentToTranscriptContent(content), name: name)
+        }
+    }
+
+    public func toChatMessage() -> ChatRequestBody.Message? {
+        let text = content?.stringValue ?? ""
+        switch role.lowercased() {
+        case "user":
+            return .user(content: .text(text), name: name)
+        case "assistant":
+            let toolCalls = toolCalls?.map {
+                ChatRequestBody.Message.ToolCall(
+                    id: $0.id,
+                    function: .init(name: $0.function.name, arguments: $0.function.arguments)
+                )
+            }
+            let assistantContent: ChatRequestBody.Message.MessageContent<String, [String]>? = text.isEmpty ? nil : .text(text)
+            return .assistant(content: assistantContent, name: name, toolCalls: toolCalls)
+        case "system":
+            return .system(content: .text(text), name: name)
+        case "developer":
+            return .developer(content: .text(text), name: name)
+        case "tool":
+            return .tool(content: .text(text), toolCallID: toolCallId ?? "")
+        default:
+            return nil
+        }
+    }
+
+    private static func convertMessageContentToTranscriptContent(
+        _ content: ChatRequestBody.Message.MessageContent<String, [String]>
+    ) -> SKITranscript.JSONL.MessageContent {
+        switch content {
+        case .text(let value):
+            return .text(value)
+        case .parts(let parts):
+            let textParts = parts.compactMap { text -> SKITranscript.JSONL.MessageContent.TextPart? in
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return nil }
+                return .init(type: "text", text: trimmed)
+            }
+            if textParts.isEmpty { return .text("") }
+            return .parts(textParts)
+        }
+    }
+
+    private static func convertMessageContentToTranscriptContent(
+        _ content: ChatRequestBody.Message.MessageContent<String, [ChatRequestBody.Message.ContentPart]>
+    ) -> SKITranscript.JSONL.MessageContent {
+        switch content {
+        case .text(let value):
+            return .text(value)
+        case .parts(let parts):
+            let textParts = parts.compactMap { part -> SKITranscript.JSONL.MessageContent.TextPart? in
+                switch part {
+                case .text(let text):
+                    return .init(type: "text", text: text)
+                case .imageURL:
+                    return nil
+                }
+            }
+            if textParts.isEmpty { return .text("") }
+            return .parts(textParts)
+        }
+    }
 }

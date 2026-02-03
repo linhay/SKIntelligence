@@ -18,6 +18,7 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "602.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.3.0"),
         .package(url: "https://github.com/linhay/STJSON", from: "1.3.1"),
+        .package(url: "https://github.com/linhay/STFilePath", from: "1.3.1"),
         .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.11.0")),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.10.2"),
         .package(url: "https://github.com/mattt/EventSource.git", from: "1.3.0"),
@@ -37,7 +38,9 @@ let package = Package(
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "JSONSchema", package: "swift-json-schema"),
                 .product(name: "JSONSchemaBuilder", package: "swift-json-schema"),
+                "STFilePath",
                 "STJSON",
+                "SKProcessRunner",
                 .product(name: "MCP", package: "swift-sdk"),
             ]
         ),
@@ -55,6 +58,7 @@ let package = Package(
             dependencies: [
                 "SKIntelligence",
                 "STJSON",
+                "SKProcessRunner",
             ]
         ),
         .target(
