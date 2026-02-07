@@ -1,5 +1,5 @@
 {
-  "originHash" : "cb976001a66118a652336a48249de8ec383eccb57b6a325369112d779d701957",
+  "originHash" : "d7db635edfa3ab45d54758f6777a3366b2758820409d81aa898646bad81501bb",
   "pins" : [
     {
       "identity" : "alamofire",
@@ -33,8 +33,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/linhay/STFilePath",
       "state" : {
-        "revision" : "c1208b16456330b548ee8579ef3d53aa1e1a8fc1",
-        "version" : "1.3.3"
+        "revision" : "3bbcb9ec909e787b473310f17257d1378e1f5b17",
+        "version" : "1.3.4"
       }
     },
     {
