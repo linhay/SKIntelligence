@@ -1,5 +1,5 @@
 {
-  "originHash" : "d7db635edfa3ab45d54758f6777a3366b2758820409d81aa898646bad81501bb",
+  "originHash" : "b32cb6594aed411d947d0a8115d275170e5ca4d1d711d1a96ad80ec15f825ffe",
   "pins" : [
     {
       "identity" : "alamofire",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/linhay/SKProcessRunner",
       "state" : {
-        "revision" : "0ef392163302fd413d4826f6495ec71a66959045",
-        "version" : "0.0.4"
+        "revision" : "d0d2d59dec2c806b1c91d48bcc679b0af29e974d",
+        "version" : "0.0.5"
       }
     },
     {
