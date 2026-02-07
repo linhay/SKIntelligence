@@ -119,19 +119,25 @@ public struct SKIToolShell: SKITool {
             throw SKIToolError.permissionDenied("Executable is not allowed: \(execName)")
         }
 
-        let result: SKProcessRunner.Result
+        let result: SKProcessResult
         do {
-            result = try await SKProcessRunner.run(
-                executableURL: execURL,
+            let payload = SKProcessPayload(
+                executable: .url(execURL),
                 arguments: execArgs,
-                configuration: .init(
-                    cwd: cwd,
-                    environment: env,
-                    timeoutMs: timeoutMs,
-                    maxOutputBytes: configuration.maxOutputBytes
-                )
+                stdinData: nil,
+                cwd: cwd,
+                environment: SKProcessEnvironment(env),
+                useUserShellEnvironment: false,
+                userShellPath: nil,
+                userShellMode: .loginInteractive,
+                userShellTimeoutMs: 2_000,
+                timeoutMs: timeoutMs,
+                maxOutputBytes: configuration.maxOutputBytes,
+                throwOnNonZeroExit: false,
+                pty: nil
             )
-        } catch let error as SKProcessRunner.RunError {
+            result = try await SKProcessRunner.run(payload)
+        } catch let error as SKProcessRunError {
             switch error {
             case .timedOut(_, let stdoutData, let stderrData, let truncated):
                 return ToolOutput(
@@ -145,6 +151,8 @@ public struct SKIToolShell: SKITool {
                 throw SKIToolError.invalidArguments(error.localizedDescription)
             case .nonZeroExit:
                 // This should never happen because we don't throw on non-zero exit for this tool.
+                throw SKIToolError.executionFailed(reason: error.localizedDescription)
+            case .ptyFailed:
                 throw SKIToolError.executionFailed(reason: error.localizedDescription)
             }
         } catch {
