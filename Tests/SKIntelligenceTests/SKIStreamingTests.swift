@@ -511,7 +511,7 @@ struct MockAddTool: SKITool {
         let b: Double
     }
 
-    struct Output: Encodable {
+    struct Output: Codable {
         let result: Double
     }
 
@@ -530,7 +530,7 @@ struct MockMultiplyTool: SKITool {
         let b: Double
     }
 
-    struct Output: Encodable {
+    struct Output: Codable {
         let result: Double
     }
 
@@ -546,7 +546,7 @@ struct MockErrorTool: SKITool {
     @Schemable
     struct Arguments: Codable {}
 
-    struct Output: Encodable {
+    struct Output: Codable {
         let result: String
     }
 
@@ -564,7 +564,7 @@ struct MockSlowTool: SKITool {
     @Schemable
     struct Arguments: Codable {}
 
-    struct Output: Encodable {
+    struct Output: Codable {
         let result: String
     }
 

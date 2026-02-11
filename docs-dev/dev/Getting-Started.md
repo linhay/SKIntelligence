@@ -150,7 +150,7 @@ MCP 能让你把外部工具/服务以统一方式接入，让模型“像调用
 
 相关文档：
 
-- [SKITextIndex.md](SKITextIndex.md)
+- [SKITextIndex.md](../features/SKITextIndex.md)
 
 ## 常见问题（FAQ）
 
@@ -165,4 +165,4 @@ MCP 能让你把外部工具/服务以统一方式接入，让模型“像调用
 
 ### Tag/发布版本怎么走？
 
-见 [CI-AutoTag.md](CI-AutoTag.md)。
+见 [CI-AutoTag.md](../ops/CI-AutoTag.md)。
