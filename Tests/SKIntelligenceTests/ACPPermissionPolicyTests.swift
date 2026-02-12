@@ -50,6 +50,44 @@ final class ACPPermissionPolicyTests: XCTestCase {
         XCTAssertEqual(secondCalls, 1)
     }
 
+    func testPolicyAskModeRemembersRejectAlwaysAndShortCircuitsToCancelled() async throws {
+        let requester = PermissionRequesterMock(response: .init(outcome: .selected(.init(optionId: "reject_always"))))
+        let policy = ACPBridgeBackedPermissionPolicy(
+            mode: .ask,
+            requester: { params in try await requester.request(params) }
+        )
+        let request = sampleRequest(sessionId: "sess-reject")
+
+        let first = try await policy.evaluate(request)
+        await policy.remember(request, decision: first)
+        let firstCalls = await requester.getCalls()
+        XCTAssertEqual(firstCalls, 1)
+        XCTAssertEqual(first.outcome, .selected(.init(optionId: "reject_always")))
+
+        let second = try await policy.evaluate(request)
+        XCTAssertEqual(second.outcome, .cancelled)
+        let secondCalls = await requester.getCalls()
+        XCTAssertEqual(secondCalls, 1)
+    }
+
+    func testPolicyAskModeDoesNotRememberAllowOnce() async throws {
+        let requester = PermissionRequesterMock(response: .init(outcome: .selected(.init(optionId: "allow_once"))))
+        let policy = ACPBridgeBackedPermissionPolicy(
+            mode: .ask,
+            requester: { params in try await requester.request(params) }
+        )
+        let request = sampleRequest(sessionId: "sess-once")
+
+        let first = try await policy.evaluate(request)
+        await policy.remember(request, decision: first)
+        let firstCalls = await requester.getCalls()
+        XCTAssertEqual(firstCalls, 1)
+
+        _ = try await policy.evaluate(request)
+        let secondCalls = await requester.getCalls()
+        XCTAssertEqual(secondCalls, 2)
+    }
+
     func testPolicyAskRequiredPropagatesBridgeError() async throws {
         let requester = PermissionRequesterMock(error: ACPPermissionRequestBridgeError.requestTimeout)
         let policy = ACPBridgeBackedPermissionPolicy(

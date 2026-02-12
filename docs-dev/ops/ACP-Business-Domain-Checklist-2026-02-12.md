@@ -173,3 +173,15 @@ swift test --filter ACPClientRuntimeTests \
 
 swift test --filter ACP --filter SKICLITests --filter SKICLIProcessTests --filter SKIAgentSessionTests
 ```
+
+## 12. Permission Policy 细节收敛（本轮补充）
+- 记忆命中 `reject_always` 时，策略结果统一返回 `cancelled`（避免调用方解析 `selected(reject_always)` 分支歧义）。
+- 补齐测试覆盖：
+  - `allow_once` 不应进入记忆（第二次仍请求 requester）
+  - `reject_always` 进入记忆后应短路为 `cancelled`
+
+验证命令：
+```bash
+swift test --filter ACPPermissionPolicyTests
+swift test --filter ACPAgentServiceTests --filter ACPClientRuntimeTests --filter SKIAgentSessionTests
+```

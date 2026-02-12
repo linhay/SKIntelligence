@@ -24,6 +24,9 @@ public actor ACPBridgeBackedPermissionPolicy: ACPPermissionPolicy {
     public func evaluate(_ request: ACPSessionPermissionRequestParams) async throws -> ACPSessionPermissionRequestResult {
         let fingerprint = ACPToolCallFingerprint(request)
         if let outcome = await memoryStore.get(sessionId: request.sessionId, fingerprint: fingerprint) {
+            if case .selected(let selected) = outcome, selected.optionId == "reject_always" {
+                return .init(outcome: .cancelled)
+            }
             return .init(outcome: outcome)
         }
 
