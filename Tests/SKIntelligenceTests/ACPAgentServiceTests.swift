@@ -6,6 +6,41 @@ import HTTPTypes
 @testable import SKIntelligence
 
 final class ACPAgentServiceTests: XCTestCase {
+    func testInitializeAndSessionPromptWithAgentSessionFactory() async throws {
+        let notifications = NotificationBox()
+
+        let service = ACPAgentService(
+            agentSessionFactory: { SKIAgentSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            notificationSink: { n in await notifications.append(n) }
+        )
+
+        let initReq = JSONRPCRequest(
+            id: .int(101),
+            method: ACPMethods.initialize,
+            params: try ACPCodec.encodeParams(ACPInitializeParams(protocolVersion: 1))
+        )
+        let initResp = await service.handle(initReq)
+        XCTAssertNil(initResp.error)
+
+        let newReq = JSONRPCRequest(
+            id: .int(102),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        let promptReq = JSONRPCRequest(
+            id: .int(103),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("hello")]))
+        )
+        let promptResp = await service.handle(promptReq)
+        XCTAssertNil(promptResp.error)
+    }
+
     func testInitializeAndSessionPrompt() async throws {
         let notifications = NotificationBox()
 

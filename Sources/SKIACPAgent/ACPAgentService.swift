@@ -46,7 +46,7 @@ public actor ACPAgentService {
         }
     }
 
-    public typealias SessionFactory = @Sendable () throws -> SKILanguageModelSession
+    public typealias SessionFactory = @Sendable () throws -> any ACPAgentSession
     public typealias NotificationSink = @Sendable (JSONRPCNotification) async -> Void
     public typealias PermissionRequester = @Sendable (ACPSessionPermissionRequestParams) async throws -> ACPSessionPermissionRequestResult
     public typealias AuthenticationHandler = @Sendable (ACPAuthenticateParams) async throws -> Void
@@ -62,7 +62,7 @@ public actor ACPAgentService {
     private let notificationSink: NotificationSink
 
     private struct SessionEntry {
-        let session: SKILanguageModelSession
+        let session: any ACPAgentSession
         var cwd: String
         var title: String?
         var updatedAt: String
@@ -106,6 +106,32 @@ public actor ACPAgentService {
             self.permissionRequester = nil
         }
         self.notificationSink = notificationSink
+    }
+
+    public init(
+        agentSessionFactory: @escaping @Sendable () throws -> SKIAgentSession,
+        agentInfo: ACPImplementationInfo,
+        capabilities: ACPAgentCapabilities,
+        authMethods: [ACPAuthMethod] = [],
+        authenticationHandler: AuthenticationHandler? = nil,
+        options: Options = .init(),
+        permissionRequester: PermissionRequester? = nil,
+        permissionPolicy: (any ACPPermissionPolicy)? = nil,
+        notificationSink: @escaping NotificationSink
+    ) {
+        self.init(
+            sessionFactory: {
+                try agentSessionFactory()
+            },
+            agentInfo: agentInfo,
+            capabilities: capabilities,
+            authMethods: authMethods,
+            authenticationHandler: authenticationHandler,
+            options: options,
+            permissionRequester: permissionRequester,
+            permissionPolicy: permissionPolicy,
+            notificationSink: notificationSink
+        )
     }
 
     public func handle(_ request: JSONRPCRequest) async -> JSONRPCResponse {
@@ -443,9 +469,7 @@ public actor ACPAgentService {
                 let toolCallID = "call_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
                 promptRequestToSession[request.id] = params.sessionId
                 defer { promptRequestToSession[request.id] = nil }
-                let task = Task<String, Error> {
-                    try await session.respond(to: text)
-                }
+                let task = Task<String, Error> { try await session.prompt(text) }
                 runningPrompts[params.sessionId] = task
 
                 do {
