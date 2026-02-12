@@ -153,3 +153,23 @@ swift test --filter ACPPermissionPolicyTests
 swift test --filter SKICLITests/testServePermissionModeSemantics
 swift test --filter ACP --parallel
 ```
+
+## 11. Runtime 与 Session Persistence 业务域（本轮新增）
+- 新增 `SKIACPClient` Runtime 抽象：
+  - `ACPFilesystemRuntime` / `ACPLocalFilesystemRuntime`
+  - `ACPTerminalRuntime` / `ACPProcessTerminalRuntime`
+  - `ACPRuntimeError` 与 rooted 文件访问策略
+- 新增 `ACPClientService.installRuntimes(filesystem:terminal:)` 统一接线接口。
+- `SKICLI` 改造为复用 runtime 抽象，移除内嵌 terminal registry 实现。
+- `SKIAgentSession` 新增 `enableJSONLPersistence(fileURL:configuration:)`，支持跨 session 恢复 transcript。
+- 新增测试：
+  - `ACPClientRuntimeTests`
+  - `SKIAgentSessionTests/testEnableJSONLPersistenceRestoresTranscriptAcrossSessions`
+
+验证命令：
+```bash
+swift test --filter ACPClientRuntimeTests \
+  --filter SKIAgentSessionTests/testEnableJSONLPersistenceRestoresTranscriptAcrossSessions
+
+swift test --filter ACP --filter SKICLITests --filter SKICLIProcessTests --filter SKIAgentSessionTests
+```
