@@ -185,3 +185,22 @@ swift test --filter ACP --filter SKICLITests --filter SKICLIProcessTests --filte
 swift test --filter ACPPermissionPolicyTests
 swift test --filter ACPAgentServiceTests --filter ACPClientRuntimeTests --filter SKIAgentSessionTests
 ```
+
+## 13. Session Fork 真实复制语义（本轮新增）
+- `ACPAgentSession` 扩展：
+  - `snapshotEntries()`
+  - `restoreEntries(_:)`
+- `ACPAgentService.sessionFork` 改为：
+  1) 从源 session 提取 transcript 快照
+  2) 通过 `sessionFactory` 创建新 session
+  3) 将快照恢复到新 session
+- 行为结果：fork 后新会话继承源上下文，同时与源会话保持隔离。
+- 新增测试：`ACPAgentServiceTests/testForkCopiesSessionStateAndKeepsIsolation`。
+
+验证命令：
+```bash
+swift test --filter ACPAgentServiceTests/testForkCopiesSessionStateAndKeepsIsolation \
+  --filter ACPAgentServiceTests/testListResumeAndForkWhenCapabilitiesEnabled
+
+swift test --filter ACPAgentServiceTests --filter ACPPermissionPolicyTests --filter ACPClientRuntimeTests
+```

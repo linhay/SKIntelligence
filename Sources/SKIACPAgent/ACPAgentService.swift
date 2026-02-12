@@ -294,9 +294,12 @@ public actor ACPAgentService {
                 guard let sourceEntry = sessions[params.sessionId] else {
                     throw ACPAgentServiceError.sessionNotFound(params.sessionId)
                 }
+                let snapshot = try await sourceEntry.session.snapshotEntries()
+                let forkedSession = try sessionFactory()
+                try await forkedSession.restoreEntries(snapshot)
                 let sessionID = "sess_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
                 sessions[sessionID] = SessionEntry(
-                    session: try sessionFactory(),
+                    session: forkedSession,
                     cwd: params.cwd,
                     title: sourceEntry.title,
                     updatedAt: iso8601TimestampNow(),

@@ -752,6 +752,64 @@ final class ACPAgentServiceTests: XCTestCase {
         XCTAssertEqual(forked.models?.currentModelId, "default")
     }
 
+    func testForkCopiesSessionStateAndKeepsIsolation() async throws {
+        let notifications = NotificationBox()
+        let service = ACPAgentService(
+            sessionFactory: { ForkStateSession() },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(
+                sessionCapabilities: .init(fork: .init()),
+                loadSession: true
+            ),
+            notificationSink: { n in await notifications.append(n) }
+        )
+
+        let newResp = await service.handle(JSONRPCRequest(
+            id: .int(1440),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp/origin"))
+        ))
+        let origin = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        _ = await service.handle(JSONRPCRequest(
+            id: .int(1441),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: origin.sessionId, prompt: [.text("alpha")]))
+        ))
+
+        let forkResp = await service.handle(JSONRPCRequest(
+            id: .int(1442),
+            method: ACPMethods.sessionFork,
+            params: try ACPCodec.encodeParams(ACPSessionForkParams(sessionId: origin.sessionId, cwd: "/tmp/forked"))
+        ))
+        let forked = try ACPCodec.decodeResult(forkResp.result, as: ACPSessionForkResult.self)
+
+        _ = await service.handle(JSONRPCRequest(
+            id: .int(1443),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: forked.sessionId, prompt: [.text("beta")]))
+        ))
+        _ = await service.handle(JSONRPCRequest(
+            id: .int(1444),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: origin.sessionId, prompt: [.text("gamma")]))
+        ))
+
+        let updates: [ACPSessionUpdateParams] = try await notifications.snapshot()
+            .map { try ACPCodec.decodeParams($0.params, as: ACPSessionUpdateParams.self) }
+
+        let forkTexts = updates
+            .filter { $0.sessionId == forked.sessionId && $0.update.sessionUpdate == .agentMessageChunk }
+            .compactMap { $0.update.content?.text }
+        let originTexts = updates
+            .filter { $0.sessionId == origin.sessionId && $0.update.sessionUpdate == .agentMessageChunk }
+            .compactMap { $0.update.content?.text }
+
+        XCTAssertTrue(forkTexts.contains(where: { $0.contains("alpha,beta") }))
+        XCTAssertTrue(originTexts.contains(where: { $0.contains("alpha,gamma") }))
+        XCTAssertFalse(originTexts.contains(where: { $0.contains("alpha,beta") }))
+    }
+
     func testSessionListSupportsCursorPagination() async throws {
         let service = ACPAgentService(
             sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
@@ -984,6 +1042,29 @@ private struct SlowCancellableClient: SKILanguageModelClient {
 private actor PromptCallCounter {
     private(set) var count: Int = 0
     func increment() { count += 1 }
+}
+
+private actor ForkStateSession: ACPAgentSession {
+    private var prompts: [String] = []
+
+    func prompt(_ text: String) async throws -> String {
+        prompts.append(text)
+        return "history:\(prompts.joined(separator: ","))"
+    }
+
+    func snapshotEntries() async throws -> [SKITranscript.Entry] {
+        prompts.map { .message(.user(content: .text($0))) }
+    }
+
+    func restoreEntries(_ entries: [SKITranscript.Entry]) async throws {
+        prompts = entries.compactMap { entry in
+            guard case .message(let message) = entry,
+                  case .user(let content, _) = message,
+                  case .text(let text) = content
+            else { return nil }
+            return text
+        }
+    }
 }
 
 private struct CountingEchoClient: SKILanguageModelClient {
