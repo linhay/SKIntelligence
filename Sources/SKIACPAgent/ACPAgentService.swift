@@ -475,87 +475,18 @@ public actor ACPAgentService {
                 do {
                     let output = try await awaitPrompt(task)
                     runningPrompts[params.sessionId] = nil
-
-                    let availableCommandsNotification = JSONRPCNotification(
-                        method: ACPMethods.sessionUpdate,
-                        params: try ACPCodec.encodeParams(
-                            ACPSessionUpdateParams(
-                                sessionId: params.sessionId,
-                                update: .init(
-                                    sessionUpdate: .availableCommandsUpdate,
-                                    availableCommands: [
-                                        .init(name: "read_file", description: "Read text file"),
-                                        .init(name: "run_terminal", description: "Run terminal command")
-                                    ]
-                                )
-                            )
-                        )
-                    )
-                    await notificationSink(availableCommandsNotification)
-
-                    let planNotification = JSONRPCNotification(
-                        method: ACPMethods.sessionUpdate,
-                        params: try ACPCodec.encodeParams(
-                            ACPSessionUpdateParams(
-                                sessionId: params.sessionId,
-                                update: .init(
-                                    sessionUpdate: .plan,
-                                    plan: .init(entries: [
-                                        .init(content: "Analyze prompt", status: "completed", priority: "high"),
-                                        .init(content: "Produce final answer", status: "in_progress", priority: "medium")
-                                    ])
-                                )
-                            )
-                        )
-                    )
-                    await notificationSink(planNotification)
-
-                    let toolCallNotification = JSONRPCNotification(
-                        method: ACPMethods.sessionUpdate,
-                        params: try ACPCodec.encodeParams(
-                            ACPSessionUpdateParams(
-                                sessionId: params.sessionId,
-                                update: .init(
-                                    sessionUpdate: .toolCall,
-                                    toolCall: .init(
-                                        toolCallId: toolCallID,
-                                        title: "language_model_prompt",
-                                        kind: .execute,
-                                        status: .inProgress,
-                                        locations: [.init(path: entry.cwd)]
-                                    )
-                                )
-                            )
-                        )
-                    )
-                    await notificationSink(toolCallNotification)
-
-                    let toolCallUpdateNotification = JSONRPCNotification(
-                        method: ACPMethods.sessionUpdate,
-                        params: try ACPCodec.encodeParams(
-                            ACPSessionUpdateParams(
-                                sessionId: params.sessionId,
-                                update: .init(
-                                    sessionUpdate: .toolCallUpdate,
-                                    toolCall: .init(
-                                        toolCallId: toolCallID,
-                                        status: .completed
-                                    )
-                                )
-                            )
-                        )
-                    )
-                    await notificationSink(toolCallUpdateNotification)
-
-                    let update = ACPSessionUpdateParams(
-                        sessionId: params.sessionId,
-                        update: ACPSessionUpdatePayload(
-                            sessionUpdate: .agentMessageChunk,
-                            content: ACPSessionUpdateContent(type: "text", text: output)
-                        )
-                    )
-                    let notification = JSONRPCNotification(method: ACPMethods.sessionUpdate, params: try ACPCodec.encodeParams(update))
-                    await notificationSink(notification)
+                    let syntheticEvents: [SKITranscript.Event] = [
+                        SKITranscript.sessionUpdateEvent(name: "available_commands_update"),
+                        SKITranscript.sessionUpdateEvent(name: "plan"),
+                        .init(kind: .toolCall, toolName: "language_model_prompt", toolCallId: toolCallID),
+                        .init(kind: .toolExecutionUpdate, toolName: "language_model_prompt", toolCallId: toolCallID, state: .completed),
+                        .init(kind: .message, role: "assistant", content: output),
+                    ]
+                    for event in syntheticEvents {
+                        if let update = sessionUpdatePayload(from: event, sessionId: params.sessionId, cwd: entry.cwd) {
+                            try await emitSessionUpdate(update)
+                        }
+                    }
 
                     if options.autoSessionInfoUpdateOnFirstPrompt,
                        var sessionEntry = sessions[params.sessionId],
@@ -719,6 +650,110 @@ public actor ACPAgentService {
         guard !trimmed.isEmpty else { return nil }
         let firstLine = trimmed.components(separatedBy: .newlines).first ?? trimmed
         return String(firstLine.prefix(80))
+    }
+
+    private func sessionUpdatePayload(
+        from event: SKITranscript.Event,
+        sessionId: String,
+        cwd: String
+    ) -> ACPSessionUpdateParams? {
+        switch event.kind {
+        case .message:
+            guard event.role == "assistant" else { return nil }
+            return ACPSessionUpdateParams(
+                sessionId: sessionId,
+                update: .init(update: .agentMessageChunk(.text(event.content ?? "")))
+            )
+        case .toolCall:
+            guard let toolCallId = event.toolCallId else { return nil }
+            return ACPSessionUpdateParams(
+                sessionId: sessionId,
+                update: .init(
+                    update: .toolCall(
+                        .init(
+                            toolCallId: toolCallId,
+                            title: event.toolName ?? "tool_call",
+                            kind: .execute,
+                            status: .inProgress,
+                            locations: [.init(path: cwd)]
+                        )
+                    )
+                )
+            )
+        case .toolResult:
+            guard let toolCallId = event.toolCallId else { return nil }
+            return ACPSessionUpdateParams(
+                sessionId: sessionId,
+                update: .init(
+                    update: .toolCallUpdate(
+                        .init(
+                            toolCallId: toolCallId,
+                            status: .completed
+                        )
+                    )
+                )
+            )
+        case .toolExecutionUpdate:
+            guard let toolCallId = event.toolCallId else { return nil }
+            let status: ACPToolCallStatus
+            switch event.state {
+            case .started:
+                status = .inProgress
+            case .completed:
+                status = .completed
+            case .failed:
+                status = .failed
+            case .none:
+                status = .pending
+            }
+            return ACPSessionUpdateParams(
+                sessionId: sessionId,
+                update: .init(
+                    update: .toolCallUpdate(
+                        .init(
+                            toolCallId: toolCallId,
+                            status: status
+                        )
+                    )
+                )
+            )
+        case .sessionUpdate:
+            guard let name = event.sessionUpdateName else { return nil }
+            switch name {
+            case "available_commands_update":
+                return ACPSessionUpdateParams(
+                    sessionId: sessionId,
+                    update: .init(
+                        update: .availableCommandsUpdate([
+                            .init(name: "read_file", description: "Read text file"),
+                            .init(name: "run_terminal", description: "Run terminal command"),
+                        ])
+                    )
+                )
+            case "plan":
+                return ACPSessionUpdateParams(
+                    sessionId: sessionId,
+                    update: .init(
+                        update: .plan(
+                            .init(entries: [
+                                .init(content: "Analyze prompt", status: "completed", priority: "high"),
+                                .init(content: "Produce final answer", status: "in_progress", priority: "medium"),
+                            ])
+                        )
+                    )
+                )
+            default:
+                return nil
+            }
+        }
+    }
+
+    private func emitSessionUpdate(_ params: ACPSessionUpdateParams) async throws {
+        let notification = JSONRPCNotification(
+            method: ACPMethods.sessionUpdate,
+            params: try ACPCodec.encodeParams(params)
+        )
+        await notificationSink(notification)
     }
 }
 
