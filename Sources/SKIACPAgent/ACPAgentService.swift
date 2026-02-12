@@ -373,12 +373,15 @@ public actor ACPAgentService {
                 entry.updatedAt = iso8601TimestampNow()
                 sessions[params.sessionId] = entry
 
-                let update = ACPSessionUpdateParams(
+                let event = SKITranscript.sessionUpdateEvent(name: "current_mode_update")
+                if let update = sessionUpdatePayload(
+                    from: event,
                     sessionId: params.sessionId,
-                    update: .init(sessionUpdate: .currentModeUpdate, currentModeId: params.modeId)
-                )
-                let notification = JSONRPCNotification(method: ACPMethods.sessionUpdate, params: try ACPCodec.encodeParams(update))
-                await notificationSink(notification)
+                    cwd: entry.cwd,
+                    currentModeId: params.modeId
+                ) {
+                    try await emitSessionUpdate(update)
+                }
                 return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(ACPSessionSetModeResult()))
 
             case ACPMethods.sessionSetModel:
@@ -418,12 +421,15 @@ public actor ACPAgentService {
                 sessions[params.sessionId] = entry
 
                 let result = ACPSessionSetConfigOptionResult(configOptions: entry.configOptions)
-                let update = ACPSessionUpdateParams(
+                let event = SKITranscript.sessionUpdateEvent(name: "config_option_update")
+                if let update = sessionUpdatePayload(
+                    from: event,
                     sessionId: params.sessionId,
-                    update: .init(sessionUpdate: .configOptionUpdate, configOptions: entry.configOptions)
-                )
-                let notification = JSONRPCNotification(method: ACPMethods.sessionUpdate, params: try ACPCodec.encodeParams(update))
-                await notificationSink(notification)
+                    cwd: entry.cwd,
+                    configOptions: entry.configOptions
+                ) {
+                    try await emitSessionUpdate(update)
+                }
                 return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
 
             case ACPMethods.sessionPrompt:
@@ -496,21 +502,18 @@ public actor ACPAgentService {
                         sessionEntry.updatedAt = iso8601TimestampNow()
                         sessionEntry.lastTouchedNanos = currentMonotonicNanos()
                         sessions[params.sessionId] = sessionEntry
-                        let infoUpdate = ACPSessionUpdateParams(
+                        let event = SKITranscript.sessionUpdateEvent(name: "session_info_update")
+                        if let update = sessionUpdatePayload(
+                            from: event,
                             sessionId: params.sessionId,
-                            update: .init(
-                                sessionUpdate: .sessionInfoUpdate,
-                                sessionInfoUpdate: .init(
-                                    title: generatedTitle,
-                                    updatedAt: sessionEntry.updatedAt
-                                )
+                            cwd: sessionEntry.cwd,
+                            sessionInfoUpdate: .init(
+                                title: generatedTitle,
+                                updatedAt: sessionEntry.updatedAt
                             )
-                        )
-                        let infoNotification = JSONRPCNotification(
-                            method: ACPMethods.sessionUpdate,
-                            params: try ACPCodec.encodeParams(infoUpdate)
-                        )
-                        await notificationSink(infoNotification)
+                        ) {
+                            try await emitSessionUpdate(update)
+                        }
                     }
 
                     let result = ACPSessionPromptResult(stopReason: .endTurn)
@@ -655,7 +658,10 @@ public actor ACPAgentService {
     private func sessionUpdatePayload(
         from event: SKITranscript.Event,
         sessionId: String,
-        cwd: String
+        cwd: String,
+        currentModeId: String? = nil,
+        configOptions: [ACPSessionConfigOption] = [],
+        sessionInfoUpdate: ACPSessionInfoUpdate? = nil
     ) -> ACPSessionUpdateParams? {
         switch event.kind {
         case .message:
@@ -739,6 +745,29 @@ public actor ACPAgentService {
                                 .init(content: "Analyze prompt", status: "completed", priority: "high"),
                                 .init(content: "Produce final answer", status: "in_progress", priority: "medium"),
                             ])
+                        )
+                    )
+                )
+            case "current_mode_update":
+                return ACPSessionUpdateParams(
+                    sessionId: sessionId,
+                    update: .init(
+                        update: .currentModeUpdate(currentModeId ?? "")
+                    )
+                )
+            case "config_option_update":
+                return ACPSessionUpdateParams(
+                    sessionId: sessionId,
+                    update: .init(
+                        update: .configOptionUpdate(configOptions)
+                    )
+                )
+            case "session_info_update":
+                return ACPSessionUpdateParams(
+                    sessionId: sessionId,
+                    update: .init(
+                        update: .sessionInfoUpdate(
+                            sessionInfoUpdate ?? .init()
                         )
                     )
                 )
