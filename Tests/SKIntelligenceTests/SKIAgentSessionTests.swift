@@ -64,6 +64,23 @@ final class SKIAgentSessionTests: XCTestCase {
             XCTAssertTrue(error is CancellationError)
         }
     }
+
+    func testEnableJSONLPersistenceRestoresTranscriptAcrossSessions() async throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ski-agent-session-\(UUID().uuidString).jsonl")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let source = SKIAgentSession(client: AgentEchoClient())
+        try await source.enableJSONLPersistence(fileURL: fileURL)
+        _ = try await source.prompt("persist me")
+        let sourceCount = await source.transcriptEntries().count
+        XCTAssertGreaterThan(sourceCount, 0)
+
+        let restored = SKIAgentSession(client: AgentEchoClient())
+        try await restored.enableJSONLPersistence(fileURL: fileURL)
+        let restoredEntries = await restored.transcriptEntries()
+        XCTAssertEqual(restoredEntries.count, sourceCount)
+    }
 }
 
 private struct AgentEchoClient: SKILanguageModelClient {

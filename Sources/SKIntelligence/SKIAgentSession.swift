@@ -97,6 +97,18 @@ public actor SKIAgentSession {
         return await transcript.entries
     }
 
+    public func enableJSONLPersistence(
+        fileURL: URL,
+        configuration: SKITranscript.JSONLPersistenceConfiguration = .init()
+    ) async throws {
+        let transcript = await modelSession.transcript
+        try await transcript.enableJSONLPersistence(
+            sessionId: id,
+            fileURL: fileURL,
+            configuration: configuration
+        )
+    }
+
     public func resume(with entries: [SKITranscript.Entry]) async throws {
         let transcript = await modelSession.transcript
         await transcript.replaceEntries(entries)
