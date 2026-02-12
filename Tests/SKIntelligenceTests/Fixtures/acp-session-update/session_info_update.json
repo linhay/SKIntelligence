@@ -1,0 +1,8 @@
+{
+  "sessionId": "sess_fixture_info",
+  "update": {
+    "sessionUpdate": "session_info_update",
+    "title": "Debug authentication timeout",
+    "updatedAt": "2026-02-12T19:00:00Z"
+  }
+}

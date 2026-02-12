@@ -1,0 +1,7 @@
+{
+  "sessionId": "sess_fixture_mode",
+  "update": {
+    "sessionUpdate": "current_mode_update",
+    "currentModeId": "default"
+  }
+}

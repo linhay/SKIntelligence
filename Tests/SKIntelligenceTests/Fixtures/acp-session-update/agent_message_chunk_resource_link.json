@@ -1,0 +1,14 @@
+{
+  "sessionId": "sess_fixture_message",
+  "update": {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "resource_link",
+      "name": "README",
+      "uri": "file:///repo/README.md",
+      "description": "spec",
+      "mimeType": "text/markdown",
+      "title": "Readme"
+    }
+  }
+}

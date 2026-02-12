@@ -1,0 +1,37 @@
+{
+  "sessionId": "sess_fixture_tool",
+  "update": {
+    "sessionUpdate": "tool_call_update",
+    "toolCall": {
+      "toolCallId": "call_fixture_1",
+      "title": "run command",
+      "kind": "execute",
+      "status": "in_progress",
+      "locations": [
+        {
+          "path": "Sources/SKIACP/ACPModels.swift",
+          "line": 12
+        }
+      ],
+      "content": [
+        {
+          "type": "content",
+          "content": {
+            "type": "text",
+            "text": "running"
+          }
+        },
+        {
+          "type": "terminal",
+          "terminalId": "term_fixture_1"
+        }
+      ],
+      "rawInput": {
+        "cmd": "echo hello"
+      },
+      "rawOutput": {
+        "stdout": "hello"
+      }
+    }
+  }
+}

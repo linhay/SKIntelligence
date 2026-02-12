@@ -1,0 +1,1686 @@
+import Foundation
+import SKIJSONRPC
+
+public enum ACPStopReason: String, Codable, Sendable {
+    case endTurn = "end_turn"
+    case maxTokens = "max_tokens"
+    case maxTurnRequests = "max_turn_requests"
+    case refusal
+    case cancelled
+}
+
+public struct ACPImplementationInfo: Codable, Sendable, Equatable {
+    public var name: String
+    public var title: String?
+    public var version: String
+
+    public init(name: String, title: String? = nil, version: String) {
+        self.name = name
+        self.title = title
+        self.version = version
+    }
+}
+
+public struct ACPClientCapabilities: Codable, Sendable, Equatable {
+    public struct FileSystem: Codable, Sendable, Equatable {
+        public var readTextFile: Bool
+        public var writeTextFile: Bool
+
+        public init(readTextFile: Bool = false, writeTextFile: Bool = false) {
+            self.readTextFile = readTextFile
+            self.writeTextFile = writeTextFile
+        }
+    }
+
+    public var fs: FileSystem
+    public var terminal: Bool
+
+    public init(fs: FileSystem = .init(), terminal: Bool = false) {
+        self.fs = fs
+        self.terminal = terminal
+    }
+}
+
+public struct ACPPromptCapabilities: Codable, Sendable, Equatable {
+    public var image: Bool
+    public var audio: Bool
+    public var embeddedContext: Bool
+
+    public init(image: Bool = false, audio: Bool = false, embeddedContext: Bool = false) {
+        self.image = image
+        self.audio = audio
+        self.embeddedContext = embeddedContext
+    }
+}
+
+public struct ACPMCPCapabilities: Codable, Sendable, Equatable {
+    public var http: Bool
+    public var sse: Bool
+
+    public init(http: Bool = false, sse: Bool = false) {
+        self.http = http
+        self.sse = sse
+    }
+}
+
+public struct ACPAgentCapabilities: Codable, Sendable, Equatable {
+    public var authCapabilities: ACPAuthCapabilities
+    public var sessionCapabilities: ACPSessionCapabilities
+    public var loadSession: Bool
+    public var promptCapabilities: ACPPromptCapabilities
+    public var mcpCapabilities: ACPMCPCapabilities
+
+    public init(
+        authCapabilities: ACPAuthCapabilities = .init(),
+        sessionCapabilities: ACPSessionCapabilities = .init(),
+        loadSession: Bool = false,
+        promptCapabilities: ACPPromptCapabilities = .init(),
+        mcpCapabilities: ACPMCPCapabilities = .init()
+    ) {
+        self.authCapabilities = authCapabilities
+        self.sessionCapabilities = sessionCapabilities
+        self.loadSession = loadSession
+        self.promptCapabilities = promptCapabilities
+        self.mcpCapabilities = mcpCapabilities
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case authCapabilities
+        case sessionCapabilities
+        case loadSession
+        case promptCapabilities
+        case mcpCapabilities
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.authCapabilities = try container.decodeIfPresent(ACPAuthCapabilities.self, forKey: .authCapabilities) ?? .init()
+        self.sessionCapabilities = try container.decodeIfPresent(ACPSessionCapabilities.self, forKey: .sessionCapabilities) ?? .init()
+        self.loadSession = try container.decodeIfPresent(Bool.self, forKey: .loadSession) ?? false
+        self.promptCapabilities = try container.decodeIfPresent(ACPPromptCapabilities.self, forKey: .promptCapabilities) ?? .init()
+        self.mcpCapabilities = try container.decodeIfPresent(ACPMCPCapabilities.self, forKey: .mcpCapabilities) ?? .init()
+    }
+}
+
+public struct ACPAuthCapabilities: Codable, Sendable, Equatable {
+    public var logout: ACPLogoutCapabilities?
+
+    public init(logout: ACPLogoutCapabilities? = nil) {
+        self.logout = logout
+    }
+}
+
+public struct ACPLogoutCapabilities: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPSessionCapabilities: Codable, Sendable, Equatable {
+    public var list: ACPSessionListCapabilities?
+    public var resume: ACPSessionResumeCapabilities?
+    public var fork: ACPSessionForkCapabilities?
+    public var delete: ACPSessionDeleteCapabilities?
+
+    public init(
+        list: ACPSessionListCapabilities? = nil,
+        resume: ACPSessionResumeCapabilities? = nil,
+        fork: ACPSessionForkCapabilities? = nil,
+        delete: ACPSessionDeleteCapabilities? = nil
+    ) {
+        self.list = list
+        self.resume = resume
+        self.fork = fork
+        self.delete = delete
+    }
+}
+
+public struct ACPSessionListCapabilities: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPSessionResumeCapabilities: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPSessionForkCapabilities: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPSessionDeleteCapabilities: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPInitializeParams: Codable, Sendable, Equatable {
+    public var protocolVersion: Int
+    public var clientCapabilities: ACPClientCapabilities
+    public var clientInfo: ACPImplementationInfo?
+
+    public init(protocolVersion: Int = 1, clientCapabilities: ACPClientCapabilities = .init(), clientInfo: ACPImplementationInfo? = nil) {
+        self.protocolVersion = protocolVersion
+        self.clientCapabilities = clientCapabilities
+        self.clientInfo = clientInfo
+    }
+}
+
+public struct ACPInitializeResult: Codable, Sendable, Equatable {
+    public var protocolVersion: Int
+    public var agentCapabilities: ACPAgentCapabilities
+    public var agentInfo: ACPImplementationInfo?
+    public var authMethods: [ACPAuthMethod]
+
+    public init(
+        protocolVersion: Int = 1,
+        agentCapabilities: ACPAgentCapabilities,
+        agentInfo: ACPImplementationInfo? = nil,
+        authMethods: [ACPAuthMethod] = []
+    ) {
+        self.protocolVersion = protocolVersion
+        self.agentCapabilities = agentCapabilities
+        self.agentInfo = agentInfo
+        self.authMethods = authMethods
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case protocolVersion
+        case agentCapabilities
+        case agentInfo
+        case authMethods
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.protocolVersion = try container.decode(Int.self, forKey: .protocolVersion)
+        self.agentCapabilities = try container.decodeIfPresent(ACPAgentCapabilities.self, forKey: .agentCapabilities) ?? .init()
+        self.agentInfo = try container.decodeIfPresent(ACPImplementationInfo.self, forKey: .agentInfo)
+        self.authMethods = try container.decodeIfPresent([ACPAuthMethod].self, forKey: .authMethods) ?? []
+    }
+}
+
+public struct ACPAuthMethod: Codable, Sendable, Equatable {
+    public var id: String
+    public var name: String
+    public var description: String?
+
+    public init(id: String, name: String, description: String? = nil) {
+        self.id = id
+        self.name = name
+        self.description = description
+    }
+}
+
+public struct ACPAuthenticateParams: Codable, Sendable, Equatable {
+    public var methodId: String
+
+    public init(methodId: String) {
+        self.methodId = methodId
+    }
+}
+
+public struct ACPAuthenticateResult: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPLogoutParams: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPLogoutResult: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPEnvVar: Codable, Sendable, Equatable {
+    public var name: String
+    public var value: String
+
+    public init(name: String, value: String) {
+        self.name = name
+        self.value = value
+    }
+}
+
+public struct ACPHTTPHeader: Codable, Sendable, Equatable {
+    public var name: String
+    public var value: String
+
+    public init(name: String, value: String) {
+        self.name = name
+        self.value = value
+    }
+}
+
+public struct ACPMCPServerConfig: Codable, Sendable, Equatable {
+    public enum TransportType: String, Codable, Sendable {
+        case stdio
+        case http
+        case sse
+    }
+
+    public var type: TransportType
+    public var name: String
+    public var command: String?
+    public var args: [String]
+    public var env: [ACPEnvVar]
+    public var url: String?
+    public var headers: [ACPHTTPHeader]
+
+    public init(
+        type: TransportType = .stdio,
+        name: String,
+        command: String? = nil,
+        args: [String] = [],
+        env: [ACPEnvVar] = [],
+        url: String? = nil,
+        headers: [ACPHTTPHeader] = []
+    ) {
+        self.type = type
+        self.name = name
+        self.command = command
+        self.args = args
+        self.env = env
+        self.url = url
+        self.headers = headers
+    }
+
+    public init(name: String, command: String, args: [String] = [], env: [ACPEnvVar] = []) {
+        self.init(type: .stdio, name: name, command: command, args: args, env: env)
+    }
+}
+
+public struct ACPSessionNewParams: Codable, Sendable, Equatable {
+    public var cwd: String
+    public var mcpServers: [ACPMCPServerConfig]
+
+    public init(cwd: String, mcpServers: [ACPMCPServerConfig] = []) {
+        self.cwd = cwd
+        self.mcpServers = mcpServers
+    }
+}
+
+public struct ACPSessionLoadParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var cwd: String
+    public var mcpServers: [ACPMCPServerConfig]
+
+    public init(sessionId: String, cwd: String, mcpServers: [ACPMCPServerConfig] = []) {
+        self.sessionId = sessionId
+        self.cwd = cwd
+        self.mcpServers = mcpServers
+    }
+}
+
+public struct ACPSessionMode: Codable, Sendable, Equatable {
+    public var id: String
+    public var name: String
+    public var description: String?
+
+    public init(id: String, name: String, description: String? = nil) {
+        self.id = id
+        self.name = name
+        self.description = description
+    }
+}
+
+public struct ACPSessionModeState: Codable, Sendable, Equatable {
+    public var currentModeId: String
+    public var availableModes: [ACPSessionMode]
+
+    public init(currentModeId: String, availableModes: [ACPSessionMode]) {
+        self.currentModeId = currentModeId
+        self.availableModes = availableModes
+    }
+}
+
+public struct ACPModelInfo: Codable, Sendable, Equatable {
+    public var modelId: String
+    public var name: String
+    public var description: String?
+
+    public init(modelId: String, name: String, description: String? = nil) {
+        self.modelId = modelId
+        self.name = name
+        self.description = description
+    }
+}
+
+public struct ACPSessionModelState: Codable, Sendable, Equatable {
+    public var currentModelId: String
+    public var availableModels: [ACPModelInfo]
+
+    public init(currentModelId: String, availableModels: [ACPModelInfo]) {
+        self.currentModelId = currentModelId
+        self.availableModels = availableModels
+    }
+}
+
+public enum ACPSessionConfigOptionKind: String, Codable, Sendable {
+    case select
+}
+
+public enum ACPSessionConfigOptionCategory: String, Codable, Sendable {
+    case mode
+    case model
+    case thoughtLevel = "thought_level"
+    case other
+}
+
+public struct ACPSessionConfigSelectOption: Codable, Sendable, Equatable {
+    public var value: String
+    public var name: String
+    public var description: String?
+
+    public init(value: String, name: String, description: String? = nil) {
+        self.value = value
+        self.name = name
+        self.description = description
+    }
+}
+
+public struct ACPSessionConfigSelectGroup: Codable, Sendable, Equatable {
+    public var group: String
+    public var name: String
+    public var options: [ACPSessionConfigSelectOption]
+
+    public init(group: String, name: String, options: [ACPSessionConfigSelectOption]) {
+        self.group = group
+        self.name = name
+        self.options = options
+    }
+}
+
+public enum ACPSessionConfigSelectOptions: Codable, Sendable, Equatable {
+    case ungrouped([ACPSessionConfigSelectOption])
+    case grouped([ACPSessionConfigSelectGroup])
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let groups = try? container.decode([ACPSessionConfigSelectGroup].self) {
+            self = .grouped(groups)
+            return
+        }
+        self = .ungrouped(try container.decode([ACPSessionConfigSelectOption].self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .ungrouped(let options):
+            try container.encode(options)
+        case .grouped(let groups):
+            try container.encode(groups)
+        }
+    }
+}
+
+public struct ACPSessionConfigOption: Codable, Sendable, Equatable {
+    public var type: ACPSessionConfigOptionKind
+    public var id: String
+    public var name: String
+    public var description: String?
+    public var category: ACPSessionConfigOptionCategory?
+    public var currentValue: String
+    public var options: ACPSessionConfigSelectOptions
+
+    public init(
+        type: ACPSessionConfigOptionKind = .select,
+        id: String,
+        name: String,
+        description: String? = nil,
+        category: ACPSessionConfigOptionCategory? = nil,
+        currentValue: String,
+        options: ACPSessionConfigSelectOptions = .ungrouped([])
+    ) {
+        self.type = type
+        self.id = id
+        self.name = name
+        self.description = description
+        self.category = category
+        self.currentValue = currentValue
+        self.options = options
+    }
+}
+
+public struct ACPSessionNewResult: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var modes: ACPSessionModeState?
+    public var models: ACPSessionModelState?
+    public var configOptions: [ACPSessionConfigOption]?
+
+    public init(
+        sessionId: String,
+        modes: ACPSessionModeState? = nil,
+        models: ACPSessionModelState? = nil,
+        configOptions: [ACPSessionConfigOption]? = nil
+    ) {
+        self.sessionId = sessionId
+        self.modes = modes
+        self.models = models
+        self.configOptions = configOptions
+    }
+}
+
+public struct ACPSessionLoadResult: Codable, Sendable, Equatable {
+    public var modes: ACPSessionModeState?
+    public var models: ACPSessionModelState?
+    public var configOptions: [ACPSessionConfigOption]?
+
+    public init(
+        modes: ACPSessionModeState? = nil,
+        models: ACPSessionModelState? = nil,
+        configOptions: [ACPSessionConfigOption]? = nil
+    ) {
+        self.modes = modes
+        self.models = models
+        self.configOptions = configOptions
+    }
+}
+
+public struct ACPTextContentBlock: Codable, Sendable, Equatable {
+    public var text: String
+    public var annotations: JSONValue?
+
+    public init(text: String, annotations: JSONValue? = nil) {
+        self.text = text
+        self.annotations = annotations
+    }
+}
+
+public struct ACPImageContentBlock: Codable, Sendable, Equatable {
+    public var data: String
+    public var mimeType: String
+    public var uri: String?
+    public var annotations: JSONValue?
+
+    public init(data: String, mimeType: String, uri: String? = nil, annotations: JSONValue? = nil) {
+        self.data = data
+        self.mimeType = mimeType
+        self.uri = uri
+        self.annotations = annotations
+    }
+}
+
+public struct ACPAudioContentBlock: Codable, Sendable, Equatable {
+    public var data: String
+    public var mimeType: String
+    public var annotations: JSONValue?
+
+    public init(data: String, mimeType: String, annotations: JSONValue? = nil) {
+        self.data = data
+        self.mimeType = mimeType
+        self.annotations = annotations
+    }
+}
+
+public struct ACPResourceLinkContentBlock: Codable, Sendable, Equatable {
+    public var name: String
+    public var uri: String
+    public var description: String?
+    public var mimeType: String?
+    public var size: Int64?
+    public var title: String?
+    public var annotations: JSONValue?
+
+    public init(
+        name: String,
+        uri: String,
+        description: String? = nil,
+        mimeType: String? = nil,
+        size: Int64? = nil,
+        title: String? = nil,
+        annotations: JSONValue? = nil
+    ) {
+        self.name = name
+        self.uri = uri
+        self.description = description
+        self.mimeType = mimeType
+        self.size = size
+        self.title = title
+        self.annotations = annotations
+    }
+}
+
+public struct ACPResourceContentBlock: Codable, Sendable, Equatable {
+    public var resource: JSONValue
+    public var annotations: JSONValue?
+
+    public init(resource: JSONValue, annotations: JSONValue? = nil) {
+        self.resource = resource
+        self.annotations = annotations
+    }
+}
+
+public struct ACPUnknownContentBlock: Codable, Sendable, Equatable {
+    public var type: String
+    public var payload: [String: JSONValue]
+
+    public init(type: String, payload: [String: JSONValue]) {
+        self.type = type
+        self.payload = payload
+    }
+}
+
+public enum ACPContentBlock: Codable, Sendable, Equatable {
+    case text(ACPTextContentBlock)
+    case image(ACPImageContentBlock)
+    case audio(ACPAudioContentBlock)
+    case resourceLink(ACPResourceLinkContentBlock)
+    case resource(ACPResourceContentBlock)
+    case unknown(ACPUnknownContentBlock)
+
+    public init(
+        type: String = "text",
+        text: String? = nil,
+        data: String? = nil,
+        mimeType: String? = nil,
+        uri: String? = nil,
+        name: String? = nil,
+        description: String? = nil,
+        size: Int64? = nil,
+        title: String? = nil,
+        resource: JSONValue? = nil,
+        annotations: JSONValue? = nil
+    ) {
+        switch type {
+        case "text":
+            self = .text(.init(text: text ?? "", annotations: annotations))
+        case "image":
+            self = .image(.init(data: data ?? "", mimeType: mimeType ?? "", uri: uri, annotations: annotations))
+        case "audio":
+            self = .audio(.init(data: data ?? "", mimeType: mimeType ?? "", annotations: annotations))
+        case "resource_link":
+            self = .resourceLink(
+                .init(
+                    name: name ?? "",
+                    uri: uri ?? "",
+                    description: description,
+                    mimeType: mimeType,
+                    size: size,
+                    title: title,
+                    annotations: annotations
+                )
+            )
+        case "resource":
+            self = .resource(.init(resource: resource ?? .object([:]), annotations: annotations))
+        default:
+            var payload: [String: JSONValue] = [:]
+            if let text { payload["text"] = .string(text) }
+            if let data { payload["data"] = .string(data) }
+            if let mimeType { payload["mimeType"] = .string(mimeType) }
+            if let uri { payload["uri"] = .string(uri) }
+            if let name { payload["name"] = .string(name) }
+            if let description { payload["description"] = .string(description) }
+            if let size { payload["size"] = .number(Double(size)) }
+            if let title { payload["title"] = .string(title) }
+            if let resource { payload["resource"] = resource }
+            if let annotations { payload["annotations"] = annotations }
+            self = .unknown(.init(type: type, payload: payload))
+        }
+    }
+
+    public static func text(_ value: String) -> ACPContentBlock {
+        .text(.init(text: value))
+    }
+
+    public static func image(data: String, mimeType: String, uri: String? = nil) -> ACPContentBlock {
+        .image(.init(data: data, mimeType: mimeType, uri: uri))
+    }
+
+    public static func audio(data: String, mimeType: String) -> ACPContentBlock {
+        .audio(.init(data: data, mimeType: mimeType))
+    }
+
+    public static func resourceLink(
+        name: String,
+        uri: String,
+        description: String? = nil,
+        mimeType: String? = nil,
+        size: Int64? = nil,
+        title: String? = nil
+    ) -> ACPContentBlock {
+        .resourceLink(
+            .init(
+                name: name,
+                uri: uri,
+                description: description,
+                mimeType: mimeType,
+                size: size,
+                title: title
+            )
+        )
+    }
+
+    public var type: String {
+        switch self {
+        case .text: return "text"
+        case .image: return "image"
+        case .audio: return "audio"
+        case .resourceLink: return "resource_link"
+        case .resource: return "resource"
+        case .unknown(let block): return block.type
+        }
+    }
+
+    public var text: String? {
+        if case .text(let block) = self { return block.text }
+        if case .unknown(let block) = self, case .string(let value)? = block.payload["text"] { return value }
+        return nil
+    }
+
+    public var data: String? {
+        switch self {
+        case .image(let block): return block.data
+        case .audio(let block): return block.data
+        case .unknown(let block):
+            if case .string(let value)? = block.payload["data"] { return value }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    public var mimeType: String? {
+        switch self {
+        case .image(let block): return block.mimeType
+        case .audio(let block): return block.mimeType
+        case .resourceLink(let block): return block.mimeType
+        case .unknown(let block):
+            if case .string(let value)? = block.payload["mimeType"] { return value }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    public var uri: String? {
+        switch self {
+        case .image(let block): return block.uri
+        case .resourceLink(let block): return block.uri
+        case .unknown(let block):
+            if case .string(let value)? = block.payload["uri"] { return value }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    public var name: String? {
+        switch self {
+        case .resourceLink(let block): return block.name
+        case .unknown(let block):
+            if case .string(let value)? = block.payload["name"] { return value }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    public var description: String? {
+        switch self {
+        case .resourceLink(let block): return block.description
+        case .unknown(let block):
+            if case .string(let value)? = block.payload["description"] { return value }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    public var size: Int64? {
+        switch self {
+        case .resourceLink(let block): return block.size
+        case .unknown(let block):
+            if case .number(let value)? = block.payload["size"] { return Int64(value) }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    public var title: String? {
+        switch self {
+        case .resourceLink(let block): return block.title
+        case .unknown(let block):
+            if case .string(let value)? = block.payload["title"] { return value }
+            return nil
+        default:
+            return nil
+        }
+    }
+
+    public var resource: JSONValue? {
+        switch self {
+        case .resource(let block): return block.resource
+        case .unknown(let block): return block.payload["resource"]
+        default: return nil
+        }
+    }
+
+    public var annotations: JSONValue? {
+        switch self {
+        case .text(let block): return block.annotations
+        case .image(let block): return block.annotations
+        case .audio(let block): return block.annotations
+        case .resourceLink(let block): return block.annotations
+        case .resource(let block): return block.annotations
+        case .unknown(let block): return block.payload["annotations"]
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(JSONValue.self)
+        guard case .object(let object) = value else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Content block must be an object")
+        }
+        guard case .string(let type)? = object["type"] else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Missing content block type")
+        }
+        switch type {
+        case "text":
+            self = .text(.init(
+                text: Self.decodeString(object, key: "text") ?? "",
+                annotations: object["annotations"]
+            ))
+        case "image":
+            self = .image(.init(
+                data: Self.decodeString(object, key: "data") ?? "",
+                mimeType: Self.decodeString(object, key: "mimeType") ?? "",
+                uri: Self.decodeString(object, key: "uri"),
+                annotations: object["annotations"]
+            ))
+        case "audio":
+            self = .audio(.init(
+                data: Self.decodeString(object, key: "data") ?? "",
+                mimeType: Self.decodeString(object, key: "mimeType") ?? "",
+                annotations: object["annotations"]
+            ))
+        case "resource_link":
+            self = .resourceLink(.init(
+                name: Self.decodeString(object, key: "name") ?? "",
+                uri: Self.decodeString(object, key: "uri") ?? "",
+                description: Self.decodeString(object, key: "description"),
+                mimeType: Self.decodeString(object, key: "mimeType"),
+                size: Self.decodeInt64(object, key: "size"),
+                title: Self.decodeString(object, key: "title"),
+                annotations: object["annotations"]
+            ))
+        case "resource":
+            self = .resource(.init(
+                resource: object["resource"] ?? .object([:]),
+                annotations: object["annotations"]
+            ))
+        default:
+            var payload = object
+            payload.removeValue(forKey: "type")
+            self = .unknown(.init(type: type, payload: payload))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var object: [String: JSONValue] = ["type": .string(type)]
+        switch self {
+        case .text(let block):
+            object["text"] = .string(block.text)
+            if let annotations = block.annotations { object["annotations"] = annotations }
+        case .image(let block):
+            object["data"] = .string(block.data)
+            object["mimeType"] = .string(block.mimeType)
+            if let uri = block.uri { object["uri"] = .string(uri) }
+            if let annotations = block.annotations { object["annotations"] = annotations }
+        case .audio(let block):
+            object["data"] = .string(block.data)
+            object["mimeType"] = .string(block.mimeType)
+            if let annotations = block.annotations { object["annotations"] = annotations }
+        case .resourceLink(let block):
+            object["name"] = .string(block.name)
+            object["uri"] = .string(block.uri)
+            if let description = block.description { object["description"] = .string(description) }
+            if let mimeType = block.mimeType { object["mimeType"] = .string(mimeType) }
+            if let size = block.size { object["size"] = .number(Double(size)) }
+            if let title = block.title { object["title"] = .string(title) }
+            if let annotations = block.annotations { object["annotations"] = annotations }
+        case .resource(let block):
+            object["resource"] = block.resource
+            if let annotations = block.annotations { object["annotations"] = annotations }
+        case .unknown(let block):
+            for (key, value) in block.payload {
+                object[key] = value
+            }
+        }
+
+        var container = encoder.singleValueContainer()
+        try container.encode(JSONValue.object(object))
+    }
+
+    private static func decodeString(_ object: [String: JSONValue], key: String) -> String? {
+        guard case .string(let value)? = object[key] else { return nil }
+        return value
+    }
+
+    private static func decodeInt64(_ object: [String: JSONValue], key: String) -> Int64? {
+        guard case .number(let value)? = object[key] else { return nil }
+        return Int64(value)
+    }
+}
+
+public typealias ACPPromptContent = ACPContentBlock
+
+public struct ACPSessionPromptParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var prompt: [ACPPromptContent]
+
+    public init(sessionId: String, prompt: [ACPPromptContent]) {
+        self.sessionId = sessionId
+        self.prompt = prompt
+    }
+}
+
+public struct ACPSessionPromptResult: Codable, Sendable, Equatable {
+    public var stopReason: ACPStopReason
+
+    public init(stopReason: ACPStopReason) {
+        self.stopReason = stopReason
+    }
+}
+
+public struct ACPSessionListParams: Codable, Sendable, Equatable {
+    public var cwd: String?
+    public var cursor: String?
+
+    public init(cwd: String? = nil, cursor: String? = nil) {
+        self.cwd = cwd
+        self.cursor = cursor
+    }
+}
+
+public struct ACPSessionInfo: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var cwd: String
+    public var title: String?
+    public var updatedAt: String?
+
+    public init(sessionId: String, cwd: String, title: String? = nil, updatedAt: String? = nil) {
+        self.sessionId = sessionId
+        self.cwd = cwd
+        self.title = title
+        self.updatedAt = updatedAt
+    }
+}
+
+public struct ACPSessionListResult: Codable, Sendable, Equatable {
+    public var sessions: [ACPSessionInfo]
+    public var nextCursor: String?
+
+    public init(sessions: [ACPSessionInfo], nextCursor: String? = nil) {
+        self.sessions = sessions
+        self.nextCursor = nextCursor
+    }
+}
+
+public struct ACPSessionResumeParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var cwd: String
+    public var mcpServers: [ACPMCPServerConfig]
+
+    public init(sessionId: String, cwd: String, mcpServers: [ACPMCPServerConfig] = []) {
+        self.sessionId = sessionId
+        self.cwd = cwd
+        self.mcpServers = mcpServers
+    }
+}
+
+public struct ACPSessionResumeResult: Codable, Sendable, Equatable {
+    public var modes: ACPSessionModeState?
+    public var models: ACPSessionModelState?
+    public var configOptions: [ACPSessionConfigOption]?
+
+    public init(
+        modes: ACPSessionModeState? = nil,
+        models: ACPSessionModelState? = nil,
+        configOptions: [ACPSessionConfigOption]? = nil
+    ) {
+        self.modes = modes
+        self.models = models
+        self.configOptions = configOptions
+    }
+}
+
+public struct ACPSessionForkParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var cwd: String
+    public var mcpServers: [ACPMCPServerConfig]
+
+    public init(sessionId: String, cwd: String, mcpServers: [ACPMCPServerConfig] = []) {
+        self.sessionId = sessionId
+        self.cwd = cwd
+        self.mcpServers = mcpServers
+    }
+}
+
+public struct ACPSessionForkResult: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var modes: ACPSessionModeState?
+    public var models: ACPSessionModelState?
+    public var configOptions: [ACPSessionConfigOption]?
+
+    public init(
+        sessionId: String,
+        modes: ACPSessionModeState? = nil,
+        models: ACPSessionModelState? = nil,
+        configOptions: [ACPSessionConfigOption]? = nil
+    ) {
+        self.sessionId = sessionId
+        self.modes = modes
+        self.models = models
+        self.configOptions = configOptions
+    }
+}
+
+public struct ACPSessionDeleteParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+
+    public init(sessionId: String) {
+        self.sessionId = sessionId
+    }
+}
+
+public struct ACPSessionDeleteResult: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPSessionSetModeParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var modeId: String
+
+    public init(sessionId: String, modeId: String) {
+        self.sessionId = sessionId
+        self.modeId = modeId
+    }
+}
+
+public struct ACPSessionSetModeResult: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPSessionSetModelParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var modelId: String
+
+    public init(sessionId: String, modelId: String) {
+        self.sessionId = sessionId
+        self.modelId = modelId
+    }
+}
+
+public struct ACPSessionSetModelResult: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPSessionSetConfigOptionParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var configId: String
+    public var value: String
+
+    public init(sessionId: String, configId: String, value: String) {
+        self.sessionId = sessionId
+        self.configId = configId
+        self.value = value
+    }
+}
+
+public struct ACPSessionSetConfigOptionResult: Codable, Sendable, Equatable {
+    public var configOptions: [ACPSessionConfigOption]
+
+    public init(configOptions: [ACPSessionConfigOption]) {
+        self.configOptions = configOptions
+    }
+}
+
+public struct ACPSessionCancelParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+
+    public init(sessionId: String) {
+        self.sessionId = sessionId
+    }
+}
+
+public struct ACPCancelRequestParams: Codable, Sendable, Equatable {
+    public var requestId: JSONRPCID
+
+    public init(requestId: JSONRPCID) {
+        self.requestId = requestId
+    }
+}
+
+public enum ACPPermissionOptionKind: String, Codable, Sendable {
+    case allowOnce = "allow_once"
+    case allowAlways = "allow_always"
+    case rejectOnce = "reject_once"
+    case rejectAlways = "reject_always"
+}
+
+public enum ACPToolKind: String, Codable, Sendable {
+    case read
+    case edit
+    case delete
+    case move
+    case search
+    case execute
+    case think
+    case fetch
+    case switchMode = "switch_mode"
+    case other
+}
+
+public enum ACPToolCallStatus: String, Codable, Sendable {
+    case pending
+    case inProgress = "in_progress"
+    case completed
+    case failed
+}
+
+public struct ACPToolCallLocation: Codable, Sendable, Equatable {
+    public var path: String
+    public var line: UInt?
+
+    public init(path: String, line: UInt? = nil) {
+        self.path = path
+        self.line = line
+    }
+}
+
+public struct ACPToolCallDiffContent: Codable, Sendable, Equatable {
+    public var path: String
+    public var newText: String
+    public var oldText: String?
+
+    public init(path: String, newText: String, oldText: String? = nil) {
+        self.path = path
+        self.newText = newText
+        self.oldText = oldText
+    }
+}
+
+public struct ACPToolCallTerminalContent: Codable, Sendable, Equatable {
+    public var terminalId: String
+
+    public init(terminalId: String) {
+        self.terminalId = terminalId
+    }
+}
+
+public enum ACPToolCallContent: Codable, Sendable, Equatable {
+    case content(JSONValue)
+    case diff(ACPToolCallDiffContent)
+    case terminal(ACPToolCallTerminalContent)
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case content
+        case path
+        case newText
+        case oldText
+        case terminalId
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = try container.decode(String.self, forKey: .type)
+        switch type {
+        case "content":
+            self = .content(try container.decode(JSONValue.self, forKey: .content))
+        case "diff":
+            self = .diff(
+                .init(
+                    path: try container.decode(String.self, forKey: .path),
+                    newText: try container.decode(String.self, forKey: .newText),
+                    oldText: try container.decodeIfPresent(String.self, forKey: .oldText)
+                )
+            )
+        case "terminal":
+            self = .terminal(.init(terminalId: try container.decode(String.self, forKey: .terminalId)))
+        default:
+            throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Unknown tool call content type: \(type)")
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .content(let value):
+            try container.encode("content", forKey: .type)
+            try container.encode(value, forKey: .content)
+        case .diff(let diff):
+            try container.encode("diff", forKey: .type)
+            try container.encode(diff.path, forKey: .path)
+            try container.encode(diff.newText, forKey: .newText)
+            try container.encodeIfPresent(diff.oldText, forKey: .oldText)
+        case .terminal(let terminal):
+            try container.encode("terminal", forKey: .type)
+            try container.encode(terminal.terminalId, forKey: .terminalId)
+        }
+    }
+}
+
+public struct ACPPermissionOption: Codable, Sendable, Equatable {
+    public var optionId: String
+    public var name: String
+    public var kind: ACPPermissionOptionKind
+
+    public init(optionId: String, name: String, kind: ACPPermissionOptionKind) {
+        self.optionId = optionId
+        self.name = name
+        self.kind = kind
+    }
+}
+
+public struct ACPToolCallUpdate: Codable, Sendable, Equatable {
+    public var toolCallId: String
+    public var title: String?
+    public var kind: ACPToolKind?
+    public var status: ACPToolCallStatus?
+    public var content: [ACPToolCallContent]?
+    public var locations: [ACPToolCallLocation]?
+    public var rawInput: JSONValue?
+    public var rawOutput: JSONValue?
+
+    public init(
+        toolCallId: String,
+        title: String? = nil,
+        kind: ACPToolKind? = nil,
+        status: ACPToolCallStatus? = nil,
+        content: [ACPToolCallContent]? = nil,
+        locations: [ACPToolCallLocation]? = nil,
+        rawInput: JSONValue? = nil,
+        rawOutput: JSONValue? = nil
+    ) {
+        self.toolCallId = toolCallId
+        self.title = title
+        self.kind = kind
+        self.status = status
+        self.content = content
+        self.locations = locations
+        self.rawInput = rawInput
+        self.rawOutput = rawOutput
+    }
+}
+
+public struct ACPPlanEntry: Codable, Sendable, Equatable {
+    public var content: String
+    public var status: String
+    public var priority: String?
+
+    public init(content: String, status: String, priority: String? = nil) {
+        self.content = content
+        self.status = status
+        self.priority = priority
+    }
+}
+
+public struct ACPPlan: Codable, Sendable, Equatable {
+    public var entries: [ACPPlanEntry]
+
+    public init(entries: [ACPPlanEntry]) {
+        self.entries = entries
+    }
+}
+
+public struct ACPAvailableCommand: Codable, Sendable, Equatable {
+    public var name: String
+    public var description: String?
+
+    public init(name: String, description: String? = nil) {
+        self.name = name
+        self.description = description
+    }
+}
+
+public struct ACPSessionInfoUpdate: Codable, Sendable, Equatable {
+    public var title: String?
+    public var updatedAt: String?
+
+    public init(title: String? = nil, updatedAt: String? = nil) {
+        self.title = title
+        self.updatedAt = updatedAt
+    }
+}
+
+public enum ACPSessionUpdateKind: String, Codable, Sendable {
+    case userMessageChunk = "user_message_chunk"
+    case agentMessageChunk = "agent_message_chunk"
+    case agentThoughtChunk = "agent_thought_chunk"
+    case toolCall = "tool_call"
+    case toolCallUpdate = "tool_call_update"
+    case plan
+    case availableCommandsUpdate = "available_commands_update"
+    case currentModeUpdate = "current_mode_update"
+    case configOptionUpdate = "config_option_update"
+    case sessionInfoUpdate = "session_info_update"
+}
+
+public struct ACPSessionPermissionRequestParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var toolCall: ACPToolCallUpdate
+    public var options: [ACPPermissionOption]
+
+    public init(sessionId: String, toolCall: ACPToolCallUpdate, options: [ACPPermissionOption]) {
+        self.sessionId = sessionId
+        self.toolCall = toolCall
+        self.options = options
+    }
+}
+
+public struct ACPPermissionSelectedOutcome: Codable, Sendable, Equatable {
+    public var optionId: String
+
+    public init(optionId: String) {
+        self.optionId = optionId
+    }
+}
+
+public enum ACPRequestPermissionOutcome: Codable, Sendable, Equatable {
+    case cancelled
+    case selected(ACPPermissionSelectedOutcome)
+
+    private enum CodingKeys: String, CodingKey {
+        case outcome
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let outcomeType = try container.decode(String.self, forKey: .outcome)
+        switch outcomeType {
+        case "cancelled":
+            self = .cancelled
+        case "selected":
+            self = .selected(try ACPPermissionSelectedOutcome(from: decoder))
+        default:
+            throw DecodingError.dataCorruptedError(forKey: .outcome, in: container, debugDescription: "Unknown permission outcome: \(outcomeType)")
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .cancelled:
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode("cancelled", forKey: .outcome)
+        case .selected(let selected):
+            try selected.encode(to: encoder)
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode("selected", forKey: .outcome)
+        }
+    }
+}
+
+public struct ACPSessionPermissionRequestResult: Codable, Sendable, Equatable {
+    public var outcome: ACPRequestPermissionOutcome
+
+    public init(outcome: ACPRequestPermissionOutcome) {
+        self.outcome = outcome
+    }
+}
+
+public typealias ACPSessionUpdateContent = ACPContentBlock
+
+public enum ACPSessionUpdate: Sendable, Equatable {
+    case userMessageChunk(ACPSessionUpdateContent)
+    case agentMessageChunk(ACPSessionUpdateContent)
+    case agentThoughtChunk(ACPSessionUpdateContent)
+    case toolCall(ACPToolCallUpdate)
+    case toolCallUpdate(ACPToolCallUpdate)
+    case plan(ACPPlan)
+    case availableCommandsUpdate([ACPAvailableCommand])
+    case currentModeUpdate(String)
+    case configOptionUpdate([ACPSessionConfigOption])
+    case sessionInfoUpdate(ACPSessionInfoUpdate)
+
+    public var kind: ACPSessionUpdateKind {
+        switch self {
+        case .userMessageChunk: return .userMessageChunk
+        case .agentMessageChunk: return .agentMessageChunk
+        case .agentThoughtChunk: return .agentThoughtChunk
+        case .toolCall: return .toolCall
+        case .toolCallUpdate: return .toolCallUpdate
+        case .plan: return .plan
+        case .availableCommandsUpdate: return .availableCommandsUpdate
+        case .currentModeUpdate: return .currentModeUpdate
+        case .configOptionUpdate: return .configOptionUpdate
+        case .sessionInfoUpdate: return .sessionInfoUpdate
+        }
+    }
+
+    public var content: ACPSessionUpdateContent? {
+        switch self {
+        case .userMessageChunk(let content),
+             .agentMessageChunk(let content),
+             .agentThoughtChunk(let content):
+            return content
+        default:
+            return nil
+        }
+    }
+
+    public var toolCall: ACPToolCallUpdate? {
+        switch self {
+        case .toolCall(let toolCall), .toolCallUpdate(let toolCall):
+            return toolCall
+        default:
+            return nil
+        }
+    }
+
+    public var plan: ACPPlan? {
+        if case .plan(let value) = self { return value }
+        return nil
+    }
+
+    public var availableCommands: [ACPAvailableCommand]? {
+        if case .availableCommandsUpdate(let commands) = self { return commands }
+        return nil
+    }
+
+    public var currentModeId: String? {
+        if case .currentModeUpdate(let modeId) = self { return modeId }
+        return nil
+    }
+
+    public var configOptions: [ACPSessionConfigOption] {
+        if case .configOptionUpdate(let options) = self { return options }
+        return []
+    }
+
+    public var sessionInfoUpdate: ACPSessionInfoUpdate? {
+        if case .sessionInfoUpdate(let info) = self { return info }
+        return nil
+    }
+
+    public init(
+        sessionUpdate: ACPSessionUpdateKind,
+        content: ACPSessionUpdateContent? = nil,
+        toolCall: ACPToolCallUpdate? = nil,
+        plan: ACPPlan? = nil,
+        availableCommands: [ACPAvailableCommand]? = nil,
+        currentModeId: String? = nil,
+        configOptions: [ACPSessionConfigOption] = [],
+        sessionInfoUpdate: ACPSessionInfoUpdate? = nil
+    ) {
+        switch sessionUpdate {
+        case .userMessageChunk:
+            self = .userMessageChunk(content ?? .text(""))
+        case .agentMessageChunk:
+            self = .agentMessageChunk(content ?? .text(""))
+        case .agentThoughtChunk:
+            self = .agentThoughtChunk(content ?? .text(""))
+        case .toolCall:
+            self = .toolCall(toolCall ?? .init(toolCallId: ""))
+        case .toolCallUpdate:
+            self = .toolCallUpdate(toolCall ?? .init(toolCallId: ""))
+        case .plan:
+            self = .plan(plan ?? .init(entries: []))
+        case .availableCommandsUpdate:
+            self = .availableCommandsUpdate(availableCommands ?? [])
+        case .currentModeUpdate:
+            self = .currentModeUpdate(currentModeId ?? "")
+        case .configOptionUpdate:
+            self = .configOptionUpdate(configOptions)
+        case .sessionInfoUpdate:
+            self = .sessionInfoUpdate(sessionInfoUpdate ?? .init())
+        }
+    }
+}
+
+public struct ACPSessionUpdatePayload: Codable, Sendable, Equatable {
+    public var update: ACPSessionUpdate
+
+    public var sessionUpdate: ACPSessionUpdateKind { update.kind }
+    public var content: ACPSessionUpdateContent? { update.content }
+    public var toolCall: ACPToolCallUpdate? { update.toolCall }
+    public var plan: ACPPlan? { update.plan }
+    public var availableCommands: [ACPAvailableCommand]? { update.availableCommands }
+    public var currentModeId: String? { update.currentModeId }
+    public var configOptions: [ACPSessionConfigOption] { update.configOptions }
+    public var sessionInfoUpdate: ACPSessionInfoUpdate? { update.sessionInfoUpdate }
+
+    public init(
+        update: ACPSessionUpdate
+    ) {
+        self.update = update
+    }
+
+    public init(
+        sessionUpdate: ACPSessionUpdateKind,
+        content: ACPSessionUpdateContent? = nil,
+        toolCall: ACPToolCallUpdate? = nil,
+        plan: ACPPlan? = nil,
+        availableCommands: [ACPAvailableCommand]? = nil,
+        currentModeId: String? = nil,
+        configOptions: [ACPSessionConfigOption] = [],
+        sessionInfoUpdate: ACPSessionInfoUpdate? = nil
+    ) {
+        self.update = ACPSessionUpdate(
+            sessionUpdate: sessionUpdate,
+            content: content,
+            toolCall: toolCall,
+            plan: plan,
+            availableCommands: availableCommands,
+            currentModeId: currentModeId,
+            configOptions: configOptions,
+            sessionInfoUpdate: sessionInfoUpdate
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sessionUpdate
+        case content
+        case toolCall
+        case plan
+        case availableCommands
+        case currentModeId
+        case configOptions
+        case title
+        case updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let kind = try container.decode(ACPSessionUpdateKind.self, forKey: .sessionUpdate)
+        switch kind {
+        case .userMessageChunk:
+            self.update = .userMessageChunk(try container.decode(ACPSessionUpdateContent.self, forKey: .content))
+        case .agentMessageChunk:
+            self.update = .agentMessageChunk(try container.decode(ACPSessionUpdateContent.self, forKey: .content))
+        case .agentThoughtChunk:
+            self.update = .agentThoughtChunk(try container.decode(ACPSessionUpdateContent.self, forKey: .content))
+        case .toolCall:
+            self.update = .toolCall(try container.decode(ACPToolCallUpdate.self, forKey: .toolCall))
+        case .toolCallUpdate:
+            self.update = .toolCallUpdate(try container.decode(ACPToolCallUpdate.self, forKey: .toolCall))
+        case .plan:
+            self.update = .plan(try container.decode(ACPPlan.self, forKey: .plan))
+        case .availableCommandsUpdate:
+            self.update = .availableCommandsUpdate(try container.decode([ACPAvailableCommand].self, forKey: .availableCommands))
+        case .currentModeUpdate:
+            self.update = .currentModeUpdate(try container.decode(String.self, forKey: .currentModeId))
+        case .configOptionUpdate:
+            self.update = .configOptionUpdate(try container.decode([ACPSessionConfigOption].self, forKey: .configOptions))
+        case .sessionInfoUpdate:
+            self.update = .sessionInfoUpdate(.init(
+                title: try container.decodeIfPresent(String.self, forKey: .title),
+                updatedAt: try container.decodeIfPresent(String.self, forKey: .updatedAt)
+            ))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(update.kind, forKey: .sessionUpdate)
+        switch update {
+        case .userMessageChunk(let content),
+             .agentMessageChunk(let content),
+             .agentThoughtChunk(let content):
+            try container.encode(content, forKey: .content)
+        case .toolCall(let toolCall), .toolCallUpdate(let toolCall):
+            try container.encode(toolCall, forKey: .toolCall)
+        case .plan(let plan):
+            try container.encode(plan, forKey: .plan)
+        case .availableCommandsUpdate(let commands):
+            try container.encode(commands, forKey: .availableCommands)
+        case .currentModeUpdate(let modeId):
+            try container.encode(modeId, forKey: .currentModeId)
+        case .configOptionUpdate(let options):
+            try container.encode(options, forKey: .configOptions)
+        case .sessionInfoUpdate(let info):
+            try container.encodeIfPresent(info.title, forKey: .title)
+            try container.encodeIfPresent(info.updatedAt, forKey: .updatedAt)
+        }
+    }
+}
+
+public struct ACPSessionUpdateParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var update: ACPSessionUpdatePayload
+
+    public init(sessionId: String, update: ACPSessionUpdatePayload) {
+        self.sessionId = sessionId
+        self.update = update
+    }
+}
+
+public struct ACPReadTextFileParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var path: String
+    public var line: Int?
+    public var limit: Int?
+
+    public init(sessionId: String, path: String, line: Int? = nil, limit: Int? = nil) {
+        self.sessionId = sessionId
+        self.path = path
+        self.line = line
+        self.limit = limit
+    }
+}
+
+public struct ACPReadTextFileResult: Codable, Sendable, Equatable {
+    public var content: String
+
+    public init(content: String) {
+        self.content = content
+    }
+}
+
+public struct ACPWriteTextFileParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var path: String
+    public var content: String
+
+    public init(sessionId: String, path: String, content: String) {
+        self.sessionId = sessionId
+        self.path = path
+        self.content = content
+    }
+}
+
+public struct ACPWriteTextFileResult: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPTerminalCreateParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var command: String
+    public var args: [String]
+    public var cwd: String?
+    public var env: [ACPEnvVar]
+    public var outputByteLimit: Int?
+
+    public init(
+        sessionId: String,
+        command: String,
+        args: [String] = [],
+        cwd: String? = nil,
+        env: [ACPEnvVar] = [],
+        outputByteLimit: Int? = nil
+    ) {
+        self.sessionId = sessionId
+        self.command = command
+        self.args = args
+        self.cwd = cwd
+        self.env = env
+        self.outputByteLimit = outputByteLimit
+    }
+}
+
+public struct ACPTerminalCreateResult: Codable, Sendable, Equatable {
+    public var terminalId: String
+
+    public init(terminalId: String) {
+        self.terminalId = terminalId
+    }
+}
+
+public struct ACPTerminalRefParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var terminalId: String
+
+    public init(sessionId: String, terminalId: String) {
+        self.sessionId = sessionId
+        self.terminalId = terminalId
+    }
+}
+
+public struct ACPTerminalExitStatus: Codable, Sendable, Equatable {
+    public var exitCode: Int?
+    public var signal: String?
+
+    public init(exitCode: Int? = nil, signal: String? = nil) {
+        self.exitCode = exitCode
+        self.signal = signal
+    }
+}
+
+public struct ACPTerminalOutputResult: Codable, Sendable, Equatable {
+    public var output: String
+    public var truncated: Bool
+    public var exitStatus: ACPTerminalExitStatus?
+
+    public init(output: String, truncated: Bool, exitStatus: ACPTerminalExitStatus? = nil) {
+        self.output = output
+        self.truncated = truncated
+        self.exitStatus = exitStatus
+    }
+}
+
+public struct ACPTerminalWaitForExitResult: Codable, Sendable, Equatable {
+    public var exitCode: Int?
+    public var signal: String?
+
+    public init(exitCode: Int? = nil, signal: String? = nil) {
+        self.exitCode = exitCode
+        self.signal = signal
+    }
+}
+
+public struct ACPTerminalKillResult: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPTerminalReleaseResult: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public enum ACPCodec {
+    public static func encodeParams<T: Encodable>(_ value: T) throws -> JSONValue {
+        try JSONRPCCodec.toValue(value)
+    }
+
+    public static func decodeParams<T: Decodable>(_ value: JSONValue?, as type: T.Type = T.self) throws -> T {
+        guard let value else {
+            throw NSError(domain: "ACPCodec", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing params"])
+        }
+        return try JSONRPCCodec.fromValue(value, as: type)
+    }
+
+    public static func decodeResult<T: Decodable>(_ value: JSONValue?, as type: T.Type = T.self) throws -> T {
+        guard let value else {
+            throw NSError(domain: "ACPCodec", code: 2, userInfo: [NSLocalizedDescriptionKey: "Missing result"])
+        }
+        return try JSONRPCCodec.fromValue(value, as: type)
+    }
+}

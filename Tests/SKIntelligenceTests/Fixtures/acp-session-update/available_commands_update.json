@@ -1,0 +1,16 @@
+{
+  "sessionId": "sess_fixture_commands",
+  "update": {
+    "sessionUpdate": "available_commands_update",
+    "availableCommands": [
+      {
+        "name": "read_file",
+        "description": "Read text file"
+      },
+      {
+        "name": "run_terminal",
+        "description": "Run terminal command"
+      }
+    ]
+  }
+}
