@@ -227,6 +227,155 @@ extension SKITranscript {
 
 }
 
+// MARK: - Event Contract
+
+extension SKITranscript {
+    public enum EventKind: String, Sendable, Equatable, Codable {
+        case message
+        case toolCall = "tool_call"
+        case toolResult = "tool_result"
+        case toolExecutionUpdate = "tool_execution_update"
+        case sessionUpdate = "session_update"
+    }
+
+    public enum ToolExecutionState: String, Sendable, Equatable, Codable {
+        case started
+        case completed
+        case failed
+    }
+
+    public struct Event: Sendable, Equatable, Codable {
+        public var kind: EventKind
+        public var role: String?
+        public var content: String?
+        public var toolName: String?
+        public var toolCallId: String?
+        public var state: ToolExecutionState?
+        public var sessionUpdateName: String?
+
+        public init(
+            kind: EventKind,
+            role: String? = nil,
+            content: String? = nil,
+            toolName: String? = nil,
+            toolCallId: String? = nil,
+            state: ToolExecutionState? = nil,
+            sessionUpdateName: String? = nil
+        ) {
+            self.kind = kind
+            self.role = role
+            self.content = content
+            self.toolName = toolName
+            self.toolCallId = toolCallId
+            self.state = state
+            self.sessionUpdateName = sessionUpdateName
+        }
+    }
+
+    public static func events(from entry: Entry) -> [Event] {
+        switch entry {
+        case .prompt(let msg), .message(let msg), .response(let msg):
+            return [
+                .init(
+                    kind: .message,
+                    role: msg.role,
+                    content: msg.eventTextContent
+                )
+            ]
+        case .toolCalls(let call):
+            return [
+                .init(
+                    kind: .toolCall,
+                    content: call.function.arguments,
+                    toolName: call.function.name,
+                    toolCallId: call.id
+                ),
+                .init(
+                    kind: .toolExecutionUpdate,
+                    toolName: call.function.name,
+                    toolCallId: call.id,
+                    state: .started
+                ),
+            ]
+        case .toolOutput(let output):
+            return [
+                .init(
+                    kind: .toolResult,
+                    content: output.contentString,
+                    toolName: output.toolCall.function.name,
+                    toolCallId: output.toolCall.id
+                ),
+                .init(
+                    kind: .toolExecutionUpdate,
+                    toolName: output.toolCall.function.name,
+                    toolCallId: output.toolCall.id,
+                    state: .completed
+                ),
+            ]
+        }
+    }
+
+    public static func sessionUpdateEvent(name: String, content: String? = nil) -> Event {
+        .init(
+            kind: .sessionUpdate,
+            content: content,
+            sessionUpdateName: name
+        )
+    }
+
+    public func events() -> [Event] {
+        entries.flatMap { Self.events(from: $0) }
+    }
+}
+
+private extension ChatRequestBody.Message {
+    var eventTextContent: String? {
+        switch self {
+        case .assistant(let content, _, _, _):
+            return content?.eventTextValue
+        case .developer(let content, _):
+            return content.eventTextValue
+        case .system(let content, _):
+            return content.eventTextValue
+        case .tool(let content, _):
+            return content.eventTextValue
+        case .user(let content, _):
+            return content.eventTextValue
+        }
+    }
+}
+
+private extension ChatRequestBody.Message.MessageContent where SingleType == String, PartsType == [String] {
+    var eventTextValue: String? {
+        switch self {
+        case .text(let value):
+            return value
+        case .parts(let values):
+            return values.joined(separator: "\n")
+        }
+    }
+}
+
+private extension ChatRequestBody.Message.MessageContent where SingleType == String, PartsType == [ChatRequestBody.Message.ContentPart] {
+    var eventTextValue: String? {
+        switch self {
+        case .text(let value):
+            return value
+        case .parts(let values):
+            let textParts = values.compactMap { part -> String? in
+                switch part {
+                case .text(let text):
+                    return text
+                case .imageURL:
+                    return nil
+                }
+            }
+            if textParts.isEmpty { return nil }
+            return textParts.joined(separator: "\n")
+        }
+    }
+}
+
 // MARK: - JSONL
 
 extension SKITranscript {
