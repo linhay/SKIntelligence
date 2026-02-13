@@ -1,0 +1,11 @@
+{
+  "sessionId": "sess_fixture_exec",
+  "update": {
+    "sessionUpdate": "execution_state_update",
+    "executionState": {
+      "state": "running",
+      "attempt": 1,
+      "message": "prompt started"
+    }
+  }
+}

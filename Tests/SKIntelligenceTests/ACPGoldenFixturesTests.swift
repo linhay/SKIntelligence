@@ -9,6 +9,8 @@ final class ACPGoldenFixturesTests: XCTestCase {
             "agent_message_chunk_resource_link",
             "available_commands_update",
             "current_mode_update",
+            "execution_state_update",
+            "retry_update",
             "session_info_update",
             "tool_call_update_full",
         ]
