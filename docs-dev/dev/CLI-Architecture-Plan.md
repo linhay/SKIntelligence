@@ -433,3 +433,14 @@ ACP WebSocket 规格：`docs-dev/features/ACP-WebSocket-Serve-Spec.md`
   - `swift test --filter ACPAgentServiceTests/testPromptEmitsTelemetryLifecycle`
   - `swift test --filter ACPAgentServiceTests/testPromptRetryEmitsTelemetryRetryEvent`
   - `swift test --filter ACPGoldenFixturesTests/testSessionUpdateGoldenFixturesRoundTrip`
+
+## 29. 协议域/扩展域边界守卫（2026-02-13）
+- 关联需求：`docs-dev/features/ACP-Protocol-Extension-Boundaries.md`
+- 目标：防止 runtime/policy/telemetry 等扩展能力污染 ACP 载荷。
+- 实现：
+  - 在 `ACPRuntime`、`ACPClientService.installRuntimes`、`ACPPermissionPolicy` 增加 Non-ACP 边界注释；
+  - 新增测试 `testTelemetryExtensionDoesNotLeakIntoProtocolPayload`：
+    - 开启 telemetry 执行完整 prompt；
+    - 对协议 `response/notification` 做 JSON 编码检查，确保不含 telemetry 字段与事件名。
+- 验证：
+  - `swift test --filter ACPAgentServiceTests/testTelemetryExtensionDoesNotLeakIntoProtocolPayload`

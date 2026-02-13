@@ -2,6 +2,8 @@ import Foundation
 import SKIACP
 
 public extension ACPClientService {
+    /// Installs local runtime adapters for ACP client-side methods.
+    /// This is a non-ACP extension helper and does not add/alter ACP protocol methods.
     func installRuntimes(
         filesystem: (any ACPFilesystemRuntime)? = nil,
         terminal: (any ACPTerminalRuntime)? = nil

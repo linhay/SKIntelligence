@@ -19,17 +19,23 @@ public enum ACPRuntimeError: Error, LocalizedError, Equatable {
     }
 }
 
+/// Non-ACP extension point.
+/// Runtime abstractions are local implementation hooks behind ACP client methods,
+/// not new ACP schema methods or payload fields.
 public protocol ACPFilesystemRuntime: Sendable {
     func readTextFile(_ params: ACPReadTextFileParams) async throws -> ACPReadTextFileResult
     func writeTextFile(_ params: ACPWriteTextFileParams) async throws -> ACPWriteTextFileResult
 }
 
+/// Non-ACP extension point.
+/// Access policy is enforced locally by runtime and must not be serialized into ACP payload.
 public enum ACPFilesystemAccessPolicy: Sendable, Equatable {
     case unrestricted
     case rooted(URL)
     case rootedWithRules(ACPFilesystemRootedRules)
 }
 
+/// Non-ACP extension policy model for local filesystem runtime.
 public struct ACPFilesystemRootedRules: Sendable, Equatable {
     public var root: URL
     public var readOnlyRoots: [URL]
@@ -46,6 +52,8 @@ public struct ACPFilesystemRootedRules: Sendable, Equatable {
     }
 }
 
+/// Local runtime implementation for ACP `fs/*` methods.
+/// This type belongs to implementation layer, not ACP protocol schema.
 public struct ACPLocalFilesystemRuntime: ACPFilesystemRuntime {
     private let policy: ACPFilesystemAccessPolicy
 
@@ -136,6 +144,8 @@ public struct ACPLocalFilesystemRuntime: ACPFilesystemRuntime {
     }
 }
 
+/// Non-ACP extension point.
+/// Runtime abstraction for handling ACP `terminal/*` methods in-process.
 public protocol ACPTerminalRuntime: Sendable {
     func create(_ params: ACPTerminalCreateParams) async throws -> ACPTerminalCreateResult
     func output(_ params: ACPTerminalRefParams) async throws -> ACPTerminalOutputResult
@@ -144,6 +154,8 @@ public protocol ACPTerminalRuntime: Sendable {
     func release(_ params: ACPTerminalRefParams) async throws -> ACPTerminalReleaseResult
 }
 
+/// Local runtime implementation for ACP `terminal/*` methods.
+/// Policy and process lifecycle are implementation details outside ACP schema.
 public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
     public struct Policy: Sendable, Equatable {
         public var allowedCommands: Set<String>?

@@ -453,6 +453,50 @@ final class ACPAgentServiceTests: XCTestCase {
         XCTAssertEqual(retryEvent?.attributes["attempt"], "1")
     }
 
+    func testTelemetryExtensionDoesNotLeakIntoProtocolPayload() async throws {
+        let notifications = NotificationBox()
+        let telemetry = TelemetryBox()
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            telemetrySink: { event in await telemetry.append(event) },
+            notificationSink: { n in await notifications.append(n) }
+        )
+
+        let newResp = await service.handle(
+            .init(
+                id: .int(1310),
+                method: ACPMethods.sessionNew,
+                params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+            )
+        )
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        let promptResp = await service.handle(
+            .init(
+                id: .int(1311),
+                method: ACPMethods.sessionPrompt,
+                params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("hello")]))
+            )
+        )
+        XCTAssertNil(promptResp.error)
+        let telemetryEvents = await telemetry.snapshot()
+        XCTAssertFalse(telemetryEvents.isEmpty)
+
+        let responseJSON = try XCTUnwrap(
+            String(data: JSONRPCCodec.encode(.response(promptResp)), encoding: .utf8)
+        )
+        XCTAssertFalse(responseJSON.contains("\"telemetry\""))
+        XCTAssertFalse(responseJSON.contains("prompt_requested"))
+
+        let payloads = try await notifications.snapshot().map {
+            try XCTUnwrap(String(data: JSONRPCCodec.encode(.notification($0)), encoding: .utf8))
+        }
+        XCTAssertFalse(payloads.joined(separator: "\n").contains("\"telemetry\""))
+        XCTAssertFalse(payloads.joined(separator: "\n").contains("prompt_requested"))
+    }
+
     func testLogoutRequiresCapability() async throws {
         let service = ACPAgentService(
             sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
