@@ -259,6 +259,14 @@
     When 执行协议一致性守卫测试
     Then 方法集必须与官方 `meta.json/meta.unstable.json` 快照一致，且项目扩展仅允许 `logout` 与 `session/delete`。
 
+63. Given 测试环境并发执行多个 WebSocket 用例
+    When 某个候选端口已被占用（`Address already in use`）
+    Then 测试基础设施应自动重试并分配新端口，避免因固定端口冲突导致非业务失败。
+
+64. Given WebSocket 集成测试结束（成功或失败）
+    When 执行资源清理
+    Then client/server transport 与 server loop 必须被关闭/取消，避免句柄泄漏影响后续测试。
+
 63. Given agent 开启 prompt 执行状态更新能力
     When client 调用 `session/prompt`
     Then agent 应通过 `session/update(execution_state_update)` 按顺序发送 `queued -> running -> completed|cancelled|timed_out|failed` 状态。

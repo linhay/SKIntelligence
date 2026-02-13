@@ -444,3 +444,15 @@ ACP WebSocket 规格：`docs-dev/features/ACP-WebSocket-Serve-Spec.md`
     - 对协议 `response/notification` 做 JSON 编码检查，确保不含 telemetry 字段与事件名。
 - 验证：
   - `swift test --filter ACPAgentServiceTests/testTelemetryExtensionDoesNotLeakIntoProtocolPayload`
+
+## 30. WebSocket 回归稳定化（2026-02-13）
+- 关联需求：`docs-dev/features/ACP-WebSocket-Serve-Spec.md`
+- 目标：降低 WebSocket 集成测试端口竞争引发的非业务失败。
+- 实现：
+  - 新增 `ACPWebSocketTestHarness`（端口占用自动重试 + 固定端口重试绑定）；
+  - 新增 `ACPWebSocketTestHarnessTests`；
+  - `ACPWebSocketRoundtripTests`、`ACPWebSocketPermissionRoundtripTests`、`ACPWebSocketMultiClientTests`、`ACPTransportConsistencyTests`、`ACPWebSocketReconnectTests` 切换到 harness 分配端口。
+- 运维文档：
+  - `docs-dev/ops/ACP-WebSocket-Test-Stability-Runbook.md`
+- 验证：
+  - `swift test --filter ACPWebSocketTestHarnessTests --filter ACPWebSocketRoundtripTests --filter ACPWebSocketPermissionRoundtripTests --filter ACPWebSocketMultiClientTests --filter ACPTransportConsistencyTests`
