@@ -344,6 +344,71 @@ final class ACPAgentServiceTests: XCTestCase {
         XCTAssertEqual(resp.error?.code, JSONRPCErrorCode.methodNotFound)
     }
 
+    func testSessionLoadRestoresPersistedTranscriptWhenSessionNotInMemory() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("acp-session-load-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let service1 = ACPAgentService(
+            agentSessionFactory: { SKIAgentSession(client: HistoryEchoClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            options: .init(
+                sessionPersistence: .init(directoryURL: tempDir)
+            ),
+            notificationSink: { _ in }
+        )
+
+        let newResp = await service1.handle(JSONRPCRequest(
+            id: .int(412),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        ))
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        _ = await service1.handle(JSONRPCRequest(
+            id: .int(413),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("persisted one")]))
+        ))
+
+        let notifications = NotificationBox()
+        let service2 = ACPAgentService(
+            agentSessionFactory: { SKIAgentSession(client: HistoryEchoClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            options: .init(
+                sessionPersistence: .init(directoryURL: tempDir)
+            ),
+            notificationSink: { n in await notifications.append(n) }
+        )
+
+        let loadResp = await service2.handle(JSONRPCRequest(
+            id: .int(414),
+            method: ACPMethods.sessionLoad,
+            params: try ACPCodec.encodeParams(ACPSessionLoadParams(sessionId: session.sessionId, cwd: "/tmp"))
+        ))
+        XCTAssertNil(loadResp.error)
+
+        _ = await service2.handle(JSONRPCRequest(
+            id: .int(415),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("persisted two")]))
+        ))
+
+        let updates: [ACPSessionUpdateParams] = try await notifications.snapshot()
+            .map { try ACPCodec.decodeParams($0.params, as: ACPSessionUpdateParams.self) }
+        let textChunks = updates
+            .filter { $0.sessionId == session.sessionId && $0.update.sessionUpdate == .agentMessageChunk }
+            .compactMap { $0.update.content?.text }
+        XCTAssertTrue(textChunks.contains(where: {
+            $0.contains("persisted one")
+            && $0.contains("ok-history:")
+            && $0.contains("persisted two")
+        }))
+    }
+
     func testSessionNewFactoryErrorReturnsInternalError() async throws {
         let service = ACPAgentService(
             sessionFactory: {
@@ -994,6 +1059,52 @@ private struct EchoTestClient: SKILanguageModelClient {
               "finish_reason": "stop",
               "message": {
                 "content": "ok: \(text)",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 0,
+          "model": "test"
+        }
+        """
+
+        return try SKIResponse<ChatResponseBody>(
+            httpResponse: .init(status: .ok),
+            data: Data(payload.utf8)
+        )
+    }
+}
+
+private struct HistoryEchoClient: SKILanguageModelClient {
+    func respond(_ body: ChatRequestBody) async throws -> sending SKIResponse<ChatResponseBody> {
+        var lines: [String] = []
+        for message in body.messages {
+            switch message {
+            case .system:
+                continue
+            case .developer:
+                continue
+            case .user(let content, _):
+                if case .text(let text) = content {
+                    lines.append("user:\(text)")
+                }
+            case .assistant(let content, _, _, _):
+                if case .text(let text) = content {
+                    lines.append("assistant:\(text)")
+                }
+            case .tool:
+                continue
+            }
+        }
+        let text = lines.joined(separator: " | ")
+
+        let payload = """
+        {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "message": {
+                "content": "ok-history: \(text)",
                 "role": "assistant"
               }
             }

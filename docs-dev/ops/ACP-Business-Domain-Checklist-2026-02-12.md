@@ -204,3 +204,22 @@ swift test --filter ACPAgentServiceTests/testForkCopiesSessionStateAndKeepsIsola
 
 swift test --filter ACPAgentServiceTests --filter ACPPermissionPolicyTests --filter ACPClientRuntimeTests
 ```
+
+## 14. Session Load + JSONL 自动接线（本轮新增）
+- `ACPAgentService.Options` 新增 `sessionPersistence`：
+  - `directoryURL`
+  - `configuration(maxReadBytes)`
+- `ACPAgentSession` 新增可选持久化能力协议 `ACPPersistableAgentSession`。
+- `SKIAgentSession` 对齐实现 `ACPPersistableAgentSession`，用于接入 `enableJSONLPersistence`。
+- `ACPAgentService` 接入策略：
+  - `session/new`：若配置了 `sessionPersistence`，自动将新会话绑定到 `<directory>/<sessionId>.jsonl`。
+  - `session/fork`：分叉会话创建后自动绑定其 JSONL 文件。
+  - `session/load`：当内存中不存在 session 时，若磁盘存在 `<sessionId>.jsonl`，自动创建并恢复会话；否则保持 `sessionNotFound` 语义。
+- 新增测试：
+  - `ACPAgentServiceTests/testSessionLoadRestoresPersistedTranscriptWhenSessionNotInMemory`
+
+验证命令：
+```bash
+swift test --filter ACPAgentServiceTests/testSessionLoadRestoresPersistedTranscriptWhenSessionNotInMemory
+swift test --filter ACPAgentServiceTests --filter ACPPermissionPolicyTests --filter ACPClientRuntimeTests
+```

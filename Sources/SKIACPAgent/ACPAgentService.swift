@@ -28,21 +28,37 @@ public enum ACPAgentServiceError: Error, LocalizedError {
 
 public actor ACPAgentService {
     public struct Options: Sendable {
+        public struct SessionPersistence: Sendable, Equatable {
+            public var directoryURL: URL
+            public var configuration: SKITranscript.JSONLPersistenceConfiguration
+
+            public init(
+                directoryURL: URL,
+                configuration: SKITranscript.JSONLPersistenceConfiguration = .init()
+            ) {
+                self.directoryURL = directoryURL
+                self.configuration = configuration
+            }
+        }
+
         public var promptTimeoutNanoseconds: UInt64?
         public var sessionTTLNanos: UInt64?
         public var sessionListPageSize: Int
         public var autoSessionInfoUpdateOnFirstPrompt: Bool
+        public var sessionPersistence: SessionPersistence?
 
         public init(
             promptTimeoutNanoseconds: UInt64? = nil,
             sessionTTLNanos: UInt64? = nil,
             sessionListPageSize: Int = 50,
-            autoSessionInfoUpdateOnFirstPrompt: Bool = false
+            autoSessionInfoUpdateOnFirstPrompt: Bool = false,
+            sessionPersistence: SessionPersistence? = nil
         ) {
             self.promptTimeoutNanoseconds = promptTimeoutNanoseconds
             self.sessionTTLNanos = sessionTTLNanos
             self.sessionListPageSize = max(1, sessionListPageSize)
             self.autoSessionInfoUpdateOnFirstPrompt = autoSessionInfoUpdateOnFirstPrompt
+            self.sessionPersistence = sessionPersistence
         }
     }
 
@@ -183,8 +199,10 @@ public actor ACPAgentService {
             case ACPMethods.sessionNew:
                 let params = try ACPCodec.decodeParams(request.params, as: ACPSessionNewParams.self)
                 let sessionID = "sess_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+                let session = try sessionFactory()
+                try await configureSessionPersistenceIfNeeded(session: session, sessionId: sessionID)
                 sessions[sessionID] = SessionEntry(
-                    session: try sessionFactory(),
+                    session: session,
                     cwd: params.cwd,
                     title: nil,
                     updatedAt: iso8601TimestampNow(),
@@ -298,6 +316,7 @@ public actor ACPAgentService {
                 let forkedSession = try sessionFactory()
                 try await forkedSession.restoreEntries(snapshot)
                 let sessionID = "sess_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+                try await configureSessionPersistenceIfNeeded(session: forkedSession, sessionId: sessionID)
                 sessions[sessionID] = SessionEntry(
                     session: forkedSession,
                     cwd: params.cwd,
@@ -347,11 +366,21 @@ public actor ACPAgentService {
                     throw ACPAgentServiceError.methodNotFound(ACPMethods.sessionLoad)
                 }
                 let params = try ACPCodec.decodeParams(request.params, as: ACPSessionLoadParams.self)
-                guard var entry = sessions[params.sessionId] else {
-                    throw ACPAgentServiceError.sessionNotFound(params.sessionId)
+                let entry: SessionEntry
+                if var loaded = sessions[params.sessionId] {
+                    loaded.cwd = params.cwd
+                    sessions[params.sessionId] = loaded
+                    entry = loaded
+                } else {
+                    guard let restored = try await restoreSessionFromPersistenceIfPresent(
+                        sessionId: params.sessionId,
+                        cwd: params.cwd
+                    ) else {
+                        throw ACPAgentServiceError.sessionNotFound(params.sessionId)
+                    }
+                    sessions[params.sessionId] = restored
+                    entry = restored
                 }
-                entry.cwd = params.cwd
-                sessions[params.sessionId] = entry
                 touchSession(params.sessionId)
                 let result = ACPSessionLoadResult(
                     modes: .init(
@@ -641,6 +670,53 @@ public actor ACPAgentService {
         sessions = sessions.filter { _, entry in
             now &- entry.lastTouchedNanos <= ttl
         }
+    }
+
+    private func sessionPersistenceFileURL(sessionId: String) -> URL? {
+        guard let persistence = options.sessionPersistence else { return nil }
+        return persistence.directoryURL
+            .appendingPathComponent("\(sessionId).jsonl", isDirectory: false)
+    }
+
+    private func configureSessionPersistenceIfNeeded(
+        session: any ACPAgentSession,
+        sessionId: String
+    ) async throws {
+        guard let persistence = options.sessionPersistence else { return }
+        guard let persistable = session as? any ACPPersistableAgentSession else { return }
+        guard let fileURL = sessionPersistenceFileURL(sessionId: sessionId) else { return }
+        try await persistable.enableJSONLPersistence(
+            fileURL: fileURL,
+            configuration: persistence.configuration
+        )
+    }
+
+    private func restoreSessionFromPersistenceIfPresent(
+        sessionId: String,
+        cwd: String
+    ) async throws -> SessionEntry? {
+        guard let fileURL = sessionPersistenceFileURL(sessionId: sessionId) else { return nil }
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+
+        let session = try sessionFactory()
+        try await configureSessionPersistenceIfNeeded(session: session, sessionId: sessionId)
+        return SessionEntry(
+            session: session,
+            cwd: cwd,
+            title: nil,
+            updatedAt: iso8601TimestampNow(),
+            currentModeId: "default",
+            availableModes: [
+                .init(id: "default", name: "Default")
+            ],
+            currentModelId: "default",
+            availableModels: [
+                .init(modelId: "default", name: "Default"),
+                .init(modelId: "gpt-5", name: "GPT-5")
+            ],
+            configOptions: [],
+            lastTouchedNanos: currentMonotonicNanos()
+        )
     }
 
     private func currentMonotonicNanos() -> UInt64 {

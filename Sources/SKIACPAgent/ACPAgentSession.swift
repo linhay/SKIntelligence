@@ -1,9 +1,17 @@
+import Foundation
 import SKIntelligence
 
 public protocol ACPAgentSession: Sendable {
     func prompt(_ text: String) async throws -> String
     func snapshotEntries() async throws -> [SKITranscript.Entry]
     func restoreEntries(_ entries: [SKITranscript.Entry]) async throws
+}
+
+public protocol ACPPersistableAgentSession: ACPAgentSession {
+    func enableJSONLPersistence(
+        fileURL: URL,
+        configuration: SKITranscript.JSONLPersistenceConfiguration
+    ) async throws
 }
 
 extension SKILanguageModelSession: ACPAgentSession {
@@ -29,3 +37,5 @@ extension SKIAgentSession: ACPAgentSession {
         try await resume(with: entries)
     }
 }
+
+extension SKIAgentSession: ACPPersistableAgentSession {}
