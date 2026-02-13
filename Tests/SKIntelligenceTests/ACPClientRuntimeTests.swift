@@ -108,6 +108,41 @@ final class ACPClientRuntimeTests: XCTestCase {
         }
     }
 
+    func testProcessTerminalRuntimeRejectsDeniedCommand() async throws {
+        let runtime = ACPProcessTerminalRuntime(
+            policy: .init(deniedCommands: ["sh"])
+        )
+
+        do {
+            _ = try await runtime.create(
+                .init(sessionId: "sess_denied", command: "/bin/sh", args: ["-c", "echo hi"])
+            )
+            XCTFail("Expected command denied")
+        } catch let error as ACPRuntimeError {
+            guard case .commandDenied = error else {
+                return XCTFail("Expected commandDenied, got \(error)")
+            }
+        }
+    }
+
+    func testProcessTerminalRuntimeTerminatesWhenExceedingMaxRuntime() async throws {
+        let runtime = ACPProcessTerminalRuntime(
+            policy: .init(maxRuntimeNanoseconds: 100_000_000)
+        )
+        let created = try await runtime.create(
+            .init(sessionId: "sess_timeout", command: "/bin/sh", args: ["-c", "sleep 2"])
+        )
+
+        let start = Date()
+        let waited = try await runtime.waitForExit(
+            .init(sessionId: "sess_timeout", terminalId: created.terminalId)
+        )
+        let elapsed = Date().timeIntervalSince(start)
+
+        XCTAssertLessThan(elapsed, 1.0)
+        XCTAssertNotEqual(waited.exitCode, 0)
+    }
+
     func testClientServiceInstallRuntimesHandlesIncomingRequests() async throws {
         let transport = RuntimeRequestTransport()
         let client = ACPClientService(transport: transport)

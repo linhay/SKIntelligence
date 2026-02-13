@@ -46,6 +46,14 @@
    When 写入只读目录或访问禁止前缀路径
    Then runtime 返回 permission denied。
 
+7. Given 终端 runtime 配置命令策略
+   When agent 创建被禁用命令
+   Then runtime 返回 command denied。
+
+8. Given 终端 runtime 配置最大运行时长
+   When 进程超时未退出
+   Then runtime 自动终止进程，`wait_for_exit` 能及时返回。
+
 ## 验收标准
 
 - 新增 Runtime 抽象类型与默认实现可直接在 CLI/集成中复用。

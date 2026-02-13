@@ -301,3 +301,26 @@ swift test --filter ACPClientRuntimeTests/testLocalFilesystemRuntimeRootedRulesR
 
 swift test --filter ACPModelsTests --filter ACPAgentServiceTests --filter ACPClientRuntimeTests --filter ACPTransportConsistencyTests
 ```
+
+## 18. Terminal Runtime Policy 细化（B2 第一批）
+- `ACPRuntimeError` 新增 `commandDenied`。
+- `ACPProcessTerminalRuntime.Policy` 新增策略项：
+  - `allowedCommands`
+  - `deniedCommands`
+  - `maxRuntimeNanoseconds`
+- `ACPProcessTerminalRuntime` 行为增强：
+  - create 前执行命令白黑名单校验；
+  - create 后按 `maxRuntimeNanoseconds` 启动自动终止任务；
+  - 进程退出/release 时清理 timeout 任务。
+- 新增测试：
+  - `ACPClientRuntimeTests/testProcessTerminalRuntimeRejectsDeniedCommand`
+  - `ACPClientRuntimeTests/testProcessTerminalRuntimeTerminatesWhenExceedingMaxRuntime`
+
+验证命令：
+```bash
+swift test --filter ACPClientRuntimeTests/testProcessTerminalRuntimeRejectsDeniedCommand \
+  --filter ACPClientRuntimeTests/testProcessTerminalRuntimeTerminatesWhenExceedingMaxRuntime \
+  --filter ACPClientRuntimeTests/testProcessTerminalRuntimeLifecycle
+
+swift test --filter ACPModelsTests --filter ACPAgentServiceTests --filter ACPClientRuntimeTests --filter ACPTransportConsistencyTests
+```

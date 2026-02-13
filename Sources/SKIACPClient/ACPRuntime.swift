@@ -5,6 +5,7 @@ import SKIACPTransport
 public enum ACPRuntimeError: Error, LocalizedError, Equatable {
     case permissionDenied(path: String)
     case unknownTerminal(String)
+    case commandDenied(String)
 
     public var errorDescription: String? {
         switch self {
@@ -12,6 +13,8 @@ public enum ACPRuntimeError: Error, LocalizedError, Equatable {
             return "Permission denied: \(path)"
         case .unknownTerminal(let terminalId):
             return "Unknown terminalId: \(terminalId)"
+        case .commandDenied(let command):
+            return "Command denied: \(command)"
         }
     }
 }
@@ -142,6 +145,22 @@ public protocol ACPTerminalRuntime: Sendable {
 }
 
 public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
+    public struct Policy: Sendable, Equatable {
+        public var allowedCommands: Set<String>?
+        public var deniedCommands: Set<String>
+        public var maxRuntimeNanoseconds: UInt64?
+
+        public init(
+            allowedCommands: Set<String>? = nil,
+            deniedCommands: Set<String> = [],
+            maxRuntimeNanoseconds: UInt64? = nil
+        ) {
+            self.allowedCommands = allowedCommands
+            self.deniedCommands = deniedCommands
+            self.maxRuntimeNanoseconds = maxRuntimeNanoseconds
+        }
+    }
+
     private struct Entry {
         let process: Process
         let stdout: Pipe
@@ -154,10 +173,15 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
     }
 
     private var entries: [String: Entry] = [:]
+    private var timeoutTasks: [String: Task<Void, Never>] = [:]
+    private let policy: Policy
 
-    public init() {}
+    public init(policy: Policy = .init()) {
+        self.policy = policy
+    }
 
     public func create(_ params: ACPTerminalCreateParams) async throws -> ACPTerminalCreateResult {
+        try validateCommand(params.command)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: params.command)
         process.arguments = params.args
@@ -199,6 +223,7 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
         }
 
         try process.run()
+        scheduleTimeoutIfNeeded(terminalID: terminalID)
         return .init(terminalId: terminalID)
     }
 
@@ -237,6 +262,8 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
         guard let entry = entries.removeValue(forKey: params.terminalId) else {
             throw ACPRuntimeError.unknownTerminal(params.terminalId)
         }
+        timeoutTasks[params.terminalId]?.cancel()
+        timeoutTasks[params.terminalId] = nil
         entry.stdout.fileHandleForReading.readabilityHandler = nil
         if !entry.didExit {
             for waiter in entry.waiters {
@@ -261,6 +288,8 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
 
     private func markExit(terminalID: String, status: Int32) {
         guard var entry = entries[terminalID] else { return }
+        timeoutTasks[terminalID]?.cancel()
+        timeoutTasks[terminalID] = nil
         entry.didExit = true
         entry.terminationStatus = status
         let waiters = entry.waiters
@@ -269,5 +298,29 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
         for waiter in waiters {
             waiter.resume(returning: .init(exitCode: Int(status), signal: nil))
         }
+    }
+
+    private func validateCommand(_ command: String) throws {
+        let executable = URL(fileURLWithPath: command).lastPathComponent
+        if policy.deniedCommands.contains(executable) || policy.deniedCommands.contains(command) {
+            throw ACPRuntimeError.commandDenied(command)
+        }
+        if let allowed = policy.allowedCommands, !allowed.contains(executable), !allowed.contains(command) {
+            throw ACPRuntimeError.commandDenied(command)
+        }
+    }
+
+    private func scheduleTimeoutIfNeeded(terminalID: String) {
+        guard let timeout = policy.maxRuntimeNanoseconds else { return }
+        let task = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: timeout)
+            await self?.terminateIfRunning(terminalID: terminalID)
+        }
+        timeoutTasks[terminalID] = task
+    }
+
+    private func terminateIfRunning(terminalID: String) {
+        guard let entry = entries[terminalID], entry.process.isRunning else { return }
+        entry.process.terminate()
     }
 }
