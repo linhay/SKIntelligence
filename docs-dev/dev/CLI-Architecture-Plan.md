@@ -415,6 +415,10 @@ ACP WebSocket 规格：`docs-dev/features/ACP-WebSocket-Serve-Spec.md`
 ## 28. ACP Agent Telemetry（2026-02-13）
 - 关联需求：`docs-dev/features/ACP-Agent-Telemetry-Spec.md`
 - 目标：在不扩展 ACP JSON-RPC 方法表的前提下，提供 agent 内部可观测性事件流。
+- 边界约束（强制）：
+  - 协议域：仅 ACP schema 定义的方法/字段；
+  - 扩展域：`ACPAgentTelemetryEvent` + `telemetrySink`，只在本地实现层生效；
+  - 禁止将 telemetry 数据写入 ACP 协议 payload。
 - 实现：
   - `ACPAgentService` 新增可选 `telemetrySink` 注入点；
   - 新增 `ACPAgentTelemetryEvent`（`name/sessionId/requestId/attributes/timestamp`）；

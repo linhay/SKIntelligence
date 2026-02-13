@@ -26,6 +26,8 @@ public enum ACPAgentServiceError: Error, LocalizedError {
     }
 }
 
+/// Non-ACP extension event for local observability.
+/// This type is not part of ACP JSON-RPC schema and must not be serialized as protocol payload.
 public struct ACPAgentTelemetryEvent: Sendable, Equatable {
     public var name: String
     public var sessionId: String?
@@ -105,6 +107,8 @@ public actor ACPAgentService {
 
     public typealias SessionFactory = @Sendable () throws -> any ACPAgentSession
     public typealias NotificationSink = @Sendable (JSONRPCNotification) async -> Void
+    /// Non-ACP extension hook for metrics/logging pipelines.
+    /// Keep protocol behavior unchanged when sink is nil.
     public typealias TelemetrySink = @Sendable (ACPAgentTelemetryEvent) async -> Void
     public typealias PermissionRequester = @Sendable (ACPSessionPermissionRequestParams) async throws -> ACPSessionPermissionRequestResult
     public typealias AuthenticationHandler = @Sendable (ACPAuthenticateParams) async throws -> Void
