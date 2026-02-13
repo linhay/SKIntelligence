@@ -30,9 +30,17 @@ public actor ACPAgentService {
     public struct Options: Sendable {
         public struct PromptExecution: Sendable, Equatable {
             public var enableStateUpdates: Bool
+            public var maxRetries: Int
+            public var retryBaseDelayNanoseconds: UInt64
 
-            public init(enableStateUpdates: Bool = false) {
+            public init(
+                enableStateUpdates: Bool = false,
+                maxRetries: Int = 0,
+                retryBaseDelayNanoseconds: UInt64 = 100_000_000
+            ) {
                 self.enableStateUpdates = enableStateUpdates
+                self.maxRetries = max(0, maxRetries)
+                self.retryBaseDelayNanoseconds = retryBaseDelayNanoseconds
             }
         }
 
@@ -531,7 +539,13 @@ public actor ACPAgentService {
                     sessionId: params.sessionId,
                     state: .running
                 )
-                let task = Task<String, Error> { try await session.prompt(text) }
+                let task = Task<String, Error> {
+                    try await self.runPromptWithRetry(
+                        session: session,
+                        text: text,
+                        sessionId: params.sessionId
+                    )
+                }
                 runningPrompts[params.sessionId] = task
 
                 do {
@@ -924,6 +938,66 @@ public actor ACPAgentService {
                         state: state,
                         attempt: attempt,
                         message: message
+                    )
+                )
+            )
+        )
+    }
+
+    private func runPromptWithRetry(
+        session: any ACPAgentSession,
+        text: String,
+        sessionId: String
+    ) async throws -> String {
+        let maxRetries = options.promptExecution.maxRetries
+        var attempt = 0
+        while true {
+            do {
+                return try await session.prompt(text)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as ACPAgentServiceError where error == .promptTimedOut {
+                throw error
+            } catch {
+                guard attempt < maxRetries else {
+                    throw error
+                }
+                attempt += 1
+                try await emitExecutionStateIfNeeded(
+                    sessionId: sessionId,
+                    state: .retrying,
+                    attempt: attempt,
+                    message: error.localizedDescription
+                )
+                try await emitRetryUpdate(
+                    sessionId: sessionId,
+                    attempt: attempt,
+                    maxAttempts: maxRetries + 1,
+                    reason: error.localizedDescription
+                )
+                let delay = options.promptExecution.retryBaseDelayNanoseconds * UInt64(attempt)
+                if delay > 0 {
+                    try await Task.sleep(nanoseconds: delay)
+                }
+            }
+        }
+    }
+
+    private func emitRetryUpdate(
+        sessionId: String,
+        attempt: Int,
+        maxAttempts: Int,
+        reason: String?
+    ) async throws {
+        try await emitSessionUpdate(
+            .init(
+                sessionId: sessionId,
+                update: .init(
+                    sessionUpdate: .retryUpdate,
+                    retryUpdate: .init(
+                        attempt: attempt,
+                        maxAttempts: maxAttempts,
+                        reason: reason
                     )
                 )
             )

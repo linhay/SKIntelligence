@@ -286,4 +286,20 @@ final class ACPModelsTests: XCTestCase {
         XCTAssertEqual(decoded.update.executionStateUpdate?.attempt, 1)
         XCTAssertEqual(decoded.update.executionStateUpdate?.message, "prompt started")
     }
+
+    func testRetryUpdateRoundTrip() throws {
+        let params = ACPSessionUpdateParams(
+            sessionId: "sess_retry",
+            update: .init(
+                sessionUpdate: .retryUpdate,
+                retryUpdate: .init(attempt: 1, maxAttempts: 2, reason: "transient")
+            )
+        )
+        let encoded = try ACPCodec.encodeParams(params)
+        let decoded = try ACPCodec.decodeParams(encoded, as: ACPSessionUpdateParams.self)
+        XCTAssertEqual(decoded.update.sessionUpdate, .retryUpdate)
+        XCTAssertEqual(decoded.update.retryUpdate?.attempt, 1)
+        XCTAssertEqual(decoded.update.retryUpdate?.maxAttempts, 2)
+        XCTAssertEqual(decoded.update.retryUpdate?.reason, "transient")
+    }
 }

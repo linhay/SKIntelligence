@@ -254,3 +254,29 @@ swift test --filter ACPModelsTests/testExecutionStateUpdateRoundTrip \
 
 swift test --filter ACPModelsTests --filter ACPAgentServiceTests --filter ACPClientRuntimeTests --filter ACPTransportConsistencyTests
 ```
+
+## 16. Prompt 重试策略（A2）
+- `ACPAgentService.Options.PromptExecution` 扩展：
+  - `maxRetries`（默认 0）
+  - `retryBaseDelayNanoseconds`（默认 100ms）
+- `session/prompt` 执行路径新增重试循环（保持取消/超时优先语义）：
+  - `CancellationError`：立即终止，不重试；
+  - `promptTimedOut`：立即终止，不重试；
+  - 其他错误：在 `maxRetries` 范围内退避重试。
+- 状态与可观测：
+  - 重试时发射 `execution_state_update(state=retrying)`；
+  - 同时发射 `retry_update(attempt,maxAttempts,reason)`；
+  - 耗尽后发射 `execution_state_update(state=failed)`。
+- 新增测试：
+  - `ACPAgentServiceTests/testPromptRetriesThenSucceedsWhenConfigured`
+  - `ACPAgentServiceTests/testPromptRetryExhaustedReturnsInternalError`
+  - `ACPModelsTests/testRetryUpdateRoundTrip`
+
+验证命令：
+```bash
+swift test --filter ACPModelsTests/testRetryUpdateRoundTrip \
+  --filter ACPAgentServiceTests/testPromptRetriesThenSucceedsWhenConfigured \
+  --filter ACPAgentServiceTests/testPromptRetryExhaustedReturnsInternalError
+
+swift test --filter ACPModelsTests --filter ACPAgentServiceTests --filter ACPClientRuntimeTests --filter ACPTransportConsistencyTests
+```

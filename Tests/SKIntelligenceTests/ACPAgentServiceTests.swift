@@ -290,6 +290,95 @@ final class ACPAgentServiceTests: XCTestCase {
         }))
     }
 
+    func testPromptRetriesThenSucceedsWhenConfigured() async throws {
+        await RetryOnceClient.resetCounter()
+        let notifications = NotificationBox()
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: RetryOnceClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            options: .init(
+                promptExecution: .init(
+                    enableStateUpdates: true,
+                    maxRetries: 1,
+                    retryBaseDelayNanoseconds: 1_000_000
+                )
+            ),
+            notificationSink: { n in await notifications.append(n) }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(1202),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        let promptReq = JSONRPCRequest(
+            id: .int(1203),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("retry me")]))
+        )
+        let promptResp = await service.handle(promptReq)
+        XCTAssertNil(promptResp.error)
+        let promptResult = try ACPCodec.decodeResult(promptResp.result, as: ACPSessionPromptResult.self)
+        XCTAssertEqual(promptResult.stopReason, .endTurn)
+
+        let updates = try await notifications.snapshot()
+            .map { try ACPCodec.decodeParams($0.params, as: ACPSessionUpdateParams.self) }
+        XCTAssertTrue(updates.contains(where: {
+            $0.update.sessionUpdate == .executionStateUpdate
+                && $0.update.executionStateUpdate?.state == .retrying
+        }))
+        XCTAssertTrue(updates.contains(where: { $0.update.sessionUpdate == .retryUpdate }))
+        XCTAssertTrue(updates.contains(where: {
+            $0.update.sessionUpdate == .executionStateUpdate
+                && $0.update.executionStateUpdate?.state == .completed
+        }))
+    }
+
+    func testPromptRetryExhaustedReturnsInternalError() async throws {
+        let notifications = NotificationBox()
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: AlwaysFailClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            options: .init(
+                promptExecution: .init(
+                    enableStateUpdates: true,
+                    maxRetries: 1,
+                    retryBaseDelayNanoseconds: 1_000_000
+                )
+            ),
+            notificationSink: { n in await notifications.append(n) }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(1204),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        let promptReq = JSONRPCRequest(
+            id: .int(1205),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("always fail")]))
+        )
+        let promptResp = await service.handle(promptReq)
+        XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.internalError)
+
+        let updates = try await notifications.snapshot()
+            .map { try ACPCodec.decodeParams($0.params, as: ACPSessionUpdateParams.self) }
+        XCTAssertTrue(updates.contains(where: {
+            $0.update.sessionUpdate == .executionStateUpdate
+                && $0.update.executionStateUpdate?.state == .failed
+        }))
+        XCTAssertEqual(updates.filter { $0.update.sessionUpdate == .retryUpdate }.count, 1)
+    }
+
     func testLogoutRequiresCapability() async throws {
         let service = ACPAgentService(
             sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
@@ -1235,6 +1324,63 @@ private struct SlowCancellableClient: SKILanguageModelClient {
             httpResponse: .init(status: .ok),
             data: Data(payload.utf8)
         )
+    }
+}
+
+private actor RetryOnceCounter {
+    private var count: Int = 0
+
+    func reset() {
+        count = 0
+    }
+
+    func nextAttempt() -> Int {
+        defer { count += 1 }
+        return count
+    }
+}
+
+private struct RetryOnceClient: SKILanguageModelClient {
+    private static let counter = RetryOnceCounter()
+
+    static func resetCounter() async {
+        await counter.reset()
+    }
+
+    func respond(_ body: ChatRequestBody) async throws -> sending SKIResponse<ChatResponseBody> {
+        _ = body
+        let current = await Self.counter.nextAttempt()
+        if current == 0 {
+            throw NSError(domain: "RetryOnceClient", code: 1, userInfo: [NSLocalizedDescriptionKey: "transient"])
+        }
+
+        let payload = """
+        {
+          "choices": [
+            {
+              "finish_reason": "stop",
+              "message": {
+                "content": "retry-ok",
+                "role": "assistant"
+              }
+            }
+          ],
+          "created": 0,
+          "model": "test"
+        }
+        """
+
+        return try SKIResponse<ChatResponseBody>(
+            httpResponse: .init(status: .ok),
+            data: Data(payload.utf8)
+        )
+    }
+}
+
+private struct AlwaysFailClient: SKILanguageModelClient {
+    func respond(_ body: ChatRequestBody) async throws -> sending SKIResponse<ChatResponseBody> {
+        _ = body
+        throw NSError(domain: "AlwaysFailClient", code: 2, userInfo: [NSLocalizedDescriptionKey: "permanent"])
     }
 }
 

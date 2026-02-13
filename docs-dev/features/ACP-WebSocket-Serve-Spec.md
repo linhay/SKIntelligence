@@ -267,6 +267,14 @@
     When client 调用 `session/prompt`
     Then `session/update` 行为保持兼容，不额外发送 `execution_state_update`。
 
+65. Given agent 配置了 `promptExecution.maxRetries > 0`
+    When `session/prompt` 首次执行遇到可恢复错误
+    Then agent 应继续重试并发送 `session/update(retry_update)`，最终成功时返回 `end_turn`。
+
+66. Given agent 配置了重试但所有尝试均失败
+    When `session/prompt` 重试耗尽
+    Then agent 返回错误响应，并发送 `execution_state_update(state=failed)`。
+
 63. Given agent 启用 Permission Policy 且 mode=`allow`
     When 执行 `session/prompt` 触发权限决策
     Then agent 直接返回放行结果（`allow_once`），不向 client 发起 `session/request_permission`。
