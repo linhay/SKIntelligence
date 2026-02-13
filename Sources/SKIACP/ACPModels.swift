@@ -1243,6 +1243,57 @@ public struct ACPSessionInfoUpdate: Codable, Sendable, Equatable {
     }
 }
 
+public enum ACPExecutionState: String, Codable, Sendable {
+    case queued
+    case running
+    case waitingTool = "waiting_tool"
+    case retrying
+    case completed
+    case failed
+    case cancelled
+    case timedOut = "timed_out"
+}
+
+public struct ACPExecutionStateUpdate: Codable, Sendable, Equatable {
+    public var state: ACPExecutionState
+    public var attempt: Int?
+    public var message: String?
+
+    public init(
+        state: ACPExecutionState,
+        attempt: Int? = nil,
+        message: String? = nil
+    ) {
+        self.state = state
+        self.attempt = attempt
+        self.message = message
+    }
+}
+
+public struct ACPRetryUpdate: Codable, Sendable, Equatable {
+    public var attempt: Int
+    public var maxAttempts: Int
+    public var reason: String?
+
+    public init(attempt: Int, maxAttempts: Int, reason: String? = nil) {
+        self.attempt = attempt
+        self.maxAttempts = maxAttempts
+        self.reason = reason
+    }
+}
+
+public struct ACPAuditUpdate: Codable, Sendable, Equatable {
+    public var action: String
+    public var decision: String
+    public var reason: String?
+
+    public init(action: String, decision: String, reason: String? = nil) {
+        self.action = action
+        self.decision = decision
+        self.reason = reason
+    }
+}
+
 public enum ACPSessionUpdateKind: String, Codable, Sendable {
     case userMessageChunk = "user_message_chunk"
     case agentMessageChunk = "agent_message_chunk"
@@ -1254,6 +1305,9 @@ public enum ACPSessionUpdateKind: String, Codable, Sendable {
     case currentModeUpdate = "current_mode_update"
     case configOptionUpdate = "config_option_update"
     case sessionInfoUpdate = "session_info_update"
+    case executionStateUpdate = "execution_state_update"
+    case retryUpdate = "retry_update"
+    case auditUpdate = "audit_update"
 }
 
 public struct ACPSessionPermissionRequestParams: Codable, Sendable, Equatable {
@@ -1331,6 +1385,9 @@ public enum ACPSessionUpdate: Sendable, Equatable {
     case currentModeUpdate(String)
     case configOptionUpdate([ACPSessionConfigOption])
     case sessionInfoUpdate(ACPSessionInfoUpdate)
+    case executionStateUpdate(ACPExecutionStateUpdate)
+    case retryUpdate(ACPRetryUpdate)
+    case auditUpdate(ACPAuditUpdate)
 
     public var kind: ACPSessionUpdateKind {
         switch self {
@@ -1344,6 +1401,9 @@ public enum ACPSessionUpdate: Sendable, Equatable {
         case .currentModeUpdate: return .currentModeUpdate
         case .configOptionUpdate: return .configOptionUpdate
         case .sessionInfoUpdate: return .sessionInfoUpdate
+        case .executionStateUpdate: return .executionStateUpdate
+        case .retryUpdate: return .retryUpdate
+        case .auditUpdate: return .auditUpdate
         }
     }
 
@@ -1392,6 +1452,21 @@ public enum ACPSessionUpdate: Sendable, Equatable {
         return nil
     }
 
+    public var executionStateUpdate: ACPExecutionStateUpdate? {
+        if case .executionStateUpdate(let value) = self { return value }
+        return nil
+    }
+
+    public var retryUpdate: ACPRetryUpdate? {
+        if case .retryUpdate(let value) = self { return value }
+        return nil
+    }
+
+    public var auditUpdate: ACPAuditUpdate? {
+        if case .auditUpdate(let value) = self { return value }
+        return nil
+    }
+
     public init(
         sessionUpdate: ACPSessionUpdateKind,
         content: ACPSessionUpdateContent? = nil,
@@ -1400,7 +1475,10 @@ public enum ACPSessionUpdate: Sendable, Equatable {
         availableCommands: [ACPAvailableCommand]? = nil,
         currentModeId: String? = nil,
         configOptions: [ACPSessionConfigOption] = [],
-        sessionInfoUpdate: ACPSessionInfoUpdate? = nil
+        sessionInfoUpdate: ACPSessionInfoUpdate? = nil,
+        executionStateUpdate: ACPExecutionStateUpdate? = nil,
+        retryUpdate: ACPRetryUpdate? = nil,
+        auditUpdate: ACPAuditUpdate? = nil
     ) {
         switch sessionUpdate {
         case .userMessageChunk:
@@ -1423,6 +1501,12 @@ public enum ACPSessionUpdate: Sendable, Equatable {
             self = .configOptionUpdate(configOptions)
         case .sessionInfoUpdate:
             self = .sessionInfoUpdate(sessionInfoUpdate ?? .init())
+        case .executionStateUpdate:
+            self = .executionStateUpdate(executionStateUpdate ?? .init(state: .running))
+        case .retryUpdate:
+            self = .retryUpdate(retryUpdate ?? .init(attempt: 1, maxAttempts: 1))
+        case .auditUpdate:
+            self = .auditUpdate(auditUpdate ?? .init(action: "", decision: ""))
         }
     }
 }
@@ -1438,6 +1522,9 @@ public struct ACPSessionUpdatePayload: Codable, Sendable, Equatable {
     public var currentModeId: String? { update.currentModeId }
     public var configOptions: [ACPSessionConfigOption] { update.configOptions }
     public var sessionInfoUpdate: ACPSessionInfoUpdate? { update.sessionInfoUpdate }
+    public var executionStateUpdate: ACPExecutionStateUpdate? { update.executionStateUpdate }
+    public var retryUpdate: ACPRetryUpdate? { update.retryUpdate }
+    public var auditUpdate: ACPAuditUpdate? { update.auditUpdate }
 
     public init(
         update: ACPSessionUpdate
@@ -1453,7 +1540,10 @@ public struct ACPSessionUpdatePayload: Codable, Sendable, Equatable {
         availableCommands: [ACPAvailableCommand]? = nil,
         currentModeId: String? = nil,
         configOptions: [ACPSessionConfigOption] = [],
-        sessionInfoUpdate: ACPSessionInfoUpdate? = nil
+        sessionInfoUpdate: ACPSessionInfoUpdate? = nil,
+        executionStateUpdate: ACPExecutionStateUpdate? = nil,
+        retryUpdate: ACPRetryUpdate? = nil,
+        auditUpdate: ACPAuditUpdate? = nil
     ) {
         self.update = ACPSessionUpdate(
             sessionUpdate: sessionUpdate,
@@ -1463,7 +1553,10 @@ public struct ACPSessionUpdatePayload: Codable, Sendable, Equatable {
             availableCommands: availableCommands,
             currentModeId: currentModeId,
             configOptions: configOptions,
-            sessionInfoUpdate: sessionInfoUpdate
+            sessionInfoUpdate: sessionInfoUpdate,
+            executionStateUpdate: executionStateUpdate,
+            retryUpdate: retryUpdate,
+            auditUpdate: auditUpdate
         )
     }
 
@@ -1477,6 +1570,9 @@ public struct ACPSessionUpdatePayload: Codable, Sendable, Equatable {
         case configOptions
         case title
         case updatedAt
+        case executionState
+        case retry
+        case audit
     }
 
     public init(from decoder: Decoder) throws {
@@ -1506,6 +1602,12 @@ public struct ACPSessionUpdatePayload: Codable, Sendable, Equatable {
                 title: try container.decodeIfPresent(String.self, forKey: .title),
                 updatedAt: try container.decodeIfPresent(String.self, forKey: .updatedAt)
             ))
+        case .executionStateUpdate:
+            self.update = .executionStateUpdate(try container.decode(ACPExecutionStateUpdate.self, forKey: .executionState))
+        case .retryUpdate:
+            self.update = .retryUpdate(try container.decode(ACPRetryUpdate.self, forKey: .retry))
+        case .auditUpdate:
+            self.update = .auditUpdate(try container.decode(ACPAuditUpdate.self, forKey: .audit))
         }
     }
 
@@ -1530,6 +1632,12 @@ public struct ACPSessionUpdatePayload: Codable, Sendable, Equatable {
         case .sessionInfoUpdate(let info):
             try container.encodeIfPresent(info.title, forKey: .title)
             try container.encodeIfPresent(info.updatedAt, forKey: .updatedAt)
+        case .executionStateUpdate(let value):
+            try container.encode(value, forKey: .executionState)
+        case .retryUpdate(let value):
+            try container.encode(value, forKey: .retry)
+        case .auditUpdate(let value):
+            try container.encode(value, forKey: .audit)
         }
     }
 }

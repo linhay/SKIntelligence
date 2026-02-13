@@ -28,6 +28,14 @@ public enum ACPAgentServiceError: Error, LocalizedError {
 
 public actor ACPAgentService {
     public struct Options: Sendable {
+        public struct PromptExecution: Sendable, Equatable {
+            public var enableStateUpdates: Bool
+
+            public init(enableStateUpdates: Bool = false) {
+                self.enableStateUpdates = enableStateUpdates
+            }
+        }
+
         public struct SessionPersistence: Sendable, Equatable {
             public var directoryURL: URL
             public var configuration: SKITranscript.JSONLPersistenceConfiguration
@@ -46,19 +54,22 @@ public actor ACPAgentService {
         public var sessionListPageSize: Int
         public var autoSessionInfoUpdateOnFirstPrompt: Bool
         public var sessionPersistence: SessionPersistence?
+        public var promptExecution: PromptExecution
 
         public init(
             promptTimeoutNanoseconds: UInt64? = nil,
             sessionTTLNanos: UInt64? = nil,
             sessionListPageSize: Int = 50,
             autoSessionInfoUpdateOnFirstPrompt: Bool = false,
-            sessionPersistence: SessionPersistence? = nil
+            sessionPersistence: SessionPersistence? = nil,
+            promptExecution: PromptExecution = .init()
         ) {
             self.promptTimeoutNanoseconds = promptTimeoutNanoseconds
             self.sessionTTLNanos = sessionTTLNanos
             self.sessionListPageSize = max(1, sessionListPageSize)
             self.autoSessionInfoUpdateOnFirstPrompt = autoSessionInfoUpdateOnFirstPrompt
             self.sessionPersistence = sessionPersistence
+            self.promptExecution = promptExecution
         }
     }
 
@@ -469,6 +480,10 @@ public actor ACPAgentService {
                 guard let entry = sessions[params.sessionId] else {
                     throw ACPAgentServiceError.sessionNotFound(params.sessionId)
                 }
+                try await emitExecutionStateIfNeeded(
+                    sessionId: params.sessionId,
+                    state: .queued
+                )
                 let session = entry.session
                 guard runningPrompts[params.sessionId] == nil else {
                     throw ACPAgentServiceError.invalidParams("Prompt already running for session: \(params.sessionId)")
@@ -498,6 +513,11 @@ public actor ACPAgentService {
                         shouldAllow = selected.optionId.hasPrefix("allow")
                     }
                     guard shouldAllow else {
+                        try await emitExecutionStateIfNeeded(
+                            sessionId: params.sessionId,
+                            state: .cancelled,
+                            message: "Permission denied"
+                        )
                         let result = ACPSessionPromptResult(stopReason: .cancelled)
                         return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
                     }
@@ -507,6 +527,10 @@ public actor ACPAgentService {
                 let toolCallID = "call_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
                 promptRequestToSession[request.id] = params.sessionId
                 defer { promptRequestToSession[request.id] = nil }
+                try await emitExecutionStateIfNeeded(
+                    sessionId: params.sessionId,
+                    state: .running
+                )
                 let task = Task<String, Error> { try await session.prompt(text) }
                 runningPrompts[params.sessionId] = task
 
@@ -548,10 +572,18 @@ public actor ACPAgentService {
                         }
                     }
 
+                    try await emitExecutionStateIfNeeded(
+                        sessionId: params.sessionId,
+                        state: .completed
+                    )
                     let result = ACPSessionPromptResult(stopReason: .endTurn)
                     return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
                 } catch is CancellationError {
                     runningPrompts[params.sessionId] = nil
+                    try await emitExecutionStateIfNeeded(
+                        sessionId: params.sessionId,
+                        state: .cancelled
+                    )
                     if protocolCancelledSessions.remove(params.sessionId) != nil {
                         return errorResponse(ACPAgentServiceError.requestCancelled, id: request.id)
                     }
@@ -559,7 +591,19 @@ public actor ACPAgentService {
                     return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
                 } catch let error as ACPAgentServiceError where error == .promptTimedOut {
                     runningPrompts[params.sessionId] = nil
+                    try await emitExecutionStateIfNeeded(
+                        sessionId: params.sessionId,
+                        state: .timedOut
+                    )
                     return errorResponse(error, id: request.id)
+                } catch {
+                    runningPrompts[params.sessionId] = nil
+                    try await emitExecutionStateIfNeeded(
+                        sessionId: params.sessionId,
+                        state: .failed,
+                        message: error.localizedDescription
+                    )
+                    throw error
                 }
 
             default:
@@ -862,6 +906,28 @@ public actor ACPAgentService {
             params: try ACPCodec.encodeParams(params)
         )
         await notificationSink(notification)
+    }
+
+    private func emitExecutionStateIfNeeded(
+        sessionId: String,
+        state: ACPExecutionState,
+        attempt: Int? = nil,
+        message: String? = nil
+    ) async throws {
+        guard options.promptExecution.enableStateUpdates else { return }
+        try await emitSessionUpdate(
+            .init(
+                sessionId: sessionId,
+                update: .init(
+                    sessionUpdate: .executionStateUpdate,
+                    executionStateUpdate: .init(
+                        state: state,
+                        attempt: attempt,
+                        message: message
+                    )
+                )
+            )
+        )
     }
 }
 

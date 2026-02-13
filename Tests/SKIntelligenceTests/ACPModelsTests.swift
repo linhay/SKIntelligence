@@ -270,4 +270,20 @@ final class ACPModelsTests: XCTestCase {
         XCTAssertEqual(decoded.update.sessionInfoUpdate?.title, "Auth Debug")
         XCTAssertEqual(decoded.update.sessionInfoUpdate?.updatedAt, "2026-02-12T19:10:00Z")
     }
+
+    func testExecutionStateUpdateRoundTrip() throws {
+        let params = ACPSessionUpdateParams(
+            sessionId: "sess_exec",
+            update: .init(
+                sessionUpdate: .executionStateUpdate,
+                executionStateUpdate: .init(state: .running, attempt: 1, message: "prompt started")
+            )
+        )
+        let encoded = try ACPCodec.encodeParams(params)
+        let decoded = try ACPCodec.decodeParams(encoded, as: ACPSessionUpdateParams.self)
+        XCTAssertEqual(decoded.update.sessionUpdate, .executionStateUpdate)
+        XCTAssertEqual(decoded.update.executionStateUpdate?.state, .running)
+        XCTAssertEqual(decoded.update.executionStateUpdate?.attempt, 1)
+        XCTAssertEqual(decoded.update.executionStateUpdate?.message, "prompt started")
+    }
 }

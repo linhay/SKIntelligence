@@ -259,6 +259,14 @@
     When 执行协议一致性守卫测试
     Then 方法集必须与官方 `meta.json/meta.unstable.json` 快照一致，且项目扩展仅允许 `logout` 与 `session/delete`。
 
+63. Given agent 开启 prompt 执行状态更新能力
+    When client 调用 `session/prompt`
+    Then agent 应通过 `session/update(execution_state_update)` 按顺序发送 `queued -> running -> completed|cancelled|timed_out|failed` 状态。
+
+64. Given agent 未开启 prompt 执行状态更新能力（默认）
+    When client 调用 `session/prompt`
+    Then `session/update` 行为保持兼容，不额外发送 `execution_state_update`。
+
 63. Given agent 启用 Permission Policy 且 mode=`allow`
     When 执行 `session/prompt` 触发权限决策
     Then agent 直接返回放行结果（`allow_once`），不向 client 发起 `session/request_permission`。

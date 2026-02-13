@@ -223,3 +223,34 @@ swift test --filter ACPAgentServiceTests --filter ACPPermissionPolicyTests --fil
 swift test --filter ACPAgentServiceTests/testSessionLoadRestoresPersistedTranscriptWhenSessionNotInMemory
 swift test --filter ACPAgentServiceTests --filter ACPPermissionPolicyTests --filter ACPClientRuntimeTests
 ```
+
+## 15. Prompt 执行状态机（A1+A3，第一批）
+- `ACPModels` 新增会话更新判别值：
+  - `execution_state_update`
+  - `retry_update`（预留）
+  - `audit_update`（预留）
+- `ACPModels` 新增强类型载荷：
+  - `ACPExecutionState/ACPExecutionStateUpdate`
+  - `ACPRetryUpdate`
+  - `ACPAuditUpdate`
+- `ACPAgentService.Options` 新增 `promptExecution.enableStateUpdates`（默认 `false`，保持兼容）。
+- `ACPAgentService` 在 `session/prompt` 中接入状态发射：
+  - `queued`（进入 prompt）
+  - `running`（开始执行）
+  - `completed`（成功结束）
+  - `cancelled`（取消或权限拒绝）
+  - `timed_out`（超时）
+  - `failed`（未知失败）
+- 新增测试：
+  - `ACPModelsTests/testExecutionStateUpdateRoundTrip`
+  - `ACPAgentServiceTests/testPromptEmitsExecutionStateLifecycleWhenEnabled`
+  - `ACPAgentServiceTests/testPromptCancellationEmitsExecutionStateWhenEnabled`
+
+验证命令：
+```bash
+swift test --filter ACPModelsTests/testExecutionStateUpdateRoundTrip \
+  --filter ACPAgentServiceTests/testPromptEmitsExecutionStateLifecycleWhenEnabled \
+  --filter ACPAgentServiceTests/testPromptCancellationEmitsExecutionStateWhenEnabled
+
+swift test --filter ACPModelsTests --filter ACPAgentServiceTests --filter ACPClientRuntimeTests --filter ACPTransportConsistencyTests
+```

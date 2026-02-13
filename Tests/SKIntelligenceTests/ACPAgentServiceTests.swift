@@ -116,6 +116,52 @@ final class ACPAgentServiceTests: XCTestCase {
         XCTAssertEqual(updates[1].update.plan?.entries.first?.content, "Analyze prompt")
     }
 
+    func testPromptEmitsExecutionStateLifecycleWhenEnabled() async throws {
+        let notifications = NotificationBox()
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            options: .init(promptExecution: .init(enableStateUpdates: true)),
+            notificationSink: { n in await notifications.append(n) }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(9993),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        let promptReq = JSONRPCRequest(
+            id: .int(9994),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("hello")]))
+        )
+        let promptResp = await service.handle(promptReq)
+        XCTAssertNil(promptResp.error)
+
+        let updates = try await notifications.snapshot()
+            .map { try ACPCodec.decodeParams($0.params, as: ACPSessionUpdateParams.self) }
+
+        let queuedIndex = try XCTUnwrap(updates.firstIndex(where: {
+            $0.update.sessionUpdate == .executionStateUpdate && $0.update.executionStateUpdate?.state == .queued
+        }))
+        let runningIndex = try XCTUnwrap(updates.firstIndex(where: {
+            $0.update.sessionUpdate == .executionStateUpdate && $0.update.executionStateUpdate?.state == .running
+        }))
+        let completedIndex = try XCTUnwrap(updates.firstIndex(where: {
+            $0.update.sessionUpdate == .executionStateUpdate && $0.update.executionStateUpdate?.state == .completed
+        }))
+        let firstLifecycleIndex = try XCTUnwrap(updates.firstIndex(where: { $0.update.sessionUpdate == .availableCommandsUpdate }))
+        let messageIndex = try XCTUnwrap(updates.firstIndex(where: { $0.update.sessionUpdate == .agentMessageChunk }))
+
+        XCTAssertLessThan(queuedIndex, runningIndex)
+        XCTAssertLessThan(runningIndex, firstLifecycleIndex)
+        XCTAssertGreaterThan(completedIndex, messageIndex)
+    }
+
     func testMethodNotFoundReturnsJSONRPCMethodNotFound() async throws {
         let service = ACPAgentService(
             sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
@@ -200,6 +246,48 @@ final class ACPAgentServiceTests: XCTestCase {
 
         let promptResp = await promptTask.value
         XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.requestCancelled)
+    }
+
+    func testPromptCancellationEmitsExecutionStateWhenEnabled() async throws {
+        let notifications = NotificationBox()
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: SlowCancellableClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            options: .init(promptExecution: .init(enableStateUpdates: true)),
+            notificationSink: { n in await notifications.append(n) }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(1200),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        let promptReq = JSONRPCRequest(
+            id: .int(1201),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("cancel path")]))
+        )
+        let promptTask = Task { await service.handle(promptReq) }
+
+        try await Task.sleep(nanoseconds: 60_000_000)
+        await service.handleCancel(
+            .init(
+                method: ACPMethods.sessionCancel,
+                params: try ACPCodec.encodeParams(ACPSessionCancelParams(sessionId: session.sessionId))
+            )
+        )
+        _ = await promptTask.value
+
+        let updates = try await notifications.snapshot()
+            .map { try ACPCodec.decodeParams($0.params, as: ACPSessionUpdateParams.self) }
+        XCTAssertTrue(updates.contains(where: {
+            $0.update.sessionUpdate == .executionStateUpdate
+                && $0.update.executionStateUpdate?.state == .cancelled
+        }))
     }
 
     func testLogoutRequiresCapability() async throws {
