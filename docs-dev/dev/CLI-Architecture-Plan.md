@@ -411,3 +411,21 @@ ACP WebSocket 规格：`docs-dev/features/ACP-WebSocket-Serve-Spec.md`
   - `swift test --filter ACPPermissionPolicyTests`
   - `swift test --filter SKICLITests/testServePermissionModeSemantics`
   - `swift test --filter ACP --parallel`
+
+## 28. ACP Agent Telemetry（2026-02-13）
+- 关联需求：`docs-dev/features/ACP-Agent-Telemetry-Spec.md`
+- 目标：在不扩展 ACP JSON-RPC 方法表的前提下，提供 agent 内部可观测性事件流。
+- 实现：
+  - `ACPAgentService` 新增可选 `telemetrySink` 注入点；
+  - 新增 `ACPAgentTelemetryEvent`（`name/sessionId/requestId/attributes/timestamp`）；
+  - 生命周期事件覆盖：
+    - session：`session_new/session_load/session_delete`
+    - prompt：`prompt_requested/prompt_started/prompt_completed/prompt_cancelled/prompt_timed_out/prompt_failed/prompt_permission_denied`
+    - retry：`prompt_retry`
+- 兼容性：
+  - 未注入 sink 时无行为变化；
+  - telemetry 仅为内部扩展，不影响 ACP 协议交互与返回结构。
+- 验证：
+  - `swift test --filter ACPAgentServiceTests/testPromptEmitsTelemetryLifecycle`
+  - `swift test --filter ACPAgentServiceTests/testPromptRetryEmitsTelemetryRetryEvent`
+  - `swift test --filter ACPGoldenFixturesTests/testSessionUpdateGoldenFixturesRoundTrip`
