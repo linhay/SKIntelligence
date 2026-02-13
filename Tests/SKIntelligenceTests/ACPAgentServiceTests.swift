@@ -379,6 +379,80 @@ final class ACPAgentServiceTests: XCTestCase {
         XCTAssertEqual(updates.filter { $0.update.sessionUpdate == .retryUpdate }.count, 1)
     }
 
+    func testPromptEmitsTelemetryLifecycle() async throws {
+        let telemetry = TelemetryBox()
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            telemetrySink: { event in await telemetry.append(event) },
+            notificationSink: { _ in }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(1300),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        let promptReq = JSONRPCRequest(
+            id: .int(1301),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("telemetry")]))
+        )
+        let promptResp = await service.handle(promptReq)
+        XCTAssertNil(promptResp.error)
+
+        let names = await telemetry.snapshot().map(\.name)
+        XCTAssertTrue(names.contains("session_new"))
+        XCTAssertTrue(names.contains("prompt_requested"))
+        XCTAssertTrue(names.contains("prompt_started"))
+        XCTAssertTrue(names.contains("prompt_completed"))
+    }
+
+    func testPromptRetryEmitsTelemetryRetryEvent() async throws {
+        await RetryOnceClient.resetCounter()
+        let telemetry = TelemetryBox()
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: RetryOnceClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            options: .init(
+                promptExecution: .init(
+                    enableStateUpdates: true,
+                    maxRetries: 1,
+                    retryBaseDelayNanoseconds: 1_000_000
+                )
+            ),
+            telemetrySink: { event in await telemetry.append(event) },
+            notificationSink: { _ in }
+        )
+
+        let newResp = await service.handle(
+            .init(
+                id: .int(1302),
+                method: ACPMethods.sessionNew,
+                params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+            )
+        )
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+        let promptResp = await service.handle(
+            .init(
+                id: .int(1303),
+                method: ACPMethods.sessionPrompt,
+                params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("retry telemetry")]))
+            )
+        )
+        XCTAssertNil(promptResp.error)
+
+        let events = await telemetry.snapshot()
+        let retryEvent = events.first(where: { $0.name == "prompt_retry" })
+        XCTAssertNotNil(retryEvent)
+        XCTAssertEqual(retryEvent?.attributes["attempt"], "1")
+    }
+
     func testLogoutRequiresCapability() async throws {
         let service = ACPAgentService(
             sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
@@ -1220,6 +1294,18 @@ private actor NotificationBox {
         values.append(value)
     }
     func snapshot() -> [JSONRPCNotification] { values }
+}
+
+private actor TelemetryBox {
+    private var values: [ACPAgentTelemetryEvent] = []
+
+    func append(_ value: ACPAgentTelemetryEvent) {
+        values.append(value)
+    }
+
+    func snapshot() -> [ACPAgentTelemetryEvent] {
+        values
+    }
 }
 
 private struct EchoTestClient: SKILanguageModelClient {

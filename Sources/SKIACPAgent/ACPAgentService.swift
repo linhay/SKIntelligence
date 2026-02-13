@@ -26,6 +26,28 @@ public enum ACPAgentServiceError: Error, LocalizedError {
     }
 }
 
+public struct ACPAgentTelemetryEvent: Sendable, Equatable {
+    public var name: String
+    public var sessionId: String?
+    public var requestId: JSONRPCID?
+    public var attributes: [String: String]
+    public var timestamp: String
+
+    public init(
+        name: String,
+        sessionId: String? = nil,
+        requestId: JSONRPCID? = nil,
+        attributes: [String: String] = [:],
+        timestamp: String
+    ) {
+        self.name = name
+        self.sessionId = sessionId
+        self.requestId = requestId
+        self.attributes = attributes
+        self.timestamp = timestamp
+    }
+}
+
 public actor ACPAgentService {
     public struct Options: Sendable {
         public struct PromptExecution: Sendable, Equatable {
@@ -83,6 +105,7 @@ public actor ACPAgentService {
 
     public typealias SessionFactory = @Sendable () throws -> any ACPAgentSession
     public typealias NotificationSink = @Sendable (JSONRPCNotification) async -> Void
+    public typealias TelemetrySink = @Sendable (ACPAgentTelemetryEvent) async -> Void
     public typealias PermissionRequester = @Sendable (ACPSessionPermissionRequestParams) async throws -> ACPSessionPermissionRequestResult
     public typealias AuthenticationHandler = @Sendable (ACPAuthenticateParams) async throws -> Void
 
@@ -95,6 +118,7 @@ public actor ACPAgentService {
     private let permissionRequester: PermissionRequester?
     private let permissionPolicy: (any ACPPermissionPolicy)?
     private let notificationSink: NotificationSink
+    private let telemetrySink: TelemetrySink?
 
     private struct SessionEntry {
         let session: any ACPAgentSession
@@ -122,6 +146,7 @@ public actor ACPAgentService {
         options: Options = .init(),
         permissionRequester: PermissionRequester? = nil,
         permissionPolicy: (any ACPPermissionPolicy)? = nil,
+        telemetrySink: TelemetrySink? = nil,
         notificationSink: @escaping NotificationSink
     ) {
         self.sessionFactory = sessionFactory
@@ -141,6 +166,7 @@ public actor ACPAgentService {
             self.permissionRequester = nil
         }
         self.notificationSink = notificationSink
+        self.telemetrySink = telemetrySink
     }
 
     public init(
@@ -152,6 +178,7 @@ public actor ACPAgentService {
         options: Options = .init(),
         permissionRequester: PermissionRequester? = nil,
         permissionPolicy: (any ACPPermissionPolicy)? = nil,
+        telemetrySink: TelemetrySink? = nil,
         notificationSink: @escaping NotificationSink
     ) {
         self.init(
@@ -165,6 +192,7 @@ public actor ACPAgentService {
             options: options,
             permissionRequester: permissionRequester,
             permissionPolicy: permissionPolicy,
+            telemetrySink: telemetrySink,
             notificationSink: notificationSink
         )
     }
@@ -248,6 +276,12 @@ public actor ACPAgentService {
                         ]
                     ),
                     configOptions: []
+                )
+                await emitTelemetry(
+                    name: "session_new",
+                    sessionId: sessionID,
+                    requestId: request.id,
+                    attributes: ["cwd": params.cwd]
                 )
                 return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
 
@@ -375,6 +409,11 @@ public actor ACPAgentService {
                 runningPrompts[params.sessionId]?.cancel()
                 runningPrompts[params.sessionId] = nil
                 await permissionPolicy?.clear(sessionId: params.sessionId)
+                await emitTelemetry(
+                    name: "session_delete",
+                    sessionId: params.sessionId,
+                    requestId: request.id
+                )
                 return JSONRPCResponse(
                     id: request.id,
                     result: try ACPCodec.encodeParams(ACPSessionDeleteResult())
@@ -411,6 +450,12 @@ public actor ACPAgentService {
                         availableModels: entry.availableModels
                     ),
                     configOptions: entry.configOptions
+                )
+                await emitTelemetry(
+                    name: "session_load",
+                    sessionId: params.sessionId,
+                    requestId: request.id,
+                    attributes: ["cwd": params.cwd]
                 )
                 return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
 
@@ -488,6 +533,11 @@ public actor ACPAgentService {
                 guard let entry = sessions[params.sessionId] else {
                     throw ACPAgentServiceError.sessionNotFound(params.sessionId)
                 }
+                await emitTelemetry(
+                    name: "prompt_requested",
+                    sessionId: params.sessionId,
+                    requestId: request.id
+                )
                 try await emitExecutionStateIfNeeded(
                     sessionId: params.sessionId,
                     state: .queued
@@ -521,6 +571,11 @@ public actor ACPAgentService {
                         shouldAllow = selected.optionId.hasPrefix("allow")
                     }
                     guard shouldAllow else {
+                        await emitTelemetry(
+                            name: "prompt_permission_denied",
+                            sessionId: params.sessionId,
+                            requestId: request.id
+                        )
                         try await emitExecutionStateIfNeeded(
                             sessionId: params.sessionId,
                             state: .cancelled,
@@ -538,6 +593,11 @@ public actor ACPAgentService {
                 try await emitExecutionStateIfNeeded(
                     sessionId: params.sessionId,
                     state: .running
+                )
+                await emitTelemetry(
+                    name: "prompt_started",
+                    sessionId: params.sessionId,
+                    requestId: request.id
                 )
                 let task = Task<String, Error> {
                     try await self.runPromptWithRetry(
@@ -590,6 +650,11 @@ public actor ACPAgentService {
                         sessionId: params.sessionId,
                         state: .completed
                     )
+                    await emitTelemetry(
+                        name: "prompt_completed",
+                        sessionId: params.sessionId,
+                        requestId: request.id
+                    )
                     let result = ACPSessionPromptResult(stopReason: .endTurn)
                     return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
                 } catch is CancellationError {
@@ -597,6 +662,11 @@ public actor ACPAgentService {
                     try await emitExecutionStateIfNeeded(
                         sessionId: params.sessionId,
                         state: .cancelled
+                    )
+                    await emitTelemetry(
+                        name: "prompt_cancelled",
+                        sessionId: params.sessionId,
+                        requestId: request.id
                     )
                     if protocolCancelledSessions.remove(params.sessionId) != nil {
                         return errorResponse(ACPAgentServiceError.requestCancelled, id: request.id)
@@ -609,6 +679,11 @@ public actor ACPAgentService {
                         sessionId: params.sessionId,
                         state: .timedOut
                     )
+                    await emitTelemetry(
+                        name: "prompt_timed_out",
+                        sessionId: params.sessionId,
+                        requestId: request.id
+                    )
                     return errorResponse(error, id: request.id)
                 } catch {
                     runningPrompts[params.sessionId] = nil
@@ -616,6 +691,12 @@ public actor ACPAgentService {
                         sessionId: params.sessionId,
                         state: .failed,
                         message: error.localizedDescription
+                    )
+                    await emitTelemetry(
+                        name: "prompt_failed",
+                        sessionId: params.sessionId,
+                        requestId: request.id,
+                        attributes: ["error": error.localizedDescription]
                     )
                     throw error
                 }
@@ -975,6 +1056,15 @@ public actor ACPAgentService {
                     maxAttempts: maxRetries + 1,
                     reason: error.localizedDescription
                 )
+                await emitTelemetry(
+                    name: "prompt_retry",
+                    sessionId: sessionId,
+                    attributes: [
+                        "attempt": "\(attempt)",
+                        "maxAttempts": "\(maxRetries + 1)",
+                        "reason": error.localizedDescription
+                    ]
+                )
                 let delay = options.promptExecution.retryBaseDelayNanoseconds * UInt64(attempt)
                 if delay > 0 {
                     try await Task.sleep(nanoseconds: delay)
@@ -1000,6 +1090,24 @@ public actor ACPAgentService {
                         reason: reason
                     )
                 )
+            )
+        )
+    }
+
+    private func emitTelemetry(
+        name: String,
+        sessionId: String? = nil,
+        requestId: JSONRPCID? = nil,
+        attributes: [String: String] = [:]
+    ) async {
+        guard let telemetrySink else { return }
+        await telemetrySink(
+            .init(
+                name: name,
+                sessionId: sessionId,
+                requestId: requestId,
+                attributes: attributes,
+                timestamp: iso8601TimestampNow()
             )
         )
     }
