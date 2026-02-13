@@ -8,8 +8,7 @@ import XCTest
 
 final class ACPWebSocketRoundtripTests: XCTestCase {
     func testWebSocketServerClientPromptRoundtrip() async throws {
-        let port = UInt16(Int.random(in: 22000...32000))
-        let serverTransport = WebSocketServerTransport(listenAddress: "127.0.0.1:\(port)")
+        let (serverTransport, port) = try await ACPWebSocketTestHarness.makeServerTransport()
         let updates = WSUpdateBox()
 
         let service = ACPAgentService(
@@ -21,7 +20,6 @@ final class ACPWebSocketRoundtripTests: XCTestCase {
             }
         )
 
-        try await serverTransport.connect()
         let serverLoop = Task {
             while let message = try await serverTransport.receive() {
                 switch message {

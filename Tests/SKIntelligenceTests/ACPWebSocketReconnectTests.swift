@@ -8,11 +8,8 @@ final class ACPWebSocketReconnectTests: XCTestCase {
             throw XCTSkip("Live websocket reconnect test is opt-in. Set RUN_LIVE_WS_RECONNECT_TESTS=1 to enable.")
         }
         try await withTimeout(seconds: 5.0) {
-            let port = UInt16(Int.random(in: 33000...43000))
+            let (server1, port) = try await ACPWebSocketTestHarness.makeServerTransport()
             let endpoint = URL(string: "ws://127.0.0.1:\(port)")!
-
-            let server1 = WebSocketServerTransport(listenAddress: "127.0.0.1:\(port)")
-            try await server1.connect()
             let serverLoop1 = Task {
                 try await runEchoLoop(on: server1)
             }
@@ -37,8 +34,7 @@ final class ACPWebSocketReconnectTests: XCTestCase {
 
             try await Task.sleep(nanoseconds: 120_000_000)
 
-            let server2 = WebSocketServerTransport(listenAddress: "127.0.0.1:\(port)")
-            try await server2.connect()
+            let server2 = try await ACPWebSocketTestHarness.makeServerTransport(onFixedPort: port)
             let serverLoop2 = Task {
                 try await runEchoLoop(on: server2)
             }

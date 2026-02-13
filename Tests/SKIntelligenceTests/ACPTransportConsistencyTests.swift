@@ -22,8 +22,7 @@ final class ACPTransportConsistencyTests: XCTestCase {
             )
         }
 
-        let port = Int.random(in: 36000...46000)
-        let wsServerTransport = WebSocketServerTransport(listenAddress: "127.0.0.1:\(port)")
+        let (wsServerTransport, port) = try await ACPWebSocketTestHarness.makeServerTransport()
         let wsAgent = ACPAgentService(
             sessionFactory: { SKILanguageModelSession(client: EchoConsistencyClient()) },
             agentInfo: .init(name: "ski", version: "0.1.0"),
@@ -32,7 +31,6 @@ final class ACPTransportConsistencyTests: XCTestCase {
                 try? await wsServerTransport.send(.notification(notification))
             }
         )
-        try await wsServerTransport.connect()
         let wsServerLoop = Task {
             while let message = try await wsServerTransport.receive() {
                 switch message {

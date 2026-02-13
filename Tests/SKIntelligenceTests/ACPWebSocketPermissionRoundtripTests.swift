@@ -7,8 +7,7 @@ import XCTest
 
 final class ACPWebSocketPermissionRoundtripTests: XCTestCase {
     func testPermissionApprovedAllowsPrompt() async throws {
-        let port = UInt16(Int.random(in: 52001...59000))
-        let serverTransport = WebSocketServerTransport(listenAddress: "127.0.0.1:\(port)")
+        let (serverTransport, port) = try await ACPWebSocketTestHarness.makeServerTransport()
         let bridge = ACPPermissionRequestBridge()
         let updates = WSUpdateBox2()
 
@@ -26,7 +25,6 @@ final class ACPWebSocketPermissionRoundtripTests: XCTestCase {
             }
         )
 
-        try await serverTransport.connect()
         let serverLoop = Task {
             while let message = try await serverTransport.receive() {
                 switch message {
@@ -76,8 +74,7 @@ final class ACPWebSocketPermissionRoundtripTests: XCTestCase {
     }
 
     func testPermissionDeniedCancelsPrompt() async throws {
-        let port = UInt16(Int.random(in: 59001...62000))
-        let serverTransport = WebSocketServerTransport(listenAddress: "127.0.0.1:\(port)")
+        let (serverTransport, port) = try await ACPWebSocketTestHarness.makeServerTransport()
         let bridge = ACPPermissionRequestBridge()
         let updates = WSUpdateBox2()
 
@@ -95,7 +92,6 @@ final class ACPWebSocketPermissionRoundtripTests: XCTestCase {
             }
         )
 
-        try await serverTransport.connect()
         let serverLoop = Task {
             while let message = try await serverTransport.receive() {
                 switch message {

@@ -8,8 +8,7 @@ import XCTest
 
 final class ACPWebSocketMultiClientTests: XCTestCase {
     func testTwoClientsCanPromptConcurrentlyWithoutCrossRouting() async throws {
-        let port = UInt16(Int.random(in: 33000...43000))
-        let serverTransport = WebSocketServerTransport(listenAddress: "127.0.0.1:\(port)")
+        let (serverTransport, port) = try await ACPWebSocketTestHarness.makeServerTransport()
 
         let service = ACPAgentService(
             sessionFactory: { SKILanguageModelSession(client: EchoMultiClient()) },
@@ -20,7 +19,6 @@ final class ACPWebSocketMultiClientTests: XCTestCase {
             }
         )
 
-        try await serverTransport.connect()
         let serverLoop = Task {
             while let message = try await serverTransport.receive() {
                 switch message {
@@ -105,9 +103,7 @@ final class ACPWebSocketMultiClientTests: XCTestCase {
     }
 
     func testServerNotificationBroadcastsToAllConnectedClients() async throws {
-        let port = UInt16(Int.random(in: 43001...52000))
-        let serverTransport = WebSocketServerTransport(listenAddress: "127.0.0.1:\(port)")
-        try await serverTransport.connect()
+        let (serverTransport, port) = try await ACPWebSocketTestHarness.makeServerTransport()
         defer {
             Task { await serverTransport.close() }
         }
