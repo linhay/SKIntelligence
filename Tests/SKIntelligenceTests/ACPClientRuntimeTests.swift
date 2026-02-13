@@ -37,6 +37,51 @@ final class ACPClientRuntimeTests: XCTestCase {
         }
     }
 
+    func testLocalFilesystemRuntimeRootedRulesReadOnlyAndDeniedPrefixes() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("acp-runtime-rules-\(UUID().uuidString)", isDirectory: true)
+        let readOnlyRoot = root.appendingPathComponent("readonly", isDirectory: true)
+        let deniedRoot = root.appendingPathComponent("secrets", isDirectory: true)
+        try FileManager.default.createDirectory(at: readOnlyRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: deniedRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let runtime = ACPLocalFilesystemRuntime(
+            policy: .rootedWithRules(
+                .init(
+                    root: root,
+                    readOnlyRoots: [readOnlyRoot],
+                    deniedPathPrefixes: ["secrets"]
+                )
+            )
+        )
+
+        let writable = root.appendingPathComponent("writable/notes.txt").path
+        _ = try await runtime.writeTextFile(.init(sessionId: "sess_rules", path: writable, content: "ok"))
+        let readable = try await runtime.readTextFile(.init(sessionId: "sess_rules", path: writable))
+        XCTAssertEqual(readable.content, "ok")
+
+        let readOnlyFile = readOnlyRoot.appendingPathComponent("a.txt").path
+        do {
+            _ = try await runtime.writeTextFile(.init(sessionId: "sess_rules", path: readOnlyFile, content: "blocked"))
+            XCTFail("Expected permission denied for read-only path")
+        } catch let error as ACPRuntimeError {
+            guard case .permissionDenied = error else {
+                return XCTFail("Expected permission denied, got \(error)")
+            }
+        }
+
+        let deniedFile = deniedRoot.appendingPathComponent("token.txt").path
+        do {
+            _ = try await runtime.writeTextFile(.init(sessionId: "sess_rules", path: deniedFile, content: "blocked"))
+            XCTFail("Expected permission denied for denied prefix")
+        } catch let error as ACPRuntimeError {
+            guard case .permissionDenied = error else {
+                return XCTFail("Expected permission denied, got \(error)")
+            }
+        }
+    }
+
     func testProcessTerminalRuntimeLifecycle() async throws {
         let runtime = ACPProcessTerminalRuntime()
 

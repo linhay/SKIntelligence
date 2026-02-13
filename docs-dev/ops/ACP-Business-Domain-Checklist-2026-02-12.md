@@ -280,3 +280,24 @@ swift test --filter ACPModelsTests/testRetryUpdateRoundTrip \
 
 swift test --filter ACPModelsTests --filter ACPAgentServiceTests --filter ACPClientRuntimeTests --filter ACPTransportConsistencyTests
 ```
+
+## 17. FS Runtime Policy 细化（B1 第一批）
+- `ACPFilesystemAccessPolicy` 新增：
+  - `.rootedWithRules(ACPFilesystemRootedRules)`
+- `ACPFilesystemRootedRules` 能力：
+  - `readOnlyRoots`：写入拒绝；
+  - `deniedPathPrefixes`：按 rooted 相对前缀拒绝访问。
+- `ACPLocalFilesystemRuntime` 校验逻辑：
+  - 先执行 rooted 边界检查；
+  - 再执行 deny prefix；
+  - 写入路径额外执行 read-only root 检查。
+- 新增测试：
+  - `ACPClientRuntimeTests/testLocalFilesystemRuntimeRootedRulesReadOnlyAndDeniedPrefixes`
+
+验证命令：
+```bash
+swift test --filter ACPClientRuntimeTests/testLocalFilesystemRuntimeRootedRulesReadOnlyAndDeniedPrefixes \
+  --filter ACPClientRuntimeTests/testLocalFilesystemRuntimeReadWriteAndRootPolicy
+
+swift test --filter ACPModelsTests --filter ACPAgentServiceTests --filter ACPClientRuntimeTests --filter ACPTransportConsistencyTests
+```

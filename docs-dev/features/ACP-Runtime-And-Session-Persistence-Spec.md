@@ -42,6 +42,10 @@
    When 会话产生消息并新建会话重新启用同一 JSONL 文件
    Then 新会话应能恢复历史 transcript。
 
+6. Given 本地文件系统 runtime 使用 rooted rules（只读目录 + 禁止前缀）
+   When 写入只读目录或访问禁止前缀路径
+   Then runtime 返回 permission denied。
+
 ## 验收标准
 
 - 新增 Runtime 抽象类型与默认实现可直接在 CLI/集成中复用。

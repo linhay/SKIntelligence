@@ -24,6 +24,23 @@ public protocol ACPFilesystemRuntime: Sendable {
 public enum ACPFilesystemAccessPolicy: Sendable, Equatable {
     case unrestricted
     case rooted(URL)
+    case rootedWithRules(ACPFilesystemRootedRules)
+}
+
+public struct ACPFilesystemRootedRules: Sendable, Equatable {
+    public var root: URL
+    public var readOnlyRoots: [URL]
+    public var deniedPathPrefixes: [String]
+
+    public init(
+        root: URL,
+        readOnlyRoots: [URL] = [],
+        deniedPathPrefixes: [String] = []
+    ) {
+        self.root = root
+        self.readOnlyRoots = readOnlyRoots
+        self.deniedPathPrefixes = deniedPathPrefixes
+    }
 }
 
 public struct ACPLocalFilesystemRuntime: ACPFilesystemRuntime {
@@ -66,7 +83,22 @@ public struct ACPLocalFilesystemRuntime: ACPFilesystemRuntime {
     }
 
     private func validate(url: URL, forWrite: Bool) throws {
-        guard case .rooted(let root) = policy else { return }
+        let root: URL
+        let readOnlyRoots: [URL]
+        let deniedPathPrefixes: [String]
+        switch policy {
+        case .unrestricted:
+            return
+        case .rooted(let rootURL):
+            root = rootURL
+            readOnlyRoots = []
+            deniedPathPrefixes = []
+        case .rootedWithRules(let rules):
+            root = rules.root
+            readOnlyRoots = rules.readOnlyRoots
+            deniedPathPrefixes = rules.deniedPathPrefixes
+        }
+
         let rootResolved = root.standardizedFileURL.resolvingSymlinksInPath()
 
         let targetURL: URL
@@ -79,9 +111,25 @@ public struct ACPLocalFilesystemRuntime: ACPFilesystemRuntime {
         let candidate = targetURL.standardizedFileURL.resolvingSymlinksInPath().path
         let rootPath = rootResolved.path
         if candidate == rootPath || candidate.hasPrefix(rootPath + "/") {
-            return
+            // continue
+        } else {
+            throw ACPRuntimeError.permissionDenied(path: url.path)
         }
-        throw ACPRuntimeError.permissionDenied(path: url.path)
+
+        for prefix in deniedPathPrefixes where !prefix.isEmpty {
+            let normalized = prefix.hasPrefix("/") ? prefix : "/" + prefix
+            if candidate == rootPath + normalized || candidate.hasPrefix(rootPath + normalized + "/") {
+                throw ACPRuntimeError.permissionDenied(path: url.path)
+            }
+        }
+
+        guard forWrite else { return }
+        for readOnlyRoot in readOnlyRoots {
+            let resolved = readOnlyRoot.standardizedFileURL.resolvingSymlinksInPath().path
+            if candidate == resolved || candidate.hasPrefix(resolved + "/") {
+                throw ACPRuntimeError.permissionDenied(path: url.path)
+            }
+        }
     }
 }
 
