@@ -259,6 +259,14 @@
     When 执行协议一致性守卫测试
     Then 方法集必须与官方 `meta.json/meta.unstable.json` 快照一致，且项目扩展仅允许 `logout` 与 `session/delete`。
 
+63. Given 项目需要对标 pi 的会话可维护能力（非 ACP stable/unstable 标准方法）
+    When client 调用扩展方法 `session/export(sessionId, format=jsonl)`
+    Then agent 返回完整 JSONL 文本（包含 header + message lines），并明确该能力属于“扩展域”。
+
+64. Given 会话由 `session/fork` 派生
+    When client 调用 `session/list`
+    Then 对应 fork 会话条目应包含 `parentSessionId` 元数据，便于客户端构建会话谱系视图。
+
 63. Given 测试环境并发执行多个 WebSocket 用例
     When 某个候选端口已被占用（`Address already in use`）
     Then 测试基础设施应自动重试并分配新端口，避免因固定端口冲突导致非业务失败。

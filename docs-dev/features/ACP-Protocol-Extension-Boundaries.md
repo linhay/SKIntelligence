@@ -17,6 +17,7 @@
 | `ACPAgentService` 方法处理（`session/*`, `authenticate`, `logout`） | 协议域 | ACP method 编排 | 仅使用 ACP 定义字段 |
 | `session/update` 业务事件 | 协议域 | 对外协议事件流 | 仅允许 schema 支持的 update kind 与字段 |
 | `ACPAgentTelemetryEvent` / `telemetrySink` | 扩展域 | 本地观测事件 | 不得序列化进 ACP payload |
+| `session/export`（project extension） | 扩展域 | 会话导出（JSONL）能力，对标 pi 会话维护 | 必须显式能力位门禁，且不纳入 ACP stable/unstable 基线 |
 | `ACPFilesystemRuntime` / `ACPTerminalRuntime` | 扩展域 | client 侧本地 runtime 接口 | 不新增 ACP method |
 | `ACPFilesystemAccessPolicy` / `ACPProcessTerminalRuntime.Policy` | 扩展域 | 本地访问控制策略 | 不写入 ACP params/result |
 | `ACPPermissionPolicy` | 扩展域 | 本地权限决策策略 | 协议交互仅通过 `session/request_permission` |

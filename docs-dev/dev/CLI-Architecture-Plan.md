@@ -381,7 +381,7 @@ ACP WebSocket 规格：`docs-dev/features/ACP-WebSocket-Serve-Spec.md`
   - 新增 `ACPProtocolConformanceTests`：
     - stable baseline 与 `meta.json` 对齐
     - unstable baseline 与 `meta.unstable.json` 对齐
-    - 项目扩展严格限定为 `logout`、`session/delete`
+    - 项目扩展严格限定为 `logout`、`session/delete`、`session/export`
 - 验证：
   - `swift test --filter ACPProtocolConformanceTests`
   - `swift test --filter ACP --parallel`
@@ -456,3 +456,28 @@ ACP WebSocket 规格：`docs-dev/features/ACP-WebSocket-Serve-Spec.md`
   - `docs-dev/ops/ACP-WebSocket-Test-Stability-Runbook.md`
 - 验证：
   - `swift test --filter ACPWebSocketTestHarnessTests --filter ACPWebSocketRoundtripTests --filter ACPWebSocketPermissionRoundtripTests --filter ACPWebSocketMultiClientTests --filter ACPTransportConsistencyTests`
+
+## 31. Session Export 扩展 + Fork 谱系元数据（2026-02-13）
+- 关联需求：`docs-dev/features/ACP-WebSocket-Serve-Spec.md` 场景 63/64
+- 目标：补齐对标 pi 的会话维护能力，同时保持 ACP 协议域与扩展域边界清晰。
+- 实现：
+  - 新增扩展方法常量：`ACPMethods.sessionExport = "session/export"`。
+  - 新增扩展模型：
+    - `ACPSessionExportCapabilities`
+    - `ACPSessionExportFormat(.jsonl)`
+    - `ACPSessionExportParams/Result`
+  - `ACPAgentService`：
+    - 新增 capability 门禁 `sessionCapabilities.export`（未声明返回 `-32601`）；
+    - `session/export` 返回 JSONL 文本（header + message lines）；
+    - `session/fork` 写入 `parentSessionId`；
+    - `session/list` 返回 `parentSessionId/messageCount` 元数据。
+  - `ACPClientService` 新增 `exportSession(_:)` API。
+  - `acp serve` 默认能力声明加入 `sessionCapabilities.export`。
+  - 协议守卫更新：`ACPMethodCatalog.projectExtensions` 扩展为 `logout/session/delete/session/export`。
+- 验证：
+  - `swift test --filter ACPAgentServiceTests/testSessionExportRequiresCapability`
+  - `swift test --filter ACPAgentServiceTests/testSessionExportReturnsJSONLContent`
+  - `swift test --filter ACPAgentServiceTests/testSessionListIncludesParentSessionIdForForkedSession`
+  - `swift test --filter ACPModelsTests/testSessionExportRoundTrip`
+  - `swift test --filter ACPProtocolConformanceTests/testProjectExtensionMethodsAreExplicitlyScoped`
+  - `swift test --filter ACP --parallel`
