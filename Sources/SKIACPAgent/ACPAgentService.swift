@@ -129,6 +129,7 @@ public actor ACPAgentService {
         var cwd: String
         var title: String?
         var updatedAt: String
+        var parentSessionId: String?
         var currentModeId: String?
         var availableModes: [ACPSessionMode]
         var currentModelId: String?
@@ -257,6 +258,7 @@ public actor ACPAgentService {
                     cwd: params.cwd,
                     title: nil,
                     updatedAt: iso8601TimestampNow(),
+                    parentSessionId: nil,
                     currentModeId: "default",
                     availableModes: [
                         .init(id: "default", name: "Default")
@@ -294,19 +296,25 @@ public actor ACPAgentService {
                     throw ACPAgentServiceError.methodNotFound(ACPMethods.sessionList)
                 }
                 let params = try ACPCodec.decodeParams(request.params, as: ACPSessionListParams.self)
-                let values = sessions
-                    .sorted(by: {
-                        if $0.value.lastTouchedNanos == $1.value.lastTouchedNanos {
-                            return $0.key < $1.key
-                        }
-                        return $0.value.lastTouchedNanos > $1.value.lastTouchedNanos
-                    })
-                    .map { (sessionID, entry) in
-                    ACPSessionInfo(
-                        sessionId: sessionID,
-                        cwd: entry.cwd,
-                        title: entry.title,
-                        updatedAt: entry.updatedAt
+                let sortedSessions = sessions.sorted(by: {
+                    if $0.value.lastTouchedNanos == $1.value.lastTouchedNanos {
+                        return $0.key < $1.key
+                    }
+                    return $0.value.lastTouchedNanos > $1.value.lastTouchedNanos
+                })
+                var values: [ACPSessionInfo] = []
+                values.reserveCapacity(sortedSessions.count)
+                for (sessionID, entry) in sortedSessions {
+                    let messageCount = try? await entry.session.snapshotEntries().count
+                    values.append(
+                        ACPSessionInfo(
+                            sessionId: sessionID,
+                            cwd: entry.cwd,
+                            title: entry.title,
+                            updatedAt: entry.updatedAt,
+                            parentSessionId: entry.parentSessionId,
+                            messageCount: messageCount
+                        )
                     )
                 }
                 let filtered = params.cwd.map { cwd in
@@ -379,6 +387,7 @@ public actor ACPAgentService {
                     cwd: params.cwd,
                     title: sourceEntry.title,
                     updatedAt: iso8601TimestampNow(),
+                    parentSessionId: params.sessionId,
                     currentModeId: sourceEntry.currentModeId,
                     availableModes: sourceEntry.availableModes,
                     currentModelId: sourceEntry.currentModelId,
@@ -421,6 +430,31 @@ public actor ACPAgentService {
                 return JSONRPCResponse(
                     id: request.id,
                     result: try ACPCodec.encodeParams(ACPSessionDeleteResult())
+                )
+
+            case ACPMethods.sessionExport:
+                guard capabilities.sessionCapabilities.export != nil else {
+                    throw ACPAgentServiceError.methodNotFound(ACPMethods.sessionExport)
+                }
+                let params = try ACPCodec.decodeParams(request.params, as: ACPSessionExportParams.self)
+                guard let entry = sessions[params.sessionId] else {
+                    throw ACPAgentServiceError.sessionNotFound(params.sessionId)
+                }
+                let content = try await exportSessionContent(
+                    sessionId: params.sessionId,
+                    format: params.format,
+                    entry: entry
+                )
+                return JSONRPCResponse(
+                    id: request.id,
+                    result: try ACPCodec.encodeParams(
+                        ACPSessionExportResult(
+                            sessionId: params.sessionId,
+                            format: params.format,
+                            mimeType: "application/x-ndjson",
+                            content: content
+                        )
+                    )
                 )
 
             case ACPMethods.sessionLoad:
@@ -848,6 +882,7 @@ public actor ACPAgentService {
             cwd: cwd,
             title: nil,
             updatedAt: iso8601TimestampNow(),
+            parentSessionId: nil,
             currentModeId: "default",
             availableModes: [
                 .init(id: "default", name: "Default")
@@ -860,6 +895,39 @@ public actor ACPAgentService {
             configOptions: [],
             lastTouchedNanos: currentMonotonicNanos()
         )
+    }
+
+    private func exportSessionContent(
+        sessionId: String,
+        format: ACPSessionExportFormat,
+        entry: SessionEntry
+    ) async throws -> String {
+        switch format {
+        case .jsonl:
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+
+            var lines: [String] = []
+            let header = SKITranscript.JSONL.Line.header(
+                .init(
+                    id: sessionId,
+                    timestamp: entry.updatedAt,
+                    cwd: entry.cwd
+                )
+            )
+            let headerData = try encoder.encode(header)
+            lines.append(String(decoding: headerData, as: UTF8.self))
+
+            let snapshot = try await entry.session.snapshotEntries()
+            for transcriptEntry in snapshot {
+                guard let message = SKITranscript.JSONL.message(from: transcriptEntry) else { continue }
+                let line = SKITranscript.JSONL.Line.message(message)
+                let data = try encoder.encode(line)
+                lines.append(String(decoding: data, as: UTF8.self))
+            }
+
+            return lines.joined(separator: "\n") + "\n"
+        }
     }
 
     private func currentMonotonicNanos() -> UInt64 {

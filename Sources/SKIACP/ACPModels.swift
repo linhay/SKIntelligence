@@ -119,17 +119,20 @@ public struct ACPSessionCapabilities: Codable, Sendable, Equatable {
     public var resume: ACPSessionResumeCapabilities?
     public var fork: ACPSessionForkCapabilities?
     public var delete: ACPSessionDeleteCapabilities?
+    public var export: ACPSessionExportCapabilities?
 
     public init(
         list: ACPSessionListCapabilities? = nil,
         resume: ACPSessionResumeCapabilities? = nil,
         fork: ACPSessionForkCapabilities? = nil,
-        delete: ACPSessionDeleteCapabilities? = nil
+        delete: ACPSessionDeleteCapabilities? = nil,
+        export: ACPSessionExportCapabilities? = nil
     ) {
         self.list = list
         self.resume = resume
         self.fork = fork
         self.delete = delete
+        self.export = export
     }
 }
 
@@ -146,6 +149,10 @@ public struct ACPSessionForkCapabilities: Codable, Sendable, Equatable {
 }
 
 public struct ACPSessionDeleteCapabilities: Codable, Sendable, Equatable {
+    public init() {}
+}
+
+public struct ACPSessionExportCapabilities: Codable, Sendable, Equatable {
     public init() {}
 }
 
@@ -896,12 +903,23 @@ public struct ACPSessionInfo: Codable, Sendable, Equatable {
     public var cwd: String
     public var title: String?
     public var updatedAt: String?
+    public var parentSessionId: String?
+    public var messageCount: Int?
 
-    public init(sessionId: String, cwd: String, title: String? = nil, updatedAt: String? = nil) {
+    public init(
+        sessionId: String,
+        cwd: String,
+        title: String? = nil,
+        updatedAt: String? = nil,
+        parentSessionId: String? = nil,
+        messageCount: Int? = nil
+    ) {
         self.sessionId = sessionId
         self.cwd = cwd
         self.title = title
         self.updatedAt = updatedAt
+        self.parentSessionId = parentSessionId
+        self.messageCount = messageCount
     }
 }
 
@@ -984,6 +1002,42 @@ public struct ACPSessionDeleteParams: Codable, Sendable, Equatable {
 
 public struct ACPSessionDeleteResult: Codable, Sendable, Equatable {
     public init() {}
+}
+
+public enum ACPSessionExportFormat: String, Codable, Sendable, Equatable {
+    case jsonl
+}
+
+public struct ACPSessionExportParams: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var format: ACPSessionExportFormat
+
+    public init(
+        sessionId: String,
+        format: ACPSessionExportFormat = .jsonl
+    ) {
+        self.sessionId = sessionId
+        self.format = format
+    }
+}
+
+public struct ACPSessionExportResult: Codable, Sendable, Equatable {
+    public var sessionId: String
+    public var format: ACPSessionExportFormat
+    public var mimeType: String
+    public var content: String
+
+    public init(
+        sessionId: String,
+        format: ACPSessionExportFormat = .jsonl,
+        mimeType: String,
+        content: String
+    ) {
+        self.sessionId = sessionId
+        self.format = format
+        self.mimeType = mimeType
+        self.content = content
+    }
 }
 
 public struct ACPSessionSetModeParams: Codable, Sendable, Equatable {

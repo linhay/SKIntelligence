@@ -162,6 +162,11 @@ public actor ACPClientService {
         return try ACPCodec.decodeResult(response.result, as: ACPSessionDeleteResult.self)
     }
 
+    public func exportSession(_ params: ACPSessionExportParams) async throws -> ACPSessionExportResult {
+        let response = try await call(method: ACPMethods.sessionExport, params: params)
+        return try ACPCodec.decodeResult(response.result, as: ACPSessionExportResult.self)
+    }
+
     public func setMode(_ params: ACPSessionSetModeParams) async throws -> ACPSessionSetModeResult {
         let response = try await call(method: ACPMethods.sessionSetMode, params: params)
         return try ACPCodec.decodeResult(response.result, as: ACPSessionSetModeResult.self)

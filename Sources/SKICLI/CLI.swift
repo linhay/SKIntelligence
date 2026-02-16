@@ -148,7 +148,7 @@ struct ACPServeCommand: AsyncParsableCommand {
                 },
                 agentInfo: ACPImplementationInfo(name: "ski", title: "SKI ACP Agent", version: "0.1.0"),
                 capabilities: ACPAgentCapabilities(
-                    sessionCapabilities: .init(list: .init(), resume: .init(), fork: .init(), delete: .init()),
+                    sessionCapabilities: .init(list: .init(), resume: .init(), fork: .init(), delete: .init(), export: .init()),
                     loadSession: true
                 ),
                 options: .init(promptTimeoutNanoseconds: timeoutNanos, sessionTTLNanos: ttlNanos),

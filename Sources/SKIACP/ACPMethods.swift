@@ -12,6 +12,7 @@ public enum ACPMethods {
     public static let sessionResume = "session/resume"
     public static let sessionFork = "session/fork"
     public static let sessionDelete = "session/delete"
+    public static let sessionExport = "session/export"
     public static let sessionSetMode = "session/set_mode"
     public static let sessionSetModel = "session/set_model"
     public static let sessionSetConfigOption = "session/set_config_option"

@@ -49,6 +49,7 @@ public enum ACPMethodCatalog {
     public static let projectExtensions: Set<String> = [
         ACPMethods.logout,
         ACPMethods.sessionDelete,
+        ACPMethods.sessionExport,
     ]
 
     public static let allSupported: Set<String> = unstableBaseline.union(projectExtensions)
