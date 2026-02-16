@@ -33,7 +33,7 @@ final class ACPProtocolConformanceTests: XCTestCase {
     }
 
     func testProjectExtensionMethodsAreExplicitlyScoped() {
-        XCTAssertEqual(ACPMethodCatalog.projectExtensions, [ACPMethods.logout, ACPMethods.sessionDelete])
+        XCTAssertEqual(ACPMethodCatalog.projectExtensions, [ACPMethods.logout, ACPMethods.sessionDelete, ACPMethods.sessionExport])
         XCTAssertEqual(ACPMethodCatalog.allSupported, ACPMethodCatalog.unstableBaseline.union(ACPMethodCatalog.projectExtensions))
     }
 

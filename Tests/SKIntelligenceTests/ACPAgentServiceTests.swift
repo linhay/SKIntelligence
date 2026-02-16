@@ -1215,6 +1215,93 @@ final class ACPAgentServiceTests: XCTestCase {
         XCTAssertEqual(listed, Set(created))
     }
 
+    func testSessionListIncludesParentSessionIdForForkedSession() async throws {
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(
+                sessionCapabilities: .init(list: .init(), fork: .init()),
+                loadSession: true
+            ),
+            notificationSink: { _ in }
+        )
+
+        let newResp = await service.handle(JSONRPCRequest(
+            id: .int(1660),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp/parent"))
+        ))
+        let origin = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        _ = await service.handle(JSONRPCRequest(
+            id: .int(1661),
+            method: ACPMethods.sessionFork,
+            params: try ACPCodec.encodeParams(ACPSessionForkParams(sessionId: origin.sessionId, cwd: "/tmp/child"))
+        ))
+
+        let listResp = await service.handle(JSONRPCRequest(
+            id: .int(1662),
+            method: ACPMethods.sessionList,
+            params: try ACPCodec.encodeParams(ACPSessionListParams())
+        ))
+        let list = try ACPCodec.decodeResult(listResp.result, as: ACPSessionListResult.self)
+        let forked = try XCTUnwrap(list.sessions.first(where: { $0.parentSessionId == origin.sessionId }))
+        XCTAssertEqual(forked.parentSessionId, origin.sessionId)
+    }
+
+    func testSessionExportRequiresCapability() async throws {
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(sessionCapabilities: .init(), loadSession: true),
+            notificationSink: { _ in }
+        )
+
+        let resp = await service.handle(JSONRPCRequest(
+            id: .int(1663),
+            method: ACPMethods.sessionExport,
+            params: try ACPCodec.encodeParams(ACPSessionExportParams(sessionId: "sess_x"))
+        ))
+        XCTAssertEqual(resp.error?.code, JSONRPCErrorCode.methodNotFound)
+    }
+
+    func testSessionExportReturnsJSONLContent() async throws {
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(
+                sessionCapabilities: .init(export: .init()),
+                loadSession: true
+            ),
+            notificationSink: { _ in }
+        )
+
+        let newResp = await service.handle(JSONRPCRequest(
+            id: .int(1664),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp/export"))
+        ))
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        _ = await service.handle(JSONRPCRequest(
+            id: .int(1665),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("hello export")]))
+        ))
+
+        let exportResp = await service.handle(JSONRPCRequest(
+            id: .int(1666),
+            method: ACPMethods.sessionExport,
+            params: try ACPCodec.encodeParams(ACPSessionExportParams(sessionId: session.sessionId))
+        ))
+        let exported = try ACPCodec.decodeResult(exportResp.result, as: ACPSessionExportResult.self)
+        XCTAssertEqual(exported.sessionId, session.sessionId)
+        XCTAssertEqual(exported.format, .jsonl)
+        XCTAssertEqual(exported.mimeType, "application/x-ndjson")
+        XCTAssertTrue(exported.content.contains("\"type\":\"session\""))
+        XCTAssertTrue(exported.content.contains("\"message\""))
+    }
+
     func testSessionListInvalidCursorReturnsInvalidParams() async throws {
         let service = ACPAgentService(
             sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },

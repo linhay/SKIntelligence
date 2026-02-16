@@ -237,7 +237,14 @@ final class ACPModelsTests: XCTestCase {
     func testSessionListResultRoundTrip() throws {
         let result = ACPSessionListResult(
             sessions: [
-                .init(sessionId: "sess_1", cwd: "/tmp/a", title: "A", updatedAt: "2026-02-12T10:00:00Z"),
+                .init(
+                    sessionId: "sess_1",
+                    cwd: "/tmp/a",
+                    title: "A",
+                    updatedAt: "2026-02-12T10:00:00Z",
+                    parentSessionId: nil,
+                    messageCount: 2
+                ),
                 .init(sessionId: "sess_2", cwd: "/tmp/b")
             ],
             nextCursor: "cursor_2"
@@ -246,7 +253,29 @@ final class ACPModelsTests: XCTestCase {
         let decoded = try ACPCodec.decodeParams(encoded, as: ACPSessionListResult.self)
         XCTAssertEqual(decoded.sessions.count, 2)
         XCTAssertEqual(decoded.sessions.first?.sessionId, "sess_1")
+        XCTAssertEqual(decoded.sessions.first?.messageCount, 2)
         XCTAssertEqual(decoded.nextCursor, "cursor_2")
+    }
+
+    func testSessionExportRoundTrip() throws {
+        let params = ACPSessionExportParams(sessionId: "sess_export", format: .jsonl)
+        let encodedParams = try ACPCodec.encodeParams(params)
+        let decodedParams = try ACPCodec.decodeParams(encodedParams, as: ACPSessionExportParams.self)
+        XCTAssertEqual(decodedParams.sessionId, "sess_export")
+        XCTAssertEqual(decodedParams.format, .jsonl)
+
+        let result = ACPSessionExportResult(
+            sessionId: "sess_export",
+            format: .jsonl,
+            mimeType: "application/x-ndjson",
+            content: "{\"type\":\"session\"}\n{\"message\":{}}\n"
+        )
+        let encodedResult = try ACPCodec.encodeParams(result)
+        let decodedResult = try ACPCodec.decodeParams(encodedResult, as: ACPSessionExportResult.self)
+        XCTAssertEqual(decodedResult.sessionId, "sess_export")
+        XCTAssertEqual(decodedResult.format, .jsonl)
+        XCTAssertEqual(decodedResult.mimeType, "application/x-ndjson")
+        XCTAssertTrue(decodedResult.content.contains("\"type\":\"session\""))
     }
 
     func testSessionDeleteParamsRoundTrip() throws {

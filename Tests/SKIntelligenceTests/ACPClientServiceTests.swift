@@ -367,6 +367,14 @@ actor SessionDomainTransport: ACPTransport {
             inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
         case ACPMethods.sessionDelete:
             inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(ACPSessionDeleteResult()))))
+        case ACPMethods.sessionExport:
+            let result = ACPSessionExportResult(
+                sessionId: "sess_domain",
+                format: .jsonl,
+                mimeType: "application/x-ndjson",
+                content: "{\"type\":\"session\"}\n{\"message\":{\"role\":\"user\"}}\n"
+            )
+            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
         case ACPMethods.logout:
             inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(ACPLogoutResult()))))
         default:
@@ -424,6 +432,11 @@ final class ACPClientServiceTests: XCTestCase {
         let forked = try await client.forkSession(.init(sessionId: newSession.sessionId, cwd: "/tmp/fork"))
         XCTAssertEqual(forked.sessionId, "sess_forked")
         XCTAssertEqual(forked.models?.currentModelId, "gpt-5")
+
+        let exported = try await client.exportSession(.init(sessionId: newSession.sessionId))
+        XCTAssertEqual(exported.sessionId, "sess_domain")
+        XCTAssertEqual(exported.format, .jsonl)
+        XCTAssertTrue(exported.content.contains("\"type\":\"session\""))
 
         _ = try await client.deleteSession(.init(sessionId: newSession.sessionId))
         _ = try await client.logout()
