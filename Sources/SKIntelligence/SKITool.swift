@@ -9,6 +9,28 @@ import Foundation
 import JSONSchema
 import JSONSchemaBuilder
 
+public struct SKIToolMetadata: Sendable, Equatable {
+    public var name: String
+    public var description: String
+    public var shortDescription: String
+    public var isEnabled: Bool
+    public var parameters: [String: JSONValue]
+
+    public init(
+        name: String,
+        description: String,
+        shortDescription: String,
+        isEnabled: Bool,
+        parameters: [String: JSONValue]
+    ) {
+        self.name = name
+        self.description = description
+        self.shortDescription = shortDescription
+        self.isEnabled = isEnabled
+        self.parameters = parameters
+    }
+}
+
 public protocol SKITool: Sendable {
 
     associatedtype ToolOutput: Codable
@@ -60,6 +82,16 @@ extension SKITool {
             let output = try? JSONDecoder().decode(ToolOutput.self, from: data)
         else { return [] }
         return references(from: output)
+    }
+
+    public var metadata: SKIToolMetadata {
+        .init(
+            name: name,
+            description: description,
+            shortDescription: shortDescription,
+            isEnabled: isEnabled,
+            parameters: schemaParameters
+        )
     }
 
 }

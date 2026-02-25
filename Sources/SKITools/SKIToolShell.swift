@@ -1,7 +1,9 @@
 import Foundation
 import JSONSchemaBuilder
-import SKProcessRunner
 import SKIntelligence
+#if canImport(SKProcessRunner)
+import SKProcessRunner
+#endif
 
 /// `shell` tool: runs a whitelisted executable with arguments.
 ///
@@ -99,6 +101,14 @@ public struct SKIToolShell: SKITool {
         self.configuration = configuration
     }
 
+    public static var isRuntimeSupported: Bool {
+#if canImport(SKProcessRunner)
+        return true
+#else
+        return false
+#endif
+    }
+
     public func displayName(for arguments: Arguments) async -> String {
         if let cmd = arguments.command?.first, !cmd.isEmpty {
             return "Shell [\(cmd)]"
@@ -110,6 +120,10 @@ public struct SKIToolShell: SKITool {
     }
 
     public func call(_ arguments: Arguments) async throws -> ToolOutput {
+        guard Self.isRuntimeSupported else {
+            throw SKIToolError.toolUnavailable(name: "shell (SKProcessRunner unavailable on this platform)")
+        }
+
         let timeoutMs = max(1_000, min(arguments.timeoutMs ?? configuration.defaultTimeoutMs, 120_000))
         let env = parseEnv(arguments.env ?? [])
         let cwd = try resolveCwd(arguments.cwd)
@@ -119,6 +133,7 @@ public struct SKIToolShell: SKITool {
             throw SKIToolError.permissionDenied("Executable is not allowed: \(execName)")
         }
 
+#if canImport(SKProcessRunner)
         let result: SKProcessResult
         do {
             let payload = SKProcessPayload(
@@ -166,6 +181,14 @@ public struct SKIToolShell: SKITool {
             timedOut: result.timedOut,
             truncated: result.truncated
         )
+#else
+        _ = timeoutMs
+        _ = env
+        _ = cwd
+        _ = execURL
+        _ = execArgs
+        throw SKIToolError.toolUnavailable(name: "shell (SKProcessRunner unavailable on this platform)")
+#endif
     }
 
     private func resolveExecution(arguments: Arguments, cwd: URL?) throws -> (URL, String, [String]) {
@@ -185,7 +208,7 @@ public struct SKIToolShell: SKITool {
                 return (execURL, execURL.lastPathComponent, Array(command.dropFirst()))
             }
 
-            guard let execURL = SKProcessRunner.resolveExecutableInPath(named: exec) else {
+            guard let execURL = resolveExecutableInPath(named: exec) else {
                 throw SKIToolError.invalidArguments("Executable not found in PATH: \(exec)")
             }
             return (execURL, exec, Array(command.dropFirst()))
@@ -247,6 +270,15 @@ public struct SKIToolShell: SKITool {
         }
         return false
     }
+}
+
+private func resolveExecutableInPath(named name: String) -> URL? {
+#if canImport(SKProcessRunner)
+    return SKProcessRunner.resolveExecutableInPath(named: name)
+#else
+    _ = name
+    return nil
+#endif
 }
 
 extension SKIToolShell.Configuration {

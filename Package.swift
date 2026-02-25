@@ -88,7 +88,6 @@ let package = Package(
                 .product(name: "JSONSchemaBuilder", package: "swift-json-schema"),
                 "STFilePath",
                 "STJSON",
-                "SKProcessRunner",
                 .product(name: "MCP", package: "swift-sdk"),
             ]
         ),
@@ -106,7 +105,8 @@ let package = Package(
             dependencies: [
                 "SKIntelligence",
                 "STJSON",
-                "SKProcessRunner",
+                .product(name: "Crypto", package: "swift-crypto"),
+                .product(name: "SKProcessRunner", package: "SKProcessRunner", condition: .when(platforms: [.macOS])),
             ]
         ),
         .target(

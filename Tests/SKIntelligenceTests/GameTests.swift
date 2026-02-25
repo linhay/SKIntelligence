@@ -49,13 +49,13 @@ import Testing
                 let defense: Int?
             }
 
-            var name: String = "createNPC"
-            var description: String = """
+            let name: String = "createNPC"
+            let description: String = """
                 创建一个游戏NPC角色。
                 返回NPC的基本信息，包括名字、描述、关系和属性。
                 """
 
-            private var npcDatabase: [ToolOutput] = [
+            private let npcDatabase: [ToolOutput] = [
                 ToolOutput(
                     id: "npc_001",
                     name: "小刚",
@@ -124,13 +124,13 @@ import Testing
                 let rewardItems: String?
             }
 
-            var name: String = "manageQuest"
-            var description: String = """
+            let name: String = "manageQuest"
+            let description: String = """
                 管理游戏任务系统。
                 支持查询任务详情、接受任务和完成任务。
                 """
 
-            private var quests: [String: ToolOutput] = [
+            private let quests: [String: ToolOutput] = [
                 "quest_001": ToolOutput(
                     questID: "quest_001",
                     title: "失落的宝石",
@@ -187,8 +187,8 @@ import Testing
                 let inventoryJSON: String?
             }
 
-            var name: String = "manageInventory"
-            var description: String = "管理玩家背包和物品"
+            let name: String = "manageInventory"
+            let description: String = "管理玩家背包和物品"
 
             private let inventoryList = """
                 [
@@ -238,6 +238,10 @@ import Testing
     @Suite("Game Scenario Tests")
     struct GameTests {
 
+        private var liveProviderTestsEnabled: Bool {
+            ProcessInfo.processInfo.environment["RUN_LIVE_PROVIDER_TESTS"] == "1"
+        }
+
         // MARK: - Shared Configuration
 
         /// Default client configuration for game tests
@@ -262,6 +266,7 @@ import Testing
         /// Test: Complete RPG scenario with NPC and quest interactions
         @Test("RPG scenario with NPC recruitment and quest progression")
         func rpgScenario() async throws {
+            guard liveProviderTestsEnabled else { return }
             let session = await SKILanguageModelSession(
                 client: client,
                 transcript: transcript,
@@ -298,6 +303,7 @@ import Testing
         /// Test: Quest management workflow
         @Test("Quest management with multiple queries")
         func questManagement() async throws {
+            guard liveProviderTestsEnabled else { return }
 
             let session = await SKILanguageModelSession(
                 client: client,
@@ -325,6 +331,7 @@ import Testing
         /// Test: Calendar tool for scheduling
         @Test("Calendar tool for game events")
         func calendarIntegration() async throws {
+            guard liveProviderTestsEnabled else { return }
             let session = SKILanguageModelSession(
                 client: client,
                 transcript: SKITranscript(),
@@ -348,6 +355,7 @@ import Testing
         /// Test: Translation tool
         @Test("Translation tool standalone")
         func translationTool() async throws {
+            guard liveProviderTestsEnabled else { return }
             let tool = SKIToolBaiduTranslate(authentication: Keys.baiduAuthentication)
             let result = try await tool.call(.init(q: "勇敢的冒险者", from: .zh, to: .en))
 
@@ -363,6 +371,7 @@ import Testing
         /// Test: Multi-turn conversation maintaining context
         @Test("Multi-turn conversation with context")
         func multiTurnConversation() async throws {
+            guard liveProviderTestsEnabled else { return }
             let transcript = SKITranscript()
             let session = SKILanguageModelSession(
                 client: client,

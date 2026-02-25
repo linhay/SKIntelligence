@@ -1,0 +1,76 @@
+# ACP Spec Coverage Matrix
+
+来源规格：`docs-dev/features/ACP-WebSocket-Serve-Spec.md`
+
+## 说明
+- 状态：`covered` / `partial`
+- 测试引用格式：`SKIntelligenceTests.<TestCase>/<testMethod>`
+
+## 覆盖矩阵
+- 场景 1,19,20,21: `covered`
+  - `SKIntelligenceTests.ACPWebSocketRoundtripTests/testWebSocketServerClientPromptRoundtrip`
+  - `SKIntelligenceTests.ACPWebSocketMultiClientTests/testTwoClientsCanPromptConcurrentlyWithoutCrossRouting`
+  - `SKIntelligenceTests.ACPWebSocketMultiClientTests/testFiveClientsCanPromptConcurrentlyWithoutCrossRouting`
+  - `SKIntelligenceTests.ACPWebSocketMultiClientTests/testServerNotificationBroadcastsToAllConnectedClients`
+- 场景 2: `covered`
+  - `SKIntelligenceTests.ACPDomainE2EMatrixTests/testForkPromptContractStdioInProcess`
+  - `SKIntelligenceTests.SKICLIProcessTests/testClientConnectViaStdioServeProcessSucceeds`
+- 场景 3: `covered`
+  - `SKIntelligenceTests.ACPWebSocketTestHarnessTests/testServerSendWithoutConnectedClientReturnsNotConnected`
+- 场景 4,17: `covered`
+  - `SKIntelligenceTests.ACPWebSocketClientDeterministicReconnectTests/testSendRetriesWithReconnectUsingInjectedFactory`
+  - `SKIntelligenceTests.ACPWebSocketClientDeterministicReconnectTests/testReceiveRetriesWithReconnectUsingInjectedFactory`
+- 场景 5,16: `covered`
+  - `SKIntelligenceTests.ACPTransportResilienceTests/testBackpressureGateBlocksUntilRelease`
+  - `SKIntelligenceTests.ACPTransportResilienceTests/testBackpressureGateCancelledWaiterDoesNotLeakPermit`
+- 场景 6: `covered`
+  - `Tests/SKIntelligenceTests/JSONRPCCodecTests.swift`
+- 场景 7~15: `covered`
+  - `SKIntelligenceTests.ACPClientServiceTests/testConcurrentRequestsHandleOutOfOrderResponses`
+  - `SKIntelligenceTests.ACPClientServiceTests/testLongRunSequentialRequestsKeepInternalStateClean`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testPromptWhileRunningReturnsInvalidParams`
+- 场景 22,25,26,27,28,29,37: `covered`
+  - `SKIntelligenceTests.ACPWebSocketPermissionRoundtripTests/testPermissionApprovedAllowsPrompt`
+  - `SKIntelligenceTests.ACPWebSocketPermissionRoundtripTests/testPermissionDeniedCancelsPrompt`
+  - `SKIntelligenceTests.ACPWebSocketPermissionRoundtripTests/testPendingPermissionRequestFailsFastWhenTransportCloses`
+  - `SKIntelligenceTests.ACPPermissionRequestBridgeTests/testFailAllClearsPendingPermissionRequests`
+  - `SKIntelligenceTests.ACPPermissionPolicyTests/testPolicyAskPermissiveFallsBackToAllowOnBridgeError`
+  - `SKIntelligenceTests.ACPPermissionPolicyTests/testPolicyAskRequiredPropagatesBridgeError`
+- 场景 23,24,30,31,32: `covered`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testInitializeUnsupportedProtocolVersionReturnsInvalidParams`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testSessionLoadUnsupportedByCapabilitiesReturnsMethodNotFound`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testInitializeReturnsAuthMethodsAndAuthenticateSucceeds`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testSetModeEmitsCurrentModeUpdate`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testSetConfigOptionReturnsConfigOptionsAndEmitsUpdate`
+- 场景 33,34,35,36,40,41: `covered`
+  - `SKIntelligenceTests.ACPWebSocketClientRuntimeRoundtripTests/testAgentCanInvokeClientFSAndTerminalRuntimesOverWebSocket`
+  - `SKIntelligenceTests.ACPWebSocketClientRuntimeRoundtripTests/testKilledTerminalCanStillOutputUntilReleaseOverWebSocket`
+  - `SKIntelligenceTests.ACPDomainE2EMatrixTests/testRuntimeFSAndTerminalLifecycleContractConsistentBetweenStdioAndWebSocket`
+  - `SKIntelligenceTests.ACPDomainE2EMatrixTests/testRuntimeTerminalKillContractConsistentBetweenStdioAndWebSocket`
+- 场景 42~47,55: `covered`
+  - `SKIntelligenceTests.ACPWebSocketRoundtripTests/testWebSocketServerClientPromptRoundtrip`
+  - `SKIntelligenceTests.ACPModelsTests/testToolCallUpdateRoundTripWithExtendedFields`
+  - `SKIntelligenceTests.ACPModelsTests/testPromptContentImageRoundTrip`
+  - `SKIntelligenceTests.ACPModelsTests/testSessionUpdatePlanRequiresPlanField`
+  - `SKIntelligenceTests.ACPGoldenFixturesTests/testSessionUpdateGoldenFixturesRoundTrip`
+- 场景 48: `covered`
+  - `SKIntelligenceTests.ACPTransportConsistencyTests/testSessionUpdateSequenceConsistentBetweenStdioAndWebSocket`
+- 场景 49~54,56~58,63(export),64(parent): `covered`
+  - `SKIntelligenceTests.ACPDomainE2EMatrixTests/testSetModelLoadContractConsistentBetweenStdioAndWebSocket`
+  - `SKIntelligenceTests.ACPDomainE2EMatrixTests/testSessionListContractConsistentBetweenStdioAndWebSocket`
+  - `SKIntelligenceTests.ACPDomainE2EMatrixTests/testForkLoadExportContractConsistentBetweenStdioAndWebSocket`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testSessionDeleteRemovesFromListAndIsIdempotent`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testPromptEmitsSessionInfoUpdateAfterAutoTitleGenerated`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testSessionListIncludesParentSessionIdForForkedSession`
+- 场景 59,60,61,62: `covered`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testPromptCanBeCancelledByProtocolCancelRequest`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testLogoutClearsSessionsWhenCapabilityEnabled`
+  - `SKIntelligenceTests.ACPWebSocketRoutingTests/testCancelRequestNotificationRequestIDIsRemappedToInternalID`
+  - `SKIntelligenceTests.ACPProtocolConformanceTests/testStableMethodBaselineMatchesOfficialMetaSnapshot`
+- 场景 63,64（端口冲突/清理）: `covered`
+  - `SKIntelligenceTests.ACPWebSocketTestHarnessTests/testMakeServerTransportRetriesWhenPreferredPortIsOccupied`
+  - `Tests/SKIntelligenceTests/ACPWebSocketPermissionRoundtripTests.swift`
+- 场景 63~66（execution_state/retry/policy extension）: `covered`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testPromptEmitsExecutionStateLifecycleWhenEnabled`
+  - `SKIntelligenceTests.ACPAgentServiceTests/testPromptRetryExhaustedReturnsInternalError`
+  - `SKIntelligenceTests.ACPPermissionPolicyTests/testPolicyAskModeUsesRequesterThenRemembersAlways`

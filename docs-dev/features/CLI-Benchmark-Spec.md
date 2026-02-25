@@ -96,6 +96,23 @@ SKIntelligence 需要一个可长期演进的 CLI。当前先基于以下参考�
 - Then 退出码分别稳定为 `2` 与 `4`
 - And stderr 包含对应错误摘要
 
+12. 场景：stdio 子进程命令支持 PATH 解析
+- Given 用户执行 `ski acp client connect-stdio`
+- And `--cmd` 传入的是 PATH 中可执行命令名（如 `env`、`swift`）
+- When CLI 创建 stdio transport
+- Then 应自动解析为可执行路径并正常启动子进程
+- And 不要求用户必须传绝对路径
+
+13. 场景：help 明确 `--cmd` 的 PATH 语义
+- Given 用户执行 `ski acp client connect-stdio --help`
+- When 查看 `--cmd` 参数说明
+- Then 文案应明确可传“可执行路径或 PATH 中命令名”
+
+14. 场景：help 说明 `--args` 的 option-like 传参规则
+- Given 用户执行 `ski acp client connect-stdio --help`
+- When 子参数以 `-` 开头（如 `--transport`）
+- Then 文案应明确使用 `--args=--flag` 形式，避免被父命令解析
+
 ## 5. 非功能要求
 - 性能：冷启动命令（`version`）在本地开发机应 < 500ms（目标值）。
 - 可观测性：支持 `--verbose` 打印请求链路关键节点。

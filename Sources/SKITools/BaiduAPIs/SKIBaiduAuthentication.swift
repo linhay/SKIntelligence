@@ -6,7 +6,7 @@
 //
 
 
-public struct SKIBaiduAuthentication {
+public struct SKIBaiduAuthentication: Sendable {
         
     public var host: String
     public var appID: String

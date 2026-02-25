@@ -92,6 +92,7 @@ public actor SKITranscript {
     }
 
     public private(set) var entries: [Entry] = []
+    public private(set) var lastUpdatedAt: Date?
     public private(set) var organizeEntries: OrganizeEntriesAction?
     public private(set) var observeNewEntry: ObserveNewEntry?
 
@@ -108,6 +109,7 @@ extension SKITranscript {
 
     public func replaceEntries(_ newEntries: [Entry]) {
         entries = newEntries
+        lastUpdatedAt = newEntries.isEmpty ? nil : Date()
     }
 
     public func runOrganizeEntries() async throws {
@@ -173,6 +175,7 @@ extension SKITranscript {
     /// Appends a single entry to the transcript.
     public func append(entry: Entry) async throws {
         entries.append(entry)
+        lastUpdatedAt = Date()
         try await runObserveNewEntry(entry)
 
         // Sync to memory if enabled
@@ -227,6 +230,45 @@ extension SKITranscript {
 
 }
 
+// MARK: - Fork Helpers
+
+extension SKITranscript {
+    public struct ForkableUserMessage: Sendable, Equatable {
+        public let entryIndex: Int
+        public let text: String
+
+        public init(entryIndex: Int, text: String) {
+            self.entryIndex = entryIndex
+            self.text = text
+        }
+    }
+
+    public enum ForkSelectionError: Error, LocalizedError, Equatable {
+        case invalidUserEntryIndex(Int)
+
+        public var errorDescription: String? {
+            switch self {
+            case .invalidUserEntryIndex(let index):
+                return "Invalid user entry index for fork: \(index)"
+            }
+        }
+    }
+
+    public func forkableUserMessages() -> [ForkableUserMessage] {
+        entries.enumerated().compactMap { index, entry in
+            guard let text = entry.forkableUserText else { return nil }
+            return ForkableUserMessage(entryIndex: index, text: text)
+        }
+    }
+
+    public func entriesForFork(fromUserEntryIndex index: Int) throws -> [Entry] {
+        guard entries.indices.contains(index), entries[index].forkableUserText != nil else {
+            throw ForkSelectionError.invalidUserEntryIndex(index)
+        }
+        return Array(entries[..<index])
+    }
+}
+
 // MARK: - Event Contract
 
 extension SKITranscript {
@@ -244,6 +286,11 @@ extension SKITranscript {
         case failed
     }
 
+    public enum EventSource: String, Sendable, Equatable, Codable {
+        case transcript
+        case session
+    }
+
     public struct Event: Sendable, Equatable, Codable {
         public var kind: EventKind
         public var role: String?
@@ -252,6 +299,8 @@ extension SKITranscript {
         public var toolCallId: String?
         public var state: ToolExecutionState?
         public var sessionUpdateName: String?
+        public var source: EventSource?
+        public var entryIndex: Int?
 
         public init(
             kind: EventKind,
@@ -260,7 +309,9 @@ extension SKITranscript {
             toolName: String? = nil,
             toolCallId: String? = nil,
             state: ToolExecutionState? = nil,
-            sessionUpdateName: String? = nil
+            sessionUpdateName: String? = nil,
+            source: EventSource? = nil,
+            entryIndex: Int? = nil
         ) {
             self.kind = kind
             self.role = role
@@ -269,17 +320,25 @@ extension SKITranscript {
             self.toolCallId = toolCallId
             self.state = state
             self.sessionUpdateName = sessionUpdateName
+            self.source = source
+            self.entryIndex = entryIndex
         }
     }
 
     public static func events(from entry: Entry) -> [Event] {
+        events(from: entry, entryIndex: nil)
+    }
+
+    public static func events(from entry: Entry, entryIndex: Int?) -> [Event] {
         switch entry {
         case .prompt(let msg), .message(let msg), .response(let msg):
             return [
                 .init(
                     kind: .message,
                     role: msg.role,
-                    content: msg.eventTextContent
+                    content: msg.eventTextContent,
+                    source: .transcript,
+                    entryIndex: entryIndex
                 )
             ]
         case .toolCalls(let call):
@@ -288,13 +347,17 @@ extension SKITranscript {
                     kind: .toolCall,
                     content: call.function.arguments,
                     toolName: call.function.name,
-                    toolCallId: call.id
+                    toolCallId: call.id,
+                    source: .transcript,
+                    entryIndex: entryIndex
                 ),
                 .init(
                     kind: .toolExecutionUpdate,
                     toolName: call.function.name,
                     toolCallId: call.id,
-                    state: .started
+                    state: .started,
+                    source: .transcript,
+                    entryIndex: entryIndex
                 ),
             ]
         case .toolOutput(let output):
@@ -303,13 +366,17 @@ extension SKITranscript {
                     kind: .toolResult,
                     content: output.contentString,
                     toolName: output.toolCall.function.name,
-                    toolCallId: output.toolCall.id
+                    toolCallId: output.toolCall.id,
+                    source: .transcript,
+                    entryIndex: entryIndex
                 ),
                 .init(
                     kind: .toolExecutionUpdate,
                     toolName: output.toolCall.function.name,
                     toolCallId: output.toolCall.id,
-                    state: .completed
+                    state: .completed,
+                    source: .transcript,
+                    entryIndex: entryIndex
                 ),
             ]
         }
@@ -319,12 +386,15 @@ extension SKITranscript {
         .init(
             kind: .sessionUpdate,
             content: content,
-            sessionUpdateName: name
+            sessionUpdateName: name,
+            source: .session
         )
     }
 
     public func events() -> [Event] {
-        entries.flatMap { Self.events(from: $0) }
+        entries.enumerated().flatMap { index, entry in
+            Self.events(from: entry, entryIndex: index)
+        }
     }
 }
 
@@ -372,6 +442,35 @@ private extension ChatRequestBody.Message.MessageContent where SingleType == Str
             }
             if textParts.isEmpty { return nil }
             return textParts.joined(separator: "\n")
+        }
+    }
+}
+
+private extension SKITranscript.Entry {
+    var forkableUserText: String? {
+        switch self {
+        case .prompt(let message), .message(let message), .response(let message):
+            return message.forkableUserText
+        case .toolCalls, .toolOutput:
+            return nil
+        }
+    }
+}
+
+private extension ChatRequestBody.Message {
+    var forkableUserText: String? {
+        guard case .user(let content, _) = self else { return nil }
+        switch content {
+        case .text(let value):
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        case .parts(let parts):
+            let values = parts.compactMap { part -> String? in
+                guard case .text(let text) = part else { return nil }
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            return values.isEmpty ? nil : values.joined(separator: "\n")
         }
     }
 }

@@ -1,6 +1,7 @@
 import XCTest
 @testable import SKIACP
 @testable import SKIACPAgent
+@testable import SKIACPTransport
 @testable import SKIJSONRPC
 
 final class ACPPermissionRequestBridgeTests: XCTestCase {
@@ -95,6 +96,39 @@ final class ACPPermissionRequestBridgeTests: XCTestCase {
             XCTFail("Expected timeout")
         } catch let error as ACPPermissionRequestBridgeError {
             XCTAssertEqual(error, .requestTimeout)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func testFailAllClearsPendingPermissionRequests() async throws {
+        let bridge = ACPPermissionRequestBridge(timeoutNanoseconds: 5_000_000_000)
+        let sent = SentRequestBox()
+
+        let task = Task {
+            try await bridge.requestPermission(
+                .init(
+                    sessionId: "sess_4",
+                    toolCall: .init(toolCallId: "call_4", title: "Cleanup pending"),
+                    options: [
+                        .init(optionId: "allow_once", name: "Allow once", kind: .allowOnce)
+                    ]
+                )
+            ) { request in
+                await sent.set(request)
+            }
+        }
+
+        _ = await sent.wait()
+        await bridge.failAll(ACPTransportError.eof)
+
+        do {
+            _ = try await task.value
+            XCTFail("Expected eof")
+        } catch let error as ACPTransportError {
+            guard case .eof = error else {
+                return XCTFail("Expected eof, got \(error)")
+            }
         } catch {
             XCTFail("Unexpected error: \(error)")
         }

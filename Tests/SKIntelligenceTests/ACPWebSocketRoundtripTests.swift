@@ -72,6 +72,7 @@ final class ACPWebSocketRoundtripTests: XCTestCase {
         XCTAssertEqual(kinds[3], .toolCallUpdate)
         XCTAssertEqual(kinds[4], .agentMessageChunk)
     }
+
 }
 
 private actor WSUpdateBox {

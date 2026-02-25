@@ -1,6 +1,29 @@
 import Foundation
 import SKIJSONRPC
 
+#if os(iOS) || os(tvOS) || os(watchOS)
+public final class ProcessStdioTransport: ACPTransport, @unchecked Sendable {
+    public init(executable: String, arguments: [String] = []) {
+        _ = executable
+        _ = arguments
+    }
+
+    public func connect() async throws {
+        throw ACPTransportError.unsupported("Process stdio transport is unavailable on this platform")
+    }
+
+    public func send(_ message: JSONRPCMessage) async throws {
+        _ = message
+        throw ACPTransportError.notConnected
+    }
+
+    public func receive() async throws -> JSONRPCMessage? {
+        throw ACPTransportError.notConnected
+    }
+
+    public func close() async {}
+}
+#else
 public final class ProcessStdioTransport: ACPTransport, @unchecked Sendable {
     private let executable: String
     private let arguments: [String]
@@ -95,3 +118,4 @@ public final class ProcessStdioTransport: ACPTransport, @unchecked Sendable {
         }
     }
 }
+#endif

@@ -248,6 +248,224 @@ final class ACPAgentServiceTests: XCTestCase {
         XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.requestCancelled)
     }
 
+    func testPromptCanBeCancelledByProtocolCancelRequestDuringPermissionStage() async throws {
+        actor PermissionGate {
+            private var released = false
+            private var waiters: [CheckedContinuation<Void, Never>] = []
+
+            func waitUntilReleased() async {
+                if released { return }
+                await withCheckedContinuation { continuation in
+                    waiters.append(continuation)
+                }
+            }
+
+            func release() {
+                released = true
+                let continuations = waiters
+                waiters.removeAll()
+                continuations.forEach { $0.resume() }
+            }
+        }
+
+        let gate = PermissionGate()
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            permissionRequester: { _ in
+                await gate.waitUntilReleased()
+                return .init(outcome: .selected(.init(optionId: "allow_once")))
+            },
+            notificationSink: { _ in }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(14),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        let promptReq = JSONRPCRequest(
+            id: .int(15),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("cancel during permission")]))
+        )
+        let promptTask = Task { await service.handle(promptReq) }
+
+        try await Task.sleep(nanoseconds: 30_000_000)
+        await service.handleCancel(
+            .init(
+                method: ACPMethods.cancelRequest,
+                params: try ACPCodec.encodeParams(ACPCancelRequestParams(requestId: .int(15)))
+            )
+        )
+        await gate.release()
+
+        let promptResp = await promptTask.value
+        XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.requestCancelled)
+    }
+
+    func testPromptPreCancelledByProtocolStringRequestIDMatchesIntPromptID() async throws {
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            notificationSink: { _ in }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(16),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        await service.handleCancel(
+            .init(
+                method: ACPMethods.cancelRequest,
+                params: try ACPCodec.encodeParams(ACPCancelRequestParams(requestId: .string("s2c-17")))
+            )
+        )
+
+        let promptReq = JSONRPCRequest(
+            id: .int(17),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(
+                ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("pre-cancel fallback string->int")])
+            )
+        )
+        let promptResp = await service.handle(promptReq)
+        XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.requestCancelled)
+    }
+
+    func testPromptPreCancelledByProtocolIntRequestIDMatchesStringPromptID() async throws {
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            notificationSink: { _ in }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(18),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        await service.handleCancel(
+            .init(
+                method: ACPMethods.cancelRequest,
+                params: try ACPCodec.encodeParams(ACPCancelRequestParams(requestId: .int(19)))
+            )
+        )
+
+        let promptReq = JSONRPCRequest(
+            id: .string("s2c-19"),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(
+                ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("pre-cancel fallback int->string")])
+            )
+        )
+        let promptResp = await service.handle(promptReq)
+        XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.requestCancelled)
+    }
+
+    func testPreCancelledRequestIsConsumedOnlyOnceForIntToStringFallback() async throws {
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            notificationSink: { _ in }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(20),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        await service.handleCancel(
+            .init(
+                method: ACPMethods.cancelRequest,
+                params: try ACPCodec.encodeParams(ACPCancelRequestParams(requestId: .int(21)))
+            )
+        )
+
+        let firstPrompt = JSONRPCRequest(
+            id: .string("s2c-21"),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(
+                ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("consume once #1")])
+            )
+        )
+        let firstResponse = await service.handle(firstPrompt)
+        XCTAssertEqual(firstResponse.error?.code, JSONRPCErrorCode.requestCancelled)
+
+        let secondPrompt = JSONRPCRequest(
+            id: .int(21),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(
+                ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("consume once #2")])
+            )
+        )
+        let secondResponse = await service.handle(secondPrompt)
+        let secondResult = try ACPCodec.decodeResult(secondResponse.result, as: ACPSessionPromptResult.self)
+        XCTAssertEqual(secondResult.stopReason, .endTurn)
+    }
+
+    func testPreCancelledRequestIsConsumedOnlyOnceForStringToIntFallback() async throws {
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            notificationSink: { _ in }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(22),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        await service.handleCancel(
+            .init(
+                method: ACPMethods.cancelRequest,
+                params: try ACPCodec.encodeParams(ACPCancelRequestParams(requestId: .string("s2c-23")))
+            )
+        )
+
+        let firstPrompt = JSONRPCRequest(
+            id: .int(23),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(
+                ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("consume once #1")])
+            )
+        )
+        let firstResponse = await service.handle(firstPrompt)
+        XCTAssertEqual(firstResponse.error?.code, JSONRPCErrorCode.requestCancelled)
+
+        let secondPrompt = JSONRPCRequest(
+            id: .string("s2c-23"),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(
+                ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("consume once #2")])
+            )
+        )
+        let secondResponse = await service.handle(secondPrompt)
+        let secondResult = try ACPCodec.decodeResult(secondResponse.result, as: ACPSessionPromptResult.self)
+        XCTAssertEqual(secondResult.stopReason, .endTurn)
+    }
+
     func testPromptCancellationEmitsExecutionStateWhenEnabled() async throws {
         let notifications = NotificationBox()
         let service = ACPAgentService(

@@ -16,6 +16,10 @@ import SKIClients
 /// Medical Report Recognition Test Cases
 @Suite("Medical Report Recognition")
 struct MedicalReportTests {
+
+    private var liveProviderTestsEnabled: Bool {
+        ProcessInfo.processInfo.environment["RUN_LIVE_PROVIDER_TESTS"] == "1"
+    }
     
     // MARK: - Test: Medical Report Image Analysis
     let imageURL = URL(string: "https://img1p.dxycdn.com/p/s115/2025/1022/933/8212768101915001891.jpg%21q70?Expires=1766569966&OSSAccessKeyId=LTAI5t8gdqA59d55WCEDtWsJ&Signature=WWSuDHoN7UeyhiTy%2FidyGodTs4Q%3D")
@@ -42,6 +46,7 @@ struct MedicalReportTests {
     /// 测试使用图片URL进行医疗报告识别
     @Test("Analyze medical report from image URL")
     func analyzeReportFromURL() async throws {
+        guard liveProviderTestsEnabled else { return }
         let session = await SKILanguageModelSession(
             client: client,
             transcript: transcript
@@ -82,7 +87,8 @@ struct MedicalReportTests {
     /// 测试使用Base64编码的图片数据进行医疗报告识别
     @Test("Analyze medical report from image data")
     func analyzeReportFromData() async throws {
-        
+        guard liveProviderTestsEnabled else { return }
+
         let session = await SKILanguageModelSession(
             client: client,
             transcript: transcript

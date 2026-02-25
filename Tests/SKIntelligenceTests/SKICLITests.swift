@@ -64,6 +64,43 @@ final class SKICLITests: XCTestCase {
         XCTAssertTrue(transport is WebSocketClientTransport)
     }
 
+    func testACPClientConnectResolvesCommandFromPATHForStdio() throws {
+        let transport = try ACPCLITransportFactory.makeClientTransport(
+            kind: .stdio,
+            cmd: "env",
+            args: [],
+            endpoint: nil,
+            wsHeartbeatMS: 15_000,
+            wsReconnectAttempts: 2,
+            wsReconnectBaseDelayMS: 200,
+            maxInFlightSends: 64
+        )
+        XCTAssertTrue(transport is ProcessStdioTransport)
+    }
+
+    func testACPClientConnectRejectsUnknownCommandForStdio() throws {
+        do {
+            _ = try ACPCLITransportFactory.makeClientTransport(
+                kind: .stdio,
+                cmd: "definitely-not-a-real-command-ski",
+                args: [],
+                endpoint: nil,
+                wsHeartbeatMS: 15_000,
+                wsReconnectAttempts: 2,
+                wsReconnectBaseDelayMS: 200,
+                maxInFlightSends: 64
+            )
+            XCTFail("Expected invalid input error")
+        } catch let error as SKICLIValidationError {
+            guard case .invalidInput(let message) = error else {
+                return XCTFail("Unexpected CLIError: \(error)")
+            }
+            XCTAssertEqual(message, "--cmd was not found in PATH for stdio transport")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
     func testACPServeBuildsWebSocketServerTransportWithValidListen() throws {
         let transport = try ACPCLITransportFactory.makeServerTransport(
             kind: .ws,
@@ -152,6 +189,7 @@ final class SKICLITests: XCTestCase {
         let object = try XCTUnwrap(
             JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: String]
         )
+        XCTAssertEqual(object["type"], "prompt_result")
         XCTAssertEqual(object["sessionId"], "sess_2")
         XCTAssertEqual(object["stopReason"], "end_turn")
     }

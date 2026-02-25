@@ -23,8 +23,10 @@ final class ACPWebSocketMultiClientTests: XCTestCase {
             while let message = try await serverTransport.receive() {
                 switch message {
                 case .request(let request):
-                    let response = await service.handle(request)
-                    try await serverTransport.send(.response(response))
+                    Task {
+                        let response = await service.handle(request)
+                        try? await serverTransport.send(.response(response))
+                    }
                 case .notification(let notification):
                     await service.handleCancel(notification)
                 case .response:
@@ -152,6 +154,124 @@ final class ACPWebSocketMultiClientTests: XCTestCase {
         XCTAssertEqual(nA.method, ACPMethods.sessionUpdate)
         XCTAssertEqual(nB.method, ACPMethods.sessionUpdate)
     }
+
+    func testFiveClientsCanPromptConcurrentlyWithoutCrossRouting() async throws {
+        let (serverTransport, port) = try await ACPWebSocketTestHarness.makeServerTransport()
+
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoMultiClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            notificationSink: { notification in
+                try? await serverTransport.send(.notification(notification))
+            }
+        )
+
+        let serverLoop = Task {
+            while let message = try await serverTransport.receive() {
+                switch message {
+                case .request(let request):
+                    Task {
+                        let response = await service.handle(request)
+                        try? await serverTransport.send(.response(response))
+                    }
+                case .notification(let notification):
+                    await service.handleCancel(notification)
+                case .response:
+                    continue
+                }
+            }
+        }
+
+        let endpoint = URL(string: "ws://127.0.0.1:\(port)")!
+        var clients: [ACPClientService] = []
+        var updates: [WSClientUpdateBox] = []
+
+        for index in 0..<5 {
+            let client = ACPClientService(
+                transport: WebSocketClientTransport(
+                    endpoint: endpoint,
+                    options: .init(
+                        heartbeatIntervalNanoseconds: nil,
+                        retryPolicy: .init(maxAttempts: 0),
+                        maxInFlightSends: 16
+                    )
+                ),
+                requestTimeoutNanoseconds: 2_000_000_000
+            )
+            let updateBox = WSClientUpdateBox()
+            await client.setNotificationHandler { notification in
+                guard notification.method == ACPMethods.sessionUpdate,
+                      let params = try? ACPCodec.decodeParams(notification.params, as: ACPSessionUpdateParams.self),
+                      let text = params.update.content?.text else { return }
+                await updateBox.append(text)
+            }
+            clients.append(client)
+            updates.append(updateBox)
+            _ = index
+        }
+
+        for client in clients {
+            try await client.connect()
+        }
+        defer {
+            serverLoop.cancel()
+            Task {
+                for client in clients {
+                    await client.close()
+                }
+                await serverTransport.close()
+            }
+        }
+
+        for (index, client) in clients.enumerated() {
+            _ = try await client.initialize(
+                .init(
+                    protocolVersion: 1,
+                    clientCapabilities: .init(),
+                    clientInfo: .init(name: "client-\(index)", version: "1.0.0")
+                )
+            )
+        }
+
+        var sessions: [ACPSessionNewResult] = []
+        for (index, client) in clients.enumerated() {
+            let session = try await client.newSession(.init(cwd: "/tmp/\(index)"))
+            sessions.append(session)
+        }
+
+        let results: [ACPSessionPromptResult] = try await withThrowingTaskGroup(
+            of: (Int, ACPSessionPromptResult).self,
+            returning: [ACPSessionPromptResult].self
+        ) { group in
+            for index in clients.indices {
+                let client = clients[index]
+                let session = sessions[index]
+                group.addTask {
+                    let result = try await client.prompt(
+                        .init(sessionId: session.sessionId, prompt: [.text("hello-\(index)")])
+                    )
+                    return (index, result)
+                }
+            }
+            var collected = Array<ACPSessionPromptResult?>(repeating: nil, count: clients.count)
+            while let (index, result) = try await group.next() {
+                collected[index] = result
+            }
+            return collected.compactMap { $0 }
+        }
+
+        XCTAssertEqual(results.count, clients.count)
+        for result in results {
+            XCTAssertEqual(result.stopReason, .endTurn)
+        }
+
+        for index in updates.indices {
+            let list = await updates[index].snapshot()
+            XCTAssertTrue(list.contains("multi: hello-\(index)"))
+        }
+    }
+
 }
 
 private actor WSClientUpdateBox {

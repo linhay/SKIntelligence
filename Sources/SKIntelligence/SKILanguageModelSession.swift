@@ -295,6 +295,11 @@ extension SKILanguageModelSession {
         tools.removeValue(forKey: name)
     }
 
+    /// Unregisters an MCP tool by name.
+    public func unregister(mcpToolNamed name: String) {
+        mcpTools.removeValue(forKey: name)
+    }
+
     /// Returns the list of enabled tools in the format expected by the API.
     public func enabledTools() -> [ChatRequestBody.Tool]? {
         var result = [ChatRequestBody.Tool]()

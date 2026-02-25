@@ -47,6 +47,7 @@ final class SKITranscriptEventContractTests: XCTestCase {
         XCTAssertEqual(event.kind, .sessionUpdate)
         XCTAssertEqual(event.sessionUpdateName, "current_mode_update")
         XCTAssertEqual(event.content, "default")
+        XCTAssertEqual(event.source, .session)
     }
 
     func testTranscriptAggregatesEventSequence() async throws {
@@ -65,5 +66,22 @@ final class SKITranscriptEventContractTests: XCTestCase {
         let events = await transcript.events()
         let kinds = events.map(\.kind)
         XCTAssertEqual(kinds, [.message, .toolCall, .toolExecutionUpdate, .toolResult, .toolExecutionUpdate])
+        XCTAssertEqual(events[0].entryIndex, 0)
+        XCTAssertEqual(events[1].entryIndex, 1)
+        XCTAssertEqual(events[2].entryIndex, 1)
+        XCTAssertEqual(events[3].entryIndex, 2)
+        XCTAssertEqual(events[4].entryIndex, 2)
+        XCTAssertTrue(events.allSatisfy { $0.source == .transcript })
+    }
+
+    func testEventsFromEntryWithIndexAnnotatesAllProducedEvents() async throws {
+        let call = ChatRequestBody.Message.ToolCall(
+            id: "call_9",
+            function: .init(name: "run", arguments: "{\"cmd\":\"pwd\"}")
+        )
+        let events = SKITranscript.events(from: .toolCalls(call), entryIndex: 7)
+        XCTAssertEqual(events.count, 2)
+        XCTAssertTrue(events.allSatisfy { $0.entryIndex == 7 })
+        XCTAssertTrue(events.allSatisfy { $0.source == .transcript })
     }
 }

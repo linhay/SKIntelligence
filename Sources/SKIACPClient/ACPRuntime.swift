@@ -173,6 +173,38 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
         }
     }
 
+#if os(iOS) || os(tvOS) || os(watchOS)
+    public static let isRuntimeSupported = false
+
+    public init(policy: Policy = .init()) {
+        _ = policy
+    }
+
+    public func create(_ params: ACPTerminalCreateParams) async throws -> ACPTerminalCreateResult {
+        _ = params
+        throw ACPTransportError.unsupported("Terminal runtime is unavailable on this platform")
+    }
+
+    public func output(_ params: ACPTerminalRefParams) async throws -> ACPTerminalOutputResult {
+        _ = params
+        throw ACPTransportError.unsupported("Terminal runtime is unavailable on this platform")
+    }
+
+    public func waitForExit(_ params: ACPTerminalRefParams) async throws -> ACPTerminalWaitForExitResult {
+        _ = params
+        throw ACPTransportError.unsupported("Terminal runtime is unavailable on this platform")
+    }
+
+    public func kill(_ params: ACPTerminalRefParams) async throws -> ACPTerminalKillResult {
+        _ = params
+        throw ACPTransportError.unsupported("Terminal runtime is unavailable on this platform")
+    }
+
+    public func release(_ params: ACPTerminalRefParams) async throws -> ACPTerminalReleaseResult {
+        _ = params
+        throw ACPTransportError.unsupported("Terminal runtime is unavailable on this platform")
+    }
+#else
     private struct Entry {
         let process: Process
         let stdout: Pipe
@@ -187,6 +219,8 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
     private var entries: [String: Entry] = [:]
     private var timeoutTasks: [String: Task<Void, Never>] = [:]
     private let policy: Policy
+
+    public static let isRuntimeSupported = true
 
     public init(policy: Policy = .init()) {
         self.policy = policy
@@ -302,6 +336,18 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
         guard var entry = entries[terminalID] else { return }
         timeoutTasks[terminalID]?.cancel()
         timeoutTasks[terminalID] = nil
+        entry.stdout.fileHandleForReading.readabilityHandler = nil
+        let tail = entry.stdout.fileHandleForReading.readDataToEndOfFile()
+        if !tail.isEmpty {
+            let chunk = String(decoding: tail, as: UTF8.self)
+            entry.output += chunk
+            if let limit = entry.limit, limit >= 0 {
+                while entry.output.utf8.count > limit {
+                    entry.truncated = true
+                    entry.output.removeFirst()
+                }
+            }
+        }
         entry.didExit = true
         entry.terminationStatus = status
         let waiters = entry.waiters
@@ -335,4 +381,5 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
         guard let entry = entries[terminalID], entry.process.isRunning else { return }
         entry.process.terminate()
     }
+#endif
 }

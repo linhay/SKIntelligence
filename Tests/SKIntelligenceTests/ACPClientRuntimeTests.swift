@@ -108,6 +108,25 @@ final class ACPClientRuntimeTests: XCTestCase {
         }
     }
 
+    func testProcessTerminalRuntimeWaitForExitFlushesRemainingOutput() async throws {
+        let runtime = ACPProcessTerminalRuntime()
+        let expectedCount = 4096
+
+        let created = try await runtime.create(
+            .init(
+                sessionId: "sess_flush",
+                command: "/usr/bin/python3",
+                args: ["-c", "import sys; sys.stdout.write('x' * \(expectedCount))"]
+            )
+        )
+
+        _ = try await runtime.waitForExit(.init(sessionId: "sess_flush", terminalId: created.terminalId))
+        let output = try await runtime.output(.init(sessionId: "sess_flush", terminalId: created.terminalId))
+        XCTAssertEqual(output.output.count, expectedCount)
+        XCTAssertTrue(output.output.allSatisfy { $0 == "x" })
+        XCTAssertFalse(output.truncated)
+    }
+
     func testProcessTerminalRuntimeRejectsDeniedCommand() async throws {
         let runtime = ACPProcessTerminalRuntime(
             policy: .init(deniedCommands: ["sh"])

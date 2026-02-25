@@ -141,6 +141,7 @@ public actor ACPAgentService {
     private var runningPrompts: [String: Task<String, Error>] = [:]
     private var promptRequestToSession: [JSONRPCID: String] = [:]
     private var protocolCancelledSessions: Set<String> = []
+    private var pendingProtocolCancelledRequestIDs: Set<JSONRPCID> = []
 
     public init(
         sessionFactory: @escaping SessionFactory,
@@ -246,6 +247,7 @@ public actor ACPAgentService {
                 runningPrompts.removeAll()
                 promptRequestToSession.removeAll()
                 protocolCancelledSessions.removeAll()
+                pendingProtocolCancelledRequestIDs.removeAll()
                 return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(ACPLogoutResult()))
 
             case ACPMethods.sessionNew:
@@ -571,6 +573,9 @@ public actor ACPAgentService {
                 guard let entry = sessions[params.sessionId] else {
                     throw ACPAgentServiceError.sessionNotFound(params.sessionId)
                 }
+                if isProtocolCancelledRequestID(request.id) {
+                    return errorResponse(ACPAgentServiceError.requestCancelled, id: request.id)
+                }
                 await emitTelemetry(
                     name: "prompt_requested",
                     sessionId: params.sessionId,
@@ -628,6 +633,10 @@ public actor ACPAgentService {
                 let toolCallID = "call_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
                 promptRequestToSession[request.id] = params.sessionId
                 defer { promptRequestToSession[request.id] = nil }
+                if isProtocolCancelledRequestID(request.id)
+                    || protocolCancelledSessions.remove(params.sessionId) != nil {
+                    return errorResponse(ACPAgentServiceError.requestCancelled, id: request.id)
+                }
                 try await emitExecutionStateIfNeeded(
                     sessionId: params.sessionId,
                     state: .running
@@ -759,11 +768,49 @@ public actor ACPAgentService {
 
         if notification.method == ACPMethods.cancelRequest {
             guard let params = try? ACPCodec.decodeParams(notification.params, as: ACPCancelRequestParams.self) else { return }
-            guard let sessionId = promptRequestToSession.removeValue(forKey: params.requestId) else { return }
-            protocolCancelledSessions.insert(sessionId)
-            runningPrompts[sessionId]?.cancel()
-            runningPrompts[sessionId] = nil
+            let candidateIDs = requestIDCandidates(from: params.requestId)
+            if let matchedID = candidateIDs.first(where: { promptRequestToSession[$0] != nil }),
+               let sessionId = promptRequestToSession.removeValue(forKey: matchedID) {
+                protocolCancelledSessions.insert(sessionId)
+                runningPrompts[sessionId]?.cancel()
+                runningPrompts[sessionId] = nil
+            } else {
+                for id in candidateIDs {
+                    pendingProtocolCancelledRequestIDs.insert(id)
+                }
+            }
         }
+    }
+
+    private func requestIDCandidates(from requestID: JSONRPCID) -> [JSONRPCID] {
+        var values: [JSONRPCID] = [requestID]
+        if let mapped = remapRequestIDFallback(requestID), mapped != requestID {
+            values.append(mapped)
+        }
+        return values
+    }
+
+    private func remapRequestIDFallback(_ requestID: JSONRPCID) -> JSONRPCID? {
+        switch requestID {
+        case .int(let number):
+            return .string("s2c-\(number)")
+        case .string(let value):
+            guard value.hasPrefix("s2c-"),
+                  let number = Int(value.dropFirst(4)) else { return nil }
+            return .int(number)
+        }
+    }
+
+    private func isProtocolCancelledRequestID(_ requestID: JSONRPCID) -> Bool {
+        var matched = false
+        if pendingProtocolCancelledRequestIDs.remove(requestID) != nil {
+            matched = true
+        }
+        if let mapped = remapRequestIDFallback(requestID),
+           pendingProtocolCancelledRequestIDs.remove(mapped) != nil {
+            matched = true
+        }
+        return matched
     }
 
     private func awaitPrompt(_ task: Task<String, Error>) async throws -> String {

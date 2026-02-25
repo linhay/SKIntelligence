@@ -8,6 +8,9 @@ import SKIClients
 #if canImport(CoreLocation)
 
 @Test func test_tavily_search_tool() async throws {
+    guard ProcessInfo.processInfo.environment["RUN_LIVE_PROVIDER_TESTS"] == "1" else {
+        return
+    }
     let client = OpenAIClient()
         .model(.deepseek_chat)
         .token(Keys.deepseek)

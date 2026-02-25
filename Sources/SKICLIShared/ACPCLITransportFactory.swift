@@ -52,11 +52,19 @@ public enum ACPCLITransportFactory {
             guard let cmd else {
                 throw SKICLIValidationError.invalidInput("--cmd is required for stdio transport")
             }
-            return ProcessStdioTransport(executable: cmd, arguments: args)
+            let trimmed = cmd.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                throw SKICLIValidationError.invalidInput("--cmd must not be empty for stdio transport")
+            }
+            let executable = try resolveStdioExecutablePath(trimmed)
+            return ProcessStdioTransport(executable: executable, arguments: args)
 
         case .ws:
             guard let endpoint, let url = URL(string: endpoint) else {
                 throw SKICLIValidationError.invalidInput("--endpoint is required for ws transport")
+            }
+            guard let scheme = url.scheme?.lowercased(), (scheme == "ws" || scheme == "wss"), url.host != nil else {
+                throw SKICLIValidationError.invalidInput("--endpoint must use ws:// or wss:// and include host")
             }
             let heartbeatNanos: UInt64? = wsHeartbeatMS <= 0 ? nil : UInt64(wsHeartbeatMS) * 1_000_000
             return WebSocketClientTransport(
@@ -106,5 +114,27 @@ private extension ACPCLITransportFactory {
             return false
         }
         return true
+    }
+
+    static func resolveStdioExecutablePath(_ command: String) throws -> String {
+        let fileManager = FileManager.default
+        let expanded = (command as NSString).expandingTildeInPath
+
+        if expanded.contains("/") {
+            if fileManager.isExecutableFile(atPath: expanded) {
+                return expanded
+            }
+            throw SKICLIValidationError.invalidInput("--cmd executable was not found or is not executable for stdio transport")
+        }
+
+        let pathValue = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        for directory in pathValue.split(separator: ":").map(String.init) where !directory.isEmpty {
+            let candidate = (directory as NSString).appendingPathComponent(expanded)
+            if fileManager.isExecutableFile(atPath: candidate) {
+                return candidate
+            }
+        }
+
+        throw SKICLIValidationError.invalidInput("--cmd was not found in PATH for stdio transport")
     }
 }

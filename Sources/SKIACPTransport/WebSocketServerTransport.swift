@@ -251,13 +251,60 @@ private extension WebSocketServerTransport {
     }
 
     func routeInboundMessage(_ message: JSONRPCMessage, from connectionID: ObjectIdentifier) -> JSONRPCMessage {
-        guard case .request(let request) = message else { return message }
+        switch message {
+        case .request(let request):
+            let internalID = JSONRPCID.string("s2c-\(nextInternalRequestID)")
+            nextInternalRequestID += 1
+            responseRoutes[internalID] = .init(connectionID: connectionID, originalID: request.id, method: request.method)
+            let routed = JSONRPCRequest(id: internalID, method: request.method, params: request.params)
+            return .request(routed)
+        case .notification(let notification):
+            return .notification(remapCancelRequestIfNeeded(notification, connectionID: connectionID))
+        case .response:
+            return message
+        }
+    }
 
-        let internalID = JSONRPCID.string("s2c-\(nextInternalRequestID)")
-        nextInternalRequestID += 1
-        responseRoutes[internalID] = .init(connectionID: connectionID, originalID: request.id, method: request.method)
-        let routed = JSONRPCRequest(id: internalID, method: request.method, params: request.params)
-        return .request(routed)
+    func remapCancelRequestIfNeeded(_ notification: JSONRPCNotification, connectionID: ObjectIdentifier) -> JSONRPCNotification {
+        guard notification.method == "$/cancel_request",
+              let params = notification.params,
+              case .object(var object) = params,
+              let requestIDValue = object["requestId"],
+              let originalID = jsonRPCID(from: requestIDValue),
+              let internalID = internalRequestID(for: originalID, connectionID: connectionID) else {
+            return notification
+        }
+        object["requestId"] = jsonValue(from: internalID)
+        return JSONRPCNotification(method: notification.method, params: .object(object))
+    }
+
+    func internalRequestID(for originalID: JSONRPCID, connectionID: ObjectIdentifier) -> JSONRPCID? {
+        for (internalID, route) in responseRoutes where route.connectionID == connectionID && route.originalID == originalID {
+            return internalID
+        }
+        return nil
+    }
+
+    func jsonRPCID(from value: JSONValue) -> JSONRPCID? {
+        switch value {
+        case .number(let number):
+            let rounded = number.rounded(.towardZero)
+            guard rounded == number else { return nil }
+            return .int(Int(rounded))
+        case .string(let string):
+            return .string(string)
+        default:
+            return nil
+        }
+    }
+
+    func jsonValue(from id: JSONRPCID) -> JSONValue {
+        switch id {
+        case .int(let value):
+            return .number(Double(value))
+        case .string(let value):
+            return .string(value)
+        }
     }
 
     func routedTargets(for message: JSONRPCMessage) throws -> [(NWConnection, JSONRPCMessage)] {
@@ -265,7 +312,8 @@ private extension WebSocketServerTransport {
         case .response(let response):
             if let route = responseRoutes.removeValue(forKey: response.id),
                let connection = connections[route.connectionID] {
-                if route.method == "session/new", let sessionID = extractSessionIDFromResult(response.result) {
+                if (route.method == "session/new" || route.method == "session/fork"),
+                   let sessionID = extractSessionIDFromResult(response.result) {
                     sessionOwners[sessionID] = route.connectionID
                 }
                 let restored = JSONRPCResponse(id: route.originalID, result: response.result, error: response.error)

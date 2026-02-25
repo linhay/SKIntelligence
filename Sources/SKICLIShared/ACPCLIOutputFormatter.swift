@@ -19,7 +19,7 @@ public enum ACPCLIOutputFormatter {
         sessionId: String,
         stopReason: String
     ) throws -> String {
-        let payload = PromptResultPayload(sessionId: sessionId, stopReason: stopReason)
+        let payload = PromptResultPayload(type: "prompt_result", sessionId: sessionId, stopReason: stopReason)
         return try encode(payload)
     }
 }
@@ -33,6 +33,7 @@ private extension ACPCLIOutputFormatter {
     }
 
     struct PromptResultPayload: Encodable {
+        let type: String
         let sessionId: String
         let stopReason: String
     }
