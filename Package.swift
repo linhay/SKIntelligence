@@ -24,7 +24,7 @@ let package = Package(
         .package(url: "https://github.com/ajevans99/swift-json-schema", from: "0.11.0"),
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "602.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.3.0"),
-        .package(url: "https://github.com/linhay/SKProcessRunner", from: "0.0.5"),
+        .package(url: "https://github.com/linhay/SKProcessRunner", from: "0.0.17"),
         .package(url: "https://github.com/linhay/STJSON", from: "1.4.8"),
         .package(url: "https://github.com/linhay/STFilePath", from: "1.3.4"),
         .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.11.0")),

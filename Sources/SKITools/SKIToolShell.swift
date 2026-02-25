@@ -169,6 +169,11 @@ public struct SKIToolShell: SKITool {
                 throw SKIToolError.executionFailed(reason: error.localizedDescription)
             case .ptyFailed:
                 throw SKIToolError.executionFailed(reason: error.localizedDescription)
+            default:
+                if error.localizedDescription.contains("Unsupported platform:") {
+                    throw SKIToolError.toolUnavailable(name: "shell (\(error.localizedDescription))")
+                }
+                throw SKIToolError.executionFailed(reason: error.localizedDescription)
             }
         } catch {
             throw SKIToolError.executionFailed(reason: String(describing: error))
