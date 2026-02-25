@@ -144,7 +144,7 @@ extension SKITranscript {
         let decoder = makeJSONLDecoder()
         let lines: [SKITranscript.JSONL.Line]
         do {
-            lines = try JSONLines().decode(text, encoder: decoder)
+            lines = try decodeJSONLLines(text, decoder: decoder)
         } catch {
             return []
         }
@@ -191,5 +191,16 @@ extension SKITranscript {
 
     private static func makeJSONLDecoder() -> JSONDecoder {
         JSONDecoder()
+    }
+
+    private static func decodeJSONLLines(
+        _ text: String,
+        decoder: JSONDecoder
+    ) throws -> [SKITranscript.JSONL.Line] {
+        let rawLines = text.components(separatedBy: .newlines).filter { !$0.isEmpty }
+        return try rawLines.compactMap { raw in
+            guard let data = raw.data(using: .utf8) else { return nil }
+            return try decoder.decode(SKITranscript.JSONL.Line.self, from: data)
+        }
     }
 }

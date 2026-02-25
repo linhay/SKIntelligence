@@ -1,5 +1,5 @@
 {
-  "originHash" : "0da7545261d332908e837b86d4bf70b472aee9421b87d3c5bb7b7c6cf57fe4be",
+  "originHash" : "9e74bb7d3bb407cbe8132ac800b1a27e4625bf5937d227615606fc1100fa7cc8",
   "pins" : [
     {
       "identity" : "alamofire",
@@ -42,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/linhay/STJSON",
       "state" : {
-        "revision" : "fee967f4641b6fc49c8847d168ba34dcf5ffd15d",
-        "version" : "1.4.4"
+        "revision" : "e1f8082a0f9ec26f6d4f51a83f47c527575f8bd3",
+        "version" : "1.4.8"
       }
     },
     {
