@@ -125,3 +125,13 @@ swift run ski acp client connect \
 swift test --filter JSONRPCCodecTests
 swift test --filter SKIToolShellTests --filter SKICLIProcessTests.testClientConnectViaStdioServeProcessSucceeds
 ```
+
+## 8. 权限矩阵联调（本地 ws）
+
+```bash
+./scripts/acp_ws_permission_matrix.sh
+```
+
+预期：
+- `allow` 分支得到 `stopReason=end_turn`
+- `deny` 分支得到 `stopReason=cancelled`
