@@ -95,4 +95,12 @@ final class JSONRPCCodecTests: XCTestCase {
         let decoded = try framer.decodeLine(line)
         XCTAssertEqual(decoded, .request(req))
     }
+
+    func testEncodeRequestDoesNotEscapeForwardSlashesInMethod() throws {
+        let req = JSONRPCRequest(id: .int(7), method: "session/new", params: nil)
+        let data = try JSONRPCCodec.encode(.request(req))
+        let raw = String(decoding: data, as: UTF8.self)
+        XCTAssertTrue(raw.contains("\"method\":\"session/new\""))
+        XCTAssertFalse(raw.contains("session\\/new"))
+    }
 }
