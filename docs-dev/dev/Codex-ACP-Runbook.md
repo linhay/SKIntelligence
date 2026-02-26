@@ -190,6 +190,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - 当 `RUN_CODEX_PROBES=0` 时，`codex_permission_probe`/`codex_multiturn_smoke` 会在 summary 中标记为 `status=skipped`（结构保持固定 7 段）。
 - summary 文件采用原子写入（临时文件后 `mv`），避免 CI 读取到半写入内容。
 - summary 顶层包含 `schemaVersion`（当前为 `1`），下游解析建议先校验版本再消费字段。
+- `stages[]` 包含固定 `index`（1..7），便于前端/报表按稳定顺序展示。
 
 示例：
 ```bash

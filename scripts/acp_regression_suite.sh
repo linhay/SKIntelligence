@@ -34,14 +34,15 @@ json_escape() {
 }
 
 append_summary() {
-  local stage="$1"
-  local status="$2"
-  local required="$3"
-  local exit_code="$4"
-  local duration_seconds="$5"
-  local attempts="$6"
-  local message="$7"
-  SUMMARY_LINES+="${stage}|${status}|${required}|${exit_code}|${duration_seconds}|${attempts}|${message}"$'\n'
+  local index="$1"
+  local stage="$2"
+  local status="$3"
+  local required="$4"
+  local exit_code="$5"
+  local duration_seconds="$6"
+  local attempts="$7"
+  local message="$8"
+  SUMMARY_LINES+="${index}|${stage}|${status}|${required}|${exit_code}|${duration_seconds}|${attempts}|${message}"$'\n'
 }
 
 write_summary_json() {
@@ -77,13 +78,14 @@ write_summary_json() {
     printf '  },\n'
     printf '  "stages": [\n'
     local first=1
-    while IFS='|' read -r stage status required exit_code duration_seconds attempts message; do
-      [ -z "$stage" ] && continue
+    while IFS='|' read -r index stage status required exit_code duration_seconds attempts message; do
+      [ -z "$index" ] && continue
       if [ "$first" -eq 0 ]; then
         printf ',\n'
       fi
       first=0
-      printf '    {"stage":"%s","status":"%s","required":%s,"exitCode":%s,"durationSeconds":%s,"attempts":%s,"message":"%s"}' \
+      printf '    {"index":%s,"stage":"%s","status":"%s","required":%s,"exitCode":%s,"durationSeconds":%s,"attempts":%s,"message":"%s"}' \
+        "$index" \
         "$(json_escape "$stage")" \
         "$(json_escape "$status")" \
         "$required" \
@@ -143,9 +145,10 @@ run_with_retry() {
 }
 
 run_required_stage() {
-  local stage="$1"
-  local label="$2"
-  local cmd="$3"
+  local index="$1"
+  local stage="$2"
+  local label="$3"
+  local cmd="$4"
   local started_at_epoch
   local ended_at_epoch
   local duration_seconds
@@ -158,17 +161,18 @@ run_required_stage() {
   ended_at_epoch="$(date +%s)"
   duration_seconds="$((ended_at_epoch - started_at_epoch))"
   if [ "$exit_code" -eq 0 ]; then
-    append_summary "$stage" "pass" "true" "$exit_code" "$duration_seconds" "1" "ok"
+    append_summary "$index" "$stage" "pass" "true" "$exit_code" "$duration_seconds" "1" "ok"
     return 0
   fi
-  append_summary "$stage" "fail" "true" "$exit_code" "$duration_seconds" "1" "required stage failed"
+  append_summary "$index" "$stage" "fail" "true" "$exit_code" "$duration_seconds" "1" "required stage failed"
   return "$exit_code"
 }
 
 run_optional_stage() {
-  local stage="$1"
-  local label="$2"
-  local cmd="$3"
+  local index="$1"
+  local stage="$2"
+  local label="$3"
+  local cmd="$4"
   local started_at_epoch
   local ended_at_epoch
   local duration_seconds
@@ -177,33 +181,33 @@ run_optional_stage() {
   if run_with_retry "$cmd" "$stage" "$CODEX_PROBE_RETRIES" "$CODEX_PROBE_RETRY_DELAY_SECONDS"; then
     ended_at_epoch="$(date +%s)"
     duration_seconds="$((ended_at_epoch - started_at_epoch))"
-    append_summary "$stage" "pass" "false" "0" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "ok"
+    append_summary "$index" "$stage" "pass" "false" "0" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "ok"
     return 0
   fi
   ended_at_epoch="$(date +%s)"
   duration_seconds="$((ended_at_epoch - started_at_epoch))"
   if [ "$STRICT_CODEX_PROBES" = "1" ]; then
-    append_summary "$stage" "fail" "false" "$RETRY_LAST_EXIT_CODE" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed under strict mode"
+    append_summary "$index" "$stage" "fail" "false" "$RETRY_LAST_EXIT_CODE" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed under strict mode"
     echo "[suite] FAIL ${stage} failed under strict mode"
     return 1
   fi
-  append_summary "$stage" "warn" "false" "$RETRY_LAST_EXIT_CODE" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed but allowed in non-strict mode"
+  append_summary "$index" "$stage" "warn" "false" "$RETRY_LAST_EXIT_CODE" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed but allowed in non-strict mode"
   echo "[suite] WARN ${stage} exhausted retries (continuing)"
   return 0
 }
 
-run_required_stage "ws_permission_matrix" "[suite] 1/5 ws permission matrix" "./scripts/acp_ws_permission_matrix.sh \"$((PORT_BASE + 0))\""
-run_required_stage "ws_session_reuse" "[suite] 2/5 ws session reuse" "./scripts/acp_ws_session_reuse_probe.sh \"$((PORT_BASE + 10))\""
-run_required_stage "stdio_session_reuse_boundary" "[suite] 3/5 stdio session reuse boundary" "./scripts/acp_stdio_session_reuse_probe.sh"
-run_required_stage "ws_ttl_zero_boundary" "[suite] 4/5 ws ttl-zero immediate-expiry boundary" "./scripts/acp_ws_ttl_zero_probe.sh \"$((PORT_BASE + 11))\""
-run_required_stage "ws_timeout_zero_boundary" "[suite] 5/5 ws timeout-zero no-timeout boundary" "./scripts/acp_ws_timeout_zero_probe.sh \"$((PORT_BASE + 12))\""
+run_required_stage "1" "ws_permission_matrix" "[suite] 1/5 ws permission matrix" "./scripts/acp_ws_permission_matrix.sh \"$((PORT_BASE + 0))\""
+run_required_stage "2" "ws_session_reuse" "[suite] 2/5 ws session reuse" "./scripts/acp_ws_session_reuse_probe.sh \"$((PORT_BASE + 10))\""
+run_required_stage "3" "stdio_session_reuse_boundary" "[suite] 3/5 stdio session reuse boundary" "./scripts/acp_stdio_session_reuse_probe.sh"
+run_required_stage "4" "ws_ttl_zero_boundary" "[suite] 4/5 ws ttl-zero immediate-expiry boundary" "./scripts/acp_ws_ttl_zero_probe.sh \"$((PORT_BASE + 11))\""
+run_required_stage "5" "ws_timeout_zero_boundary" "[suite] 5/5 ws timeout-zero no-timeout boundary" "./scripts/acp_ws_timeout_zero_probe.sh \"$((PORT_BASE + 12))\""
 
 if [ "${RUN_CODEX_PROBES:-0}" = "1" ]; then
-  run_optional_stage "codex_permission_probe" "[suite] 6/7 codex permission probe (optional)" "./scripts/codex_acp_permission_probe.sh"
-  run_optional_stage "codex_multiturn_smoke" "[suite] 7/7 codex multi-turn smoke (optional)" "./scripts/codex_acp_multiturn_smoke.sh"
+  run_optional_stage "6" "codex_permission_probe" "[suite] 6/7 codex permission probe (optional)" "./scripts/codex_acp_permission_probe.sh"
+  run_optional_stage "7" "codex_multiturn_smoke" "[suite] 7/7 codex multi-turn smoke (optional)" "./scripts/codex_acp_multiturn_smoke.sh"
 else
-  append_summary "codex_permission_probe" "skipped" "false" "0" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
-  append_summary "codex_multiturn_smoke" "skipped" "false" "0" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
+  append_summary "6" "codex_permission_probe" "skipped" "false" "0" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
+  append_summary "7" "codex_multiturn_smoke" "skipped" "false" "0" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
 fi
 
 SUITE_RESULT="pass"
