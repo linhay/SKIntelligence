@@ -85,6 +85,50 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--request-timeout-ms must be >= 0"))
     }
 
+    func testClientConnectWSRejectsNegativeHeartbeat() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-heartbeat-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-heartbeat-ms must be >= 0"))
+    }
+
+    func testClientConnectWSRejectsNegativeReconnectAttempts() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-reconnect-attempts=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-attempts must be >= 0"))
+    }
+
+    func testClientConnectWSRejectsNegativeReconnectBaseDelay() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-reconnect-base-delay-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-base-delay-ms must be >= 0"))
+    }
+
+    func testClientConnectWSRejectsNonPositiveMaxInFlightSends() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--max-in-flight-sends=0",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--max-in-flight-sends must be > 0"))
+    }
+
     func testClientConnectHelpContainsExamples() throws {
         let result = try runSKI(arguments: ["acp", "client", "connect", "--help"])
         XCTAssertEqual(result.exitCode, 0)
