@@ -137,3 +137,16 @@ swift test --filter SKIToolShellTests --filter SKICLIProcessTests.testClientConn
 预期：
 - `allow` 分支得到 `stopReason=end_turn`
 - `deny` 分支得到 `stopReason=cancelled`
+
+## 9. `codex-acp` 权限探针
+
+```bash
+./scripts/codex_acp_permission_probe.sh
+```
+
+输出示例：
+- `probe-allow permission_requests=0 stop_reason=end_turn`
+- `probe-deny permission_requests=0 stop_reason=end_turn`
+
+含义：
+- `permission_requests=0` 表示该 prompt 路径未触发 ACP `session/request_permission`。
