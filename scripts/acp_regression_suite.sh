@@ -10,6 +10,8 @@ STRICT_CODEX_PROBES="${STRICT_CODEX_PROBES:-0}"
 SUMMARY_JSON_PATH="${ACP_SUITE_SUMMARY_JSON:-}"
 SUMMARY_LINES=""
 SUITE_RESULT="fail"
+SUITE_STARTED_AT_EPOCH="$(date +%s)"
+SUITE_STARTED_AT_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 if ! [[ "$CODEX_PROBE_RETRIES" =~ ^[0-9]+$ ]] || [ "$CODEX_PROBE_RETRIES" -lt 1 ]; then
   echo "CODEX_PROBE_RETRIES must be a positive integer" >&2
@@ -41,12 +43,28 @@ write_summary_json() {
   if [ -z "$SUMMARY_JSON_PATH" ]; then
     return 0
   fi
+  local finished_at_epoch
+  local finished_at_utc
+  local duration_seconds
+  finished_at_epoch="$(date +%s)"
+  finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  duration_seconds="$((finished_at_epoch - SUITE_STARTED_AT_EPOCH))"
   mkdir -p "$(dirname "$SUMMARY_JSON_PATH")"
   {
     printf '{\n'
     printf '  "result": "%s",\n' "$(json_escape "$SUITE_RESULT")"
+    printf '  "startedAtUtc": "%s",\n' "$(json_escape "$SUITE_STARTED_AT_UTC")"
+    printf '  "finishedAtUtc": "%s",\n' "$(json_escape "$finished_at_utc")"
+    printf '  "durationSeconds": %s,\n' "$duration_seconds"
     printf '  "strictCodexProbes": %s,\n' "$STRICT_CODEX_PROBES"
     printf '  "runCodexProbes": %s,\n' "${RUN_CODEX_PROBES:-0}"
+    printf '  "config": {\n'
+    printf '    "portBase": %s,\n' "$PORT_BASE"
+    printf '    "codexProbeRetries": %s,\n' "$CODEX_PROBE_RETRIES"
+    printf '    "codexProbeRetryDelaySeconds": %s,\n' "$CODEX_PROBE_RETRY_DELAY_SECONDS"
+    printf '    "strictCodexProbes": %s,\n' "$STRICT_CODEX_PROBES"
+    printf '    "runCodexProbes": %s\n' "${RUN_CODEX_PROBES:-0}"
+    printf '  },\n'
     printf '  "stages": [\n'
     local first=1
     while IFS='|' read -r stage status required exit_code message; do
