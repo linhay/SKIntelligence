@@ -188,6 +188,9 @@ run_required_stage "ws_timeout_zero_boundary" "[suite] 5/5 ws timeout-zero no-ti
 if [ "${RUN_CODEX_PROBES:-0}" = "1" ]; then
   run_optional_stage "codex_permission_probe" "[suite] 6/7 codex permission probe (optional)" "./scripts/codex_acp_permission_probe.sh"
   run_optional_stage "codex_multiturn_smoke" "[suite] 7/7 codex multi-turn smoke (optional)" "./scripts/codex_acp_multiturn_smoke.sh"
+else
+  append_summary "codex_permission_probe" "skipped" "false" "0" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
+  append_summary "codex_multiturn_smoke" "skipped" "false" "0" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
 fi
 
 SUITE_RESULT="pass"
