@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
+PORT_BASE="${ACP_PORT_BASE:-18920}"
 
 run_with_retry() {
   local cmd="$1"
@@ -31,19 +32,19 @@ run_with_retry() {
 }
 
 echo "[suite] 1/5 ws permission matrix"
-./scripts/acp_ws_permission_matrix.sh
+./scripts/acp_ws_permission_matrix.sh "$((PORT_BASE + 0))"
 
 echo "[suite] 2/5 ws session reuse"
-./scripts/acp_ws_session_reuse_probe.sh
+./scripts/acp_ws_session_reuse_probe.sh "$((PORT_BASE + 10))"
 
 echo "[suite] 3/5 stdio session reuse boundary"
 ./scripts/acp_stdio_session_reuse_probe.sh
 
 echo "[suite] 4/5 ws ttl-zero immediate-expiry boundary"
-./scripts/acp_ws_ttl_zero_probe.sh
+./scripts/acp_ws_ttl_zero_probe.sh "$((PORT_BASE + 11))"
 
 echo "[suite] 5/5 ws timeout-zero no-timeout boundary"
-./scripts/acp_ws_timeout_zero_probe.sh
+./scripts/acp_ws_timeout_zero_probe.sh "$((PORT_BASE + 12))"
 
 if [ "${RUN_CODEX_PROBES:-0}" = "1" ]; then
   echo "[suite] 6/7 codex permission probe (optional)"
