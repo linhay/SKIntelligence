@@ -8,6 +8,7 @@ CODEX_PROBE_RETRIES="${CODEX_PROBE_RETRIES:-2}"
 CODEX_PROBE_RETRY_DELAY_SECONDS="${CODEX_PROBE_RETRY_DELAY_SECONDS:-2}"
 STRICT_CODEX_PROBES="${STRICT_CODEX_PROBES:-0}"
 SUMMARY_JSON_PATH="${ACP_SUITE_SUMMARY_JSON:-}"
+SUMMARY_SCHEMA_VERSION="1"
 SUMMARY_LINES=""
 SUITE_RESULT="fail"
 SUITE_STARTED_AT_EPOCH="$(date +%s)"
@@ -60,6 +61,7 @@ write_summary_json() {
   summary_tmp="$(mktemp "$summary_dir/.acp-summary.XXXXXX.json")"
   {
     printf '{\n'
+    printf '  "schemaVersion": "%s",\n' "$(json_escape "$SUMMARY_SCHEMA_VERSION")"
     printf '  "result": "%s",\n' "$(json_escape "$SUITE_RESULT")"
     printf '  "startedAtUtc": "%s",\n' "$(json_escape "$SUITE_STARTED_AT_UTC")"
     printf '  "finishedAtUtc": "%s",\n' "$(json_escape "$finished_at_utc")"
@@ -94,6 +96,12 @@ write_summary_json() {
     printf '}\n'
   } > "$summary_tmp"
   mv "$summary_tmp" "$SUMMARY_JSON_PATH"
+
+  # Lightweight guard against accidental format drift.
+  if ! rg -q '"schemaVersion":' "$SUMMARY_JSON_PATH" || ! rg -q '"stages": \[' "$SUMMARY_JSON_PATH"; then
+    echo "summary json validation failed: missing schemaVersion or stages" >&2
+    return 1
+  fi
 }
 
 trap write_summary_json EXIT
