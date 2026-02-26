@@ -8,7 +8,7 @@ CODEX_PROBE_RETRIES="${CODEX_PROBE_RETRIES:-2}"
 CODEX_PROBE_RETRY_DELAY_SECONDS="${CODEX_PROBE_RETRY_DELAY_SECONDS:-2}"
 STRICT_CODEX_PROBES="${STRICT_CODEX_PROBES:-0}"
 SUMMARY_JSON_PATH="${ACP_SUITE_SUMMARY_JSON:-}"
-SUMMARY_SCHEMA_VERSION="1"
+SUMMARY_SCHEMA_VERSION="2"
 SUMMARY_LINES=""
 SUITE_RESULT="fail"
 SUITE_STARTED_AT_EPOCH="$(date +%s)"
@@ -20,6 +20,7 @@ fi
 if [ -z "$SUITE_RUN_ID" ]; then
   SUITE_RUN_ID="$(date +%s)"
 fi
+SUITE_LOG_DIR="${ACP_SUITE_LOG_DIR:-.local/acp-suite-logs/$SUITE_RUN_ID}"
 GIT_HEAD="$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
 GIT_DIRTY="false"
 if ! git diff --quiet --ignore-submodules -- 2>/dev/null || ! git diff --cached --quiet --ignore-submodules -- 2>/dev/null; then
@@ -59,7 +60,8 @@ append_summary() {
   local duration_seconds="$8"
   local attempts="$9"
   local message="${10}"
-  SUMMARY_LINES+="${index}|${stage}|${status}|${required}|${exit_code}|${started_at_utc}|${finished_at_utc}|${duration_seconds}|${attempts}|${message}"$'\n'
+  local log_path="${11:-}"
+  SUMMARY_LINES+="${index}|${stage}|${status}|${required}|${exit_code}|${started_at_utc}|${finished_at_utc}|${duration_seconds}|${attempts}|${message}|${log_path}"$'\n'
 }
 
 write_summary_json() {
@@ -75,6 +77,7 @@ write_summary_json() {
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((finished_at_epoch - SUITE_STARTED_AT_EPOCH))"
   summary_dir="$(dirname "$SUMMARY_JSON_PATH")"
+  mkdir -p "$SUITE_LOG_DIR"
   mkdir -p "$summary_dir"
   summary_tmp="$(mktemp "$summary_dir/.acp-summary.XXXXXX")"
   {
@@ -101,15 +104,18 @@ write_summary_json() {
     printf '    "strictCodexProbes": %s,\n' "$STRICT_CODEX_PROBES"
     printf '    "runCodexProbes": %s\n' "${RUN_CODEX_PROBES:-0}"
     printf '  },\n'
+    printf '  "artifacts": {\n'
+    printf '    "suiteLogDir": "%s"\n' "$(json_escape "$SUITE_LOG_DIR")"
+    printf '  },\n'
     printf '  "stages": [\n'
     local first=1
-    while IFS='|' read -r index stage status required exit_code started_at_utc finished_at_utc duration_seconds attempts message; do
+    while IFS='|' read -r index stage status required exit_code started_at_utc finished_at_utc duration_seconds attempts message log_path; do
       [ -z "$index" ] && continue
       if [ "$first" -eq 0 ]; then
         printf ',\n'
       fi
       first=0
-      printf '    {"index":%s,"stage":"%s","status":"%s","required":%s,"exitCode":%s,"startedAtUtc":"%s","finishedAtUtc":"%s","durationSeconds":%s,"attempts":%s,"message":"%s"}' \
+      printf '    {"index":%s,"stage":"%s","status":"%s","required":%s,"exitCode":%s,"startedAtUtc":"%s","finishedAtUtc":"%s","durationSeconds":%s,"attempts":%s,"message":"%s","logPath":"%s"}' \
         "$index" \
         "$(json_escape "$stage")" \
         "$(json_escape "$status")" \
@@ -119,7 +125,8 @@ write_summary_json() {
         "$(json_escape "$finished_at_utc")" \
         "$duration_seconds" \
         "$attempts" \
-        "$(json_escape "$message")"
+        "$(json_escape "$message")" \
+        "$(json_escape "$log_path")"
     done <<< "$SUMMARY_LINES"
     printf '\n  ]\n'
     printf '}\n'
@@ -140,14 +147,25 @@ run_with_retry() {
   local label="$2"
   local max_attempts="${3:-2}"
   local delay_seconds="${4:-0}"
+  local log_path="${5:-}"
   local attempt=1
   local exit_code=0
 
   RETRY_LAST_ATTEMPTS=0
   RETRY_LAST_EXIT_CODE=0
   while [ "$attempt" -le "$max_attempts" ]; do
+    if [ -n "$log_path" ]; then
+      {
+        echo "[attempt ${attempt}/${max_attempts}] $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+        echo "$ $cmd"
+      } >> "$log_path"
+    fi
     set +e
-    eval "$cmd"
+    if [ -n "$log_path" ]; then
+      eval "$cmd" > >(tee -a "$log_path") 2> >(tee -a "$log_path" >&2)
+    else
+      eval "$cmd"
+    fi
     exit_code=$?
     set -e
 
@@ -181,21 +199,24 @@ run_required_stage() {
   local ended_at_epoch
   local finished_at_utc
   local duration_seconds
+  local log_path="${SUITE_LOG_DIR}/${index}_${stage}.log"
+  mkdir -p "$SUITE_LOG_DIR"
+  : > "$log_path"
   started_at_epoch="$(date +%s)"
   started_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo "$label"
   set +e
-  eval "$cmd"
+  eval "$cmd" > >(tee -a "$log_path") 2> >(tee -a "$log_path" >&2)
   local exit_code=$?
   set -e
   ended_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((ended_at_epoch - started_at_epoch))"
   if [ "$exit_code" -eq 0 ]; then
-    append_summary "$index" "$stage" "pass" "true" "$exit_code" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "1" "ok"
+    append_summary "$index" "$stage" "pass" "true" "$exit_code" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "1" "ok" "$log_path"
     return 0
   fi
-  append_summary "$index" "$stage" "fail" "true" "$exit_code" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "1" "required stage failed"
+  append_summary "$index" "$stage" "fail" "true" "$exit_code" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "1" "required stage failed" "$log_path"
   return "$exit_code"
 }
 
@@ -209,25 +230,28 @@ run_optional_stage() {
   local ended_at_epoch
   local finished_at_utc
   local duration_seconds
+  local log_path="${SUITE_LOG_DIR}/${index}_${stage}.log"
+  mkdir -p "$SUITE_LOG_DIR"
+  : > "$log_path"
   started_at_epoch="$(date +%s)"
   started_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo "$label"
-  if run_with_retry "$cmd" "$stage" "$CODEX_PROBE_RETRIES" "$CODEX_PROBE_RETRY_DELAY_SECONDS"; then
+  if run_with_retry "$cmd" "$stage" "$CODEX_PROBE_RETRIES" "$CODEX_PROBE_RETRY_DELAY_SECONDS" "$log_path"; then
     ended_at_epoch="$(date +%s)"
     finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     duration_seconds="$((ended_at_epoch - started_at_epoch))"
-    append_summary "$index" "$stage" "pass" "false" "0" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "ok"
+    append_summary "$index" "$stage" "pass" "false" "0" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "ok" "$log_path"
     return 0
   fi
   ended_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((ended_at_epoch - started_at_epoch))"
   if [ "$STRICT_CODEX_PROBES" = "1" ]; then
-    append_summary "$index" "$stage" "fail" "false" "$RETRY_LAST_EXIT_CODE" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed under strict mode"
+    append_summary "$index" "$stage" "fail" "false" "$RETRY_LAST_EXIT_CODE" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed under strict mode" "$log_path"
     echo "[suite] FAIL ${stage} failed under strict mode"
     return 1
   fi
-  append_summary "$index" "$stage" "warn" "false" "$RETRY_LAST_EXIT_CODE" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed but allowed in non-strict mode"
+  append_summary "$index" "$stage" "warn" "false" "$RETRY_LAST_EXIT_CODE" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed but allowed in non-strict mode" "$log_path"
   echo "[suite] WARN ${stage} exhausted retries (continuing)"
   return 0
 }
@@ -242,8 +266,8 @@ if [ "${RUN_CODEX_PROBES:-0}" = "1" ]; then
   run_optional_stage "6" "codex_permission_probe" "[suite] 6/7 codex permission probe (optional)" "./scripts/codex_acp_permission_probe.sh"
   run_optional_stage "7" "codex_multiturn_smoke" "[suite] 7/7 codex multi-turn smoke (optional)" "./scripts/codex_acp_multiturn_smoke.sh"
 else
-  append_summary "6" "codex_permission_probe" "skipped" "false" "0" "$SUITE_STARTED_AT_UTC" "$SUITE_STARTED_AT_UTC" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
-  append_summary "7" "codex_multiturn_smoke" "skipped" "false" "0" "$SUITE_STARTED_AT_UTC" "$SUITE_STARTED_AT_UTC" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
+  append_summary "6" "codex_permission_probe" "skipped" "false" "0" "$SUITE_STARTED_AT_UTC" "$SUITE_STARTED_AT_UTC" "0" "0" "skipped (RUN_CODEX_PROBES=0)" ""
+  append_summary "7" "codex_multiturn_smoke" "skipped" "false" "0" "$SUITE_STARTED_AT_UTC" "$SUITE_STARTED_AT_UTC" "0" "0" "skipped (RUN_CODEX_PROBES=0)" ""
 fi
 
 SUITE_RESULT="pass"

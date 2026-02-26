@@ -196,6 +196,8 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - 每个 stage 记录 `startedAtUtc/finishedAtUtc`，可与外部日志按时间戳精确对齐。
 - 顶层包含 `gitHead` 与 `gitDirty`，用于把回归结果绑定到具体代码快照及工作区状态。
 - 顶层 `host`（`name/os/arch`）用于跨机器对比联调结果。
+- 可通过 `ACP_SUITE_LOG_DIR` 指定 stage 日志目录；默认 `.local/acp-suite-logs/<runId>`。
+- summary 顶层 `artifacts.suiteLogDir` 给出本轮日志目录，每个 stage 追加 `logPath`，失败排查可直接跳转。
 
 示例：
 ```bash
