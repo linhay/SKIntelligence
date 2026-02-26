@@ -13,7 +13,10 @@ SUMMARY_LINES=""
 SUITE_RESULT="fail"
 SUITE_STARTED_AT_EPOCH="$(date +%s)"
 SUITE_STARTED_AT_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-SUITE_RUN_ID="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 12 || true)"
+SUITE_RUN_ID="${ACP_SUITE_RUN_ID:-}"
+if [ -z "$SUITE_RUN_ID" ]; then
+  SUITE_RUN_ID="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 12 || true)"
+fi
 if [ -z "$SUITE_RUN_ID" ]; then
   SUITE_RUN_ID="$(date +%s)"
 fi
@@ -63,7 +66,7 @@ write_summary_json() {
   duration_seconds="$((finished_at_epoch - SUITE_STARTED_AT_EPOCH))"
   summary_dir="$(dirname "$SUMMARY_JSON_PATH")"
   mkdir -p "$summary_dir"
-  summary_tmp="$(mktemp "$summary_dir/.acp-summary.XXXXXX.json")"
+  summary_tmp="$(mktemp "$summary_dir/.acp-summary.XXXXXX")"
   {
     printf '{\n'
     printf '  "schemaVersion": "%s",\n' "$(json_escape "$SUMMARY_SCHEMA_VERSION")"
