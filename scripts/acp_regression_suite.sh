@@ -50,10 +50,14 @@ write_summary_json() {
   local finished_at_epoch
   local finished_at_utc
   local duration_seconds
+  local summary_dir
+  local summary_tmp
   finished_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((finished_at_epoch - SUITE_STARTED_AT_EPOCH))"
-  mkdir -p "$(dirname "$SUMMARY_JSON_PATH")"
+  summary_dir="$(dirname "$SUMMARY_JSON_PATH")"
+  mkdir -p "$summary_dir"
+  summary_tmp="$(mktemp "$summary_dir/.acp-summary.XXXXXX.json")"
   {
     printf '{\n'
     printf '  "result": "%s",\n' "$(json_escape "$SUITE_RESULT")"
@@ -88,7 +92,8 @@ write_summary_json() {
     done <<< "$SUMMARY_LINES"
     printf '\n  ]\n'
     printf '}\n'
-  } > "$SUMMARY_JSON_PATH"
+  } > "$summary_tmp"
+  mv "$summary_tmp" "$SUMMARY_JSON_PATH"
 }
 
 trap write_summary_json EXIT

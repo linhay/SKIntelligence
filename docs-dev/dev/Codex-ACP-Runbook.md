@@ -188,6 +188,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - 汇总中包含 `startedAtUtc/finishedAtUtc/durationSeconds` 与 `config`（端口基线、重试参数、strict 开关）便于排障追踪。
 - 每个 `stages[]` 项含 `durationSeconds` 与 `attempts`，可快速识别慢阶段和重试抖动阶段。
 - 当 `RUN_CODEX_PROBES=0` 时，`codex_permission_probe`/`codex_multiturn_smoke` 会在 summary 中标记为 `status=skipped`（结构保持固定 7 段）。
+- summary 文件采用原子写入（临时文件后 `mv`），避免 CI 读取到半写入内容。
 
 示例：
 ```bash
