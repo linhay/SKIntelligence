@@ -31,6 +31,8 @@ HOST_OS="$(uname -s 2>/dev/null || echo unknown)"
 HOST_ARCH="$(uname -m 2>/dev/null || echo unknown)"
 RETRY_LAST_ATTEMPTS=0
 RETRY_LAST_EXIT_CODE=0
+FAILURE_STAGE=""
+FAILURE_EXIT_CODE=0
 
 if ! [[ "$CODEX_PROBE_RETRIES" =~ ^[0-9]+$ ]] || [ "$CODEX_PROBE_RETRIES" -lt 1 ]; then
   echo "CODEX_PROBE_RETRIES must be a positive integer" >&2
@@ -62,6 +64,15 @@ append_summary() {
   local message="${10}"
   local log_path="${11:-}"
   SUMMARY_LINES+="${index}|${stage}|${status}|${required}|${exit_code}|${started_at_utc}|${finished_at_utc}|${duration_seconds}|${attempts}|${message}|${log_path}"$'\n'
+}
+
+record_failure() {
+  local stage="$1"
+  local exit_code="$2"
+  if [ -z "$FAILURE_STAGE" ]; then
+    FAILURE_STAGE="$stage"
+    FAILURE_EXIT_CODE="$exit_code"
+  fi
 }
 
 write_summary_json() {
@@ -107,6 +118,11 @@ write_summary_json() {
     printf '    "arch": "%s"\n' "$(json_escape "$HOST_ARCH")"
     printf '  },\n'
     printf '  "result": "%s",\n' "$(json_escape "$SUITE_RESULT")"
+    if [ -n "$FAILURE_STAGE" ]; then
+      printf '  "failure": {"stage":"%s","exitCode":%s},\n' "$(json_escape "$FAILURE_STAGE")" "$FAILURE_EXIT_CODE"
+    else
+      printf '  "failure": null,\n'
+    fi
     printf '  "startedAtUtc": "%s",\n' "$(json_escape "$SUITE_STARTED_AT_UTC")"
     printf '  "finishedAtUtc": "%s",\n' "$(json_escape "$finished_at_utc")"
     printf '  "durationSeconds": %s,\n' "$duration_seconds"
@@ -157,6 +173,7 @@ write_summary_json() {
 
   # Lightweight guard against accidental format drift.
   if ! rg -q '"schemaVersion":' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"artifacts": \{' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stages": \[' "$SUMMARY_JSON_PATH" || \
@@ -247,6 +264,7 @@ run_required_stage() {
     return 0
   fi
   append_summary "$index" "$stage" "fail" "true" "$exit_code" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "1" "required stage failed" "$log_path"
+  record_failure "$stage" "$exit_code"
   return "$exit_code"
 }
 
@@ -278,6 +296,7 @@ run_optional_stage() {
   duration_seconds="$((ended_at_epoch - started_at_epoch))"
   if [ "$STRICT_CODEX_PROBES" = "1" ]; then
     append_summary "$index" "$stage" "fail" "false" "$RETRY_LAST_EXIT_CODE" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed under strict mode" "$log_path"
+    record_failure "$stage" "$RETRY_LAST_EXIT_CODE"
     echo "[suite] FAIL ${stage} failed under strict mode"
     return 1
   fi
