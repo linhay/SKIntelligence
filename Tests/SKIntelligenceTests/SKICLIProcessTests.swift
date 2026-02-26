@@ -249,6 +249,26 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--endpoint must use ws:// or wss:// and include host"))
     }
 
+    func testClientConnectWSRejectsEndpointWithoutWSScheme() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "http://127.0.0.1:8900",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--endpoint must use ws:// or wss:// and include host"))
+    }
+
+    func testClientConnectWSRejectsEndpointWithoutHost() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws:///path-only",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--endpoint must use ws:// or wss:// and include host"))
+    }
+
     func testClientWSRejectsCmdOption() throws {
         let result = try runSKI(arguments: [
             "acp", "client", "connect",
