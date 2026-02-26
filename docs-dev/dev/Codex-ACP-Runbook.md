@@ -199,6 +199,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - 可通过 `ACP_SUITE_LOG_DIR` 指定 stage 日志目录；默认 `.local/acp-suite-logs/<runId>`。
 - summary 顶层 `artifacts.suiteLogDir` 给出本轮日志目录，每个 stage 追加 `logPath`，失败排查可直接跳转。
 - summary 顶层 `stageCounts` 提供 `total/pass/fail/warn/skipped` 聚合，适合 CI 直接做阈值判定。
+- 脚本结束会输出一行 `[suite] counts ...`，可直接在控制台/CI 日志快速观察本轮分布。
 
 示例：
 ```bash

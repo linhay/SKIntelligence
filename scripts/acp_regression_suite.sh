@@ -286,6 +286,25 @@ run_optional_stage() {
   return 0
 }
 
+print_stage_counts_line() {
+  local count_total=0
+  local count_pass=0
+  local count_fail=0
+  local count_warn=0
+  local count_skipped=0
+  while IFS='|' read -r _index _stage _status _required _exit_code _started_at_utc _finished_at_utc _duration_seconds _attempts _message _log_path; do
+    [ -z "$_index" ] && continue
+    count_total=$((count_total + 1))
+    case "$_status" in
+      pass) count_pass=$((count_pass + 1)) ;;
+      fail) count_fail=$((count_fail + 1)) ;;
+      warn) count_warn=$((count_warn + 1)) ;;
+      skipped) count_skipped=$((count_skipped + 1)) ;;
+    esac
+  done <<< "$SUMMARY_LINES"
+  echo "[suite] counts total=${count_total} pass=${count_pass} fail=${count_fail} warn=${count_warn} skipped=${count_skipped}"
+}
+
 run_required_stage "1" "ws_permission_matrix" "[suite] 1/5 ws permission matrix" "./scripts/acp_ws_permission_matrix.sh \"$((PORT_BASE + 0))\""
 run_required_stage "2" "ws_session_reuse" "[suite] 2/5 ws session reuse" "./scripts/acp_ws_session_reuse_probe.sh \"$((PORT_BASE + 10))\""
 run_required_stage "3" "stdio_session_reuse_boundary" "[suite] 3/5 stdio session reuse boundary" "./scripts/acp_stdio_session_reuse_probe.sh"
@@ -301,4 +320,5 @@ else
 fi
 
 SUITE_RESULT="pass"
+print_stage_counts_line
 echo "[suite] PASS"
