@@ -103,11 +103,13 @@ swift run ski acp client connect \
 
 症状：某些 prompt 下 deny 仍可得到正常执行结果。
 
-说明：`codex-acp` 侧并非所有执行路径都通过 ACP `request_permission` 回调；该参数只影响收到权限请求时客户端返回策略。
+说明：`codex-acp` 侧并非所有执行路径都通过 ACP `request_permission` 回调；该参数只影响收到权限请求时客户端返回策略。  
+客户端 stderr 现会输出：`[SKI] ACP client permission requests=<N>`，可直接判断该轮是否触发 ACP 权限请求。
 
 处理：
 1. 先以 `prompt_result` 成功作为主验收标准。
-2. 如需严格权限联调，需要构造 `codex-acp` 必经 `request_permission` 的场景再验证。
+2. 若 `N=0`，说明 deny/allow 差异不会生效。
+3. 如需严格权限联调，需要构造 `codex-acp` 必经 `request_permission` 的场景再验证。
 
 ### 5.6 本地 `ski acp serve --transport stdio` 的多轮差异
 

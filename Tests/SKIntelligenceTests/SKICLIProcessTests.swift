@@ -435,6 +435,7 @@ final class SKICLIProcessTests: XCTestCase {
         )
 
         XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        XCTAssertTrue(result.stderr.contains("permission requests=1"), "stderr: \(result.stderr)")
         let lines = result.stdout
             .split(separator: "\n")
             .map(String.init)
@@ -482,6 +483,7 @@ final class SKICLIProcessTests: XCTestCase {
         )
 
         XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        XCTAssertTrue(result.stderr.contains("permission requests=1"), "stderr: \(result.stderr)")
         let lines = result.stdout
             .split(separator: "\n")
             .map(String.init)
