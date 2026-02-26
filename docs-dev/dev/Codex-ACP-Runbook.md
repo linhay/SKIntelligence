@@ -155,3 +155,19 @@ swift test --filter SKIToolShellTests --filter SKICLIProcessTests.testClientConn
 
 含义：
 - `permission_requests=0` 表示该 prompt 路径未触发 ACP `session/request_permission`。
+
+## 10. 一键回归套件
+
+```bash
+./scripts/acp_regression_suite.sh
+```
+
+默认覆盖：
+1. `ws` 权限矩阵（allow/deny）
+2. `ws` 跨连接 session 复用
+3. `stdio` 跨连接 session 复用失败边界
+
+可选附加（需要 codex 环境）：
+```bash
+RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
+```
