@@ -46,10 +46,12 @@ append_summary() {
   local status="$3"
   local required="$4"
   local exit_code="$5"
-  local duration_seconds="$6"
-  local attempts="$7"
-  local message="$8"
-  SUMMARY_LINES+="${index}|${stage}|${status}|${required}|${exit_code}|${duration_seconds}|${attempts}|${message}"$'\n'
+  local started_at_utc="$6"
+  local finished_at_utc="$7"
+  local duration_seconds="$8"
+  local attempts="$9"
+  local message="${10}"
+  SUMMARY_LINES+="${index}|${stage}|${status}|${required}|${exit_code}|${started_at_utc}|${finished_at_utc}|${duration_seconds}|${attempts}|${message}"$'\n'
 }
 
 write_summary_json() {
@@ -86,18 +88,20 @@ write_summary_json() {
     printf '  },\n'
     printf '  "stages": [\n'
     local first=1
-    while IFS='|' read -r index stage status required exit_code duration_seconds attempts message; do
+    while IFS='|' read -r index stage status required exit_code started_at_utc finished_at_utc duration_seconds attempts message; do
       [ -z "$index" ] && continue
       if [ "$first" -eq 0 ]; then
         printf ',\n'
       fi
       first=0
-      printf '    {"index":%s,"stage":"%s","status":"%s","required":%s,"exitCode":%s,"durationSeconds":%s,"attempts":%s,"message":"%s"}' \
+      printf '    {"index":%s,"stage":"%s","status":"%s","required":%s,"exitCode":%s,"startedAtUtc":"%s","finishedAtUtc":"%s","durationSeconds":%s,"attempts":%s,"message":"%s"}' \
         "$index" \
         "$(json_escape "$stage")" \
         "$(json_escape "$status")" \
         "$required" \
         "$exit_code" \
+        "$(json_escape "$started_at_utc")" \
+        "$(json_escape "$finished_at_utc")" \
         "$duration_seconds" \
         "$attempts" \
         "$(json_escape "$message")"
@@ -158,21 +162,25 @@ run_required_stage() {
   local label="$3"
   local cmd="$4"
   local started_at_epoch
+  local started_at_utc
   local ended_at_epoch
+  local finished_at_utc
   local duration_seconds
   started_at_epoch="$(date +%s)"
+  started_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo "$label"
   set +e
   eval "$cmd"
   local exit_code=$?
   set -e
   ended_at_epoch="$(date +%s)"
+  finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((ended_at_epoch - started_at_epoch))"
   if [ "$exit_code" -eq 0 ]; then
-    append_summary "$index" "$stage" "pass" "true" "$exit_code" "$duration_seconds" "1" "ok"
+    append_summary "$index" "$stage" "pass" "true" "$exit_code" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "1" "ok"
     return 0
   fi
-  append_summary "$index" "$stage" "fail" "true" "$exit_code" "$duration_seconds" "1" "required stage failed"
+  append_summary "$index" "$stage" "fail" "true" "$exit_code" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "1" "required stage failed"
   return "$exit_code"
 }
 
@@ -182,24 +190,29 @@ run_optional_stage() {
   local label="$3"
   local cmd="$4"
   local started_at_epoch
+  local started_at_utc
   local ended_at_epoch
+  local finished_at_utc
   local duration_seconds
   started_at_epoch="$(date +%s)"
+  started_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo "$label"
   if run_with_retry "$cmd" "$stage" "$CODEX_PROBE_RETRIES" "$CODEX_PROBE_RETRY_DELAY_SECONDS"; then
     ended_at_epoch="$(date +%s)"
+    finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
     duration_seconds="$((ended_at_epoch - started_at_epoch))"
-    append_summary "$index" "$stage" "pass" "false" "0" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "ok"
+    append_summary "$index" "$stage" "pass" "false" "0" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "ok"
     return 0
   fi
   ended_at_epoch="$(date +%s)"
+  finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((ended_at_epoch - started_at_epoch))"
   if [ "$STRICT_CODEX_PROBES" = "1" ]; then
-    append_summary "$index" "$stage" "fail" "false" "$RETRY_LAST_EXIT_CODE" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed under strict mode"
+    append_summary "$index" "$stage" "fail" "false" "$RETRY_LAST_EXIT_CODE" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed under strict mode"
     echo "[suite] FAIL ${stage} failed under strict mode"
     return 1
   fi
-  append_summary "$index" "$stage" "warn" "false" "$RETRY_LAST_EXIT_CODE" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed but allowed in non-strict mode"
+  append_summary "$index" "$stage" "warn" "false" "$RETRY_LAST_EXIT_CODE" "$started_at_utc" "$finished_at_utc" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed but allowed in non-strict mode"
   echo "[suite] WARN ${stage} exhausted retries (continuing)"
   return 0
 }
@@ -214,8 +227,8 @@ if [ "${RUN_CODEX_PROBES:-0}" = "1" ]; then
   run_optional_stage "6" "codex_permission_probe" "[suite] 6/7 codex permission probe (optional)" "./scripts/codex_acp_permission_probe.sh"
   run_optional_stage "7" "codex_multiturn_smoke" "[suite] 7/7 codex multi-turn smoke (optional)" "./scripts/codex_acp_multiturn_smoke.sh"
 else
-  append_summary "6" "codex_permission_probe" "skipped" "false" "0" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
-  append_summary "7" "codex_multiturn_smoke" "skipped" "false" "0" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
+  append_summary "6" "codex_permission_probe" "skipped" "false" "0" "$SUITE_STARTED_AT_UTC" "$SUITE_STARTED_AT_UTC" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
+  append_summary "7" "codex_multiturn_smoke" "skipped" "false" "0" "$SUITE_STARTED_AT_UTC" "$SUITE_STARTED_AT_UTC" "0" "0" "skipped (RUN_CODEX_PROBES=0)"
 fi
 
 SUITE_RESULT="pass"

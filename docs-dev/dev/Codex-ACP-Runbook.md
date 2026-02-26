@@ -193,6 +193,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - `stages[]` 包含固定 `index`（1..7），便于前端/报表按稳定顺序展示。
 - 顶层 `runId` 为单次套件执行唯一标识，可用于关联同轮的日志与 summary。
 - 可通过 `ACP_SUITE_RUN_ID` 覆盖 `runId`（例如注入 CI job/build id）。
+- 每个 stage 记录 `startedAtUtc/finishedAtUtc`，可与外部日志按时间戳精确对齐。
 
 示例：
 ```bash
