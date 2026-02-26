@@ -318,6 +318,54 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--request-timeout-ms must be >= 0"))
     }
 
+    func testClientConnectGenericWSRejectsNegativeHeartbeat() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-heartbeat-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-heartbeat-ms must be >= 0"))
+    }
+
+    func testClientConnectGenericWSRejectsNegativeReconnectAttempts() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-reconnect-attempts=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-attempts must be >= 0"))
+    }
+
+    func testClientConnectGenericWSRejectsNegativeReconnectBaseDelay() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-reconnect-base-delay-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-base-delay-ms must be >= 0"))
+    }
+
+    func testClientConnectGenericWSRejectsNonPositiveMaxInFlightSends() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--max-in-flight-sends=0",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--max-in-flight-sends must be > 0"))
+    }
+
     func testClientConnectRejectsEmptySessionID() throws {
         let result = try runSKI(arguments: [
             "acp", "client", "connect-stdio",
