@@ -45,11 +45,19 @@
 - When 执行同一命令
 - Then 返回上游错误并保持 CLI 退出码语义（upstream failure）
 
+### 场景 4：单连接多轮 prompt
+
+- Given `codex-acp` 已可连接
+- When 在一次 `connect` 中重复传入多个 `--prompt`
+- Then 客户端应在同一连接和同一 `sessionId` 下顺序完成多次 `session/prompt`
+- And 每轮都输出一条 `prompt_result`
+
 ## 验收标准
 
 1. 最小链路命令至少一次返回 `prompt_result`。
 2. 不再出现 `session/new` 解析失败（`expected a borrowed string`）。
 3. 相关 JSON-RPC 编码测试通过。
+4. 多 `--prompt` 调用可在一次连接中输出多条 `prompt_result`，且 `sessionId` 一致。
 
 ## 设计约束
 

@@ -33,6 +33,22 @@ swift run ski acp client connect \
 
 预期：出现多条 `session_update`，最终输出一条 `prompt_result`。
 
+### 4.1 单连接多轮 prompt（推荐用于会话连续性联调）
+
+```bash
+swift run ski acp client connect \
+  --transport stdio \
+  --cmd npx \
+  --args=-y \
+  --args=@zed-industries/codex-acp \
+  --cwd "$PWD" \
+  --prompt "first turn" \
+  --prompt "second turn" \
+  --json
+```
+
+预期：输出两条 `prompt_result`，且 `sessionId` 相同。
+
 ## 5. 稳定性烟测
 
 ```bash
@@ -81,7 +97,7 @@ swift run ski acp client connect \
 
 处理：
 1. 使用 `session/new` 新建会话（默认行为）。
-2. 若需要跨请求复用同一会话，改为长连接模式（当前 `connect` 命令不是该模式）。
+2. 若需要会话连续性，优先在一次 `connect` 中重复使用多个 `--prompt`（单连接多轮）。
 
 ### 5.5 `--permission-decision deny` 与 allow 行为无明显差异
 
@@ -92,6 +108,16 @@ swift run ski acp client connect \
 处理：
 1. 先以 `prompt_result` 成功作为主验收标准。
 2. 如需严格权限联调，需要构造 `codex-acp` 必经 `request_permission` 的场景再验证。
+
+### 5.6 本地 `ski acp serve --transport stdio` 的多轮差异
+
+症状：在 `connect-stdio --cmd ski --args acp --args serve --args=--transport --args=stdio` 下，第二轮 prompt 可能超时。
+
+说明：这是当前本地 stdio serve 路径的已知限制；同样的多轮流程在 `codex-acp` 与本地 ws serve 路径可正常通过。
+
+处理：
+1. 对多轮连续性联调，优先使用 `codex-acp`（stdio）或本地 `serve --transport ws`。
+2. 本地 stdio serve 继续保留单轮验收。
 
 ## 7. 回归命令
 

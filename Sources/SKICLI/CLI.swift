@@ -253,8 +253,8 @@ struct ACPClientConnectStdioCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Working directory sent to session/new.")
     var cwd: String = FileManager.default.currentDirectoryPath
 
-    @Option(name: .long)
-    var prompt: String
+    @Option(name: .long, help: "Prompt text. Repeat --prompt for multi-turn prompts in one connection.")
+    var prompt: [String] = []
 
     @Option(name: .long, help: "Reuse an existing ACP session ID instead of creating a new one")
     var sessionID: String?
@@ -275,7 +275,11 @@ struct ACPClientConnectStdioCommand: AsyncParsableCommand {
     var permissionMessage: String?
 
     mutating func run() async throws {
-        if prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if prompt.isEmpty {
+            fputs("Error: --prompt must be provided at least once\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if prompt.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
             fputs("Error: --prompt must not be empty\n", stderr)
             throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
         }
@@ -299,7 +303,7 @@ struct ACPClientConnectStdioCommand: AsyncParsableCommand {
             args: args,
             endpoint: nil,
             cwd: cwd,
-            prompt: prompt,
+            prompts: prompt,
             sessionID: sessionID,
             jsonOutput: json,
             requestTimeoutMS: requestTimeoutMS,
@@ -326,8 +330,8 @@ struct ACPClientConnectWSCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Working directory sent to session/new. Use a path valid on the server.")
     var cwd: String = FileManager.default.currentDirectoryPath
 
-    @Option(name: .long)
-    var prompt: String
+    @Option(name: .long, help: "Prompt text. Repeat --prompt for multi-turn prompts in one connection.")
+    var prompt: [String] = []
 
     @Option(name: .long, help: "Reuse an existing ACP session ID instead of creating a new one")
     var sessionID: String?
@@ -360,7 +364,11 @@ struct ACPClientConnectWSCommand: AsyncParsableCommand {
     var permissionMessage: String?
 
     mutating func run() async throws {
-        if prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if prompt.isEmpty {
+            fputs("Error: --prompt must be provided at least once\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if prompt.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
             fputs("Error: --prompt must not be empty\n", stderr)
             throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
         }
@@ -395,7 +403,7 @@ struct ACPClientConnectWSCommand: AsyncParsableCommand {
             args: [],
             endpoint: endpoint,
             cwd: cwd,
-            prompt: prompt,
+            prompts: prompt,
             sessionID: sessionID,
             jsonOutput: json,
             requestTimeoutMS: requestTimeoutMS,
@@ -438,8 +446,8 @@ struct ACPClientConnectCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Working directory sent to session/new. For ws transport, use a path valid on the server.")
     var cwd: String = FileManager.default.currentDirectoryPath
 
-    @Option(name: .long)
-    var prompt: String
+    @Option(name: .long, help: "Prompt text. Repeat --prompt for multi-turn prompts in one connection.")
+    var prompt: [String] = []
 
     @Option(name: .long, help: "Reuse an existing ACP session ID instead of creating a new one")
     var sessionID: String?
@@ -478,7 +486,11 @@ struct ACPClientConnectCommand: AsyncParsableCommand {
     }
 
     mutating func run() async throws {
-        if prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if prompt.isEmpty {
+            fputs("Error: --prompt must be provided at least once\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if prompt.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
             fputs("Error: --prompt must not be empty\n", stderr)
             throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
         }
@@ -552,7 +564,7 @@ struct ACPClientConnectCommand: AsyncParsableCommand {
             args: args,
             endpoint: endpoint,
             cwd: cwd,
-            prompt: prompt,
+            prompts: prompt,
             sessionID: sessionID,
             jsonOutput: json,
             requestTimeoutMS: requestTimeoutMS,
@@ -573,7 +585,7 @@ private func runACPClientConnect(
     args: [String],
     endpoint: String?,
     cwd: String,
-    prompt: String,
+    prompts: [String],
     sessionID: String?,
     jsonOutput: Bool,
     requestTimeoutMS: Int,
@@ -659,16 +671,17 @@ private func runACPClientConnect(
             let session = try await client.newSession(.init(cwd: cwd))
             effectiveSessionID = session.sessionId
         }
-        let result = try await client.prompt(.init(sessionId: effectiveSessionID, prompt: [.text(prompt)]))
-
-        if jsonOutput {
-            let json = try ACPCLIOutputFormatter.promptResultJSON(
-                sessionId: effectiveSessionID,
-                stopReason: result.stopReason.rawValue
-            )
-            print(json)
-        } else {
-            print("stopReason: \(result.stopReason.rawValue)")
+        for prompt in prompts {
+            let result = try await client.prompt(.init(sessionId: effectiveSessionID, prompt: [.text(prompt)]))
+            if jsonOutput {
+                let json = try ACPCLIOutputFormatter.promptResultJSON(
+                    sessionId: effectiveSessionID,
+                    stopReason: result.stopReason.rawValue
+                )
+                print(json)
+            } else {
+                print("stopReason: \(result.stopReason.rawValue)")
+            }
         }
     } catch {
         let code = SKICLIExitCodeMapper.exitCode(for: error)
