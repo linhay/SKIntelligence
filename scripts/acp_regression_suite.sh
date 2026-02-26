@@ -8,7 +8,7 @@ CODEX_PROBE_RETRIES="${CODEX_PROBE_RETRIES:-2}"
 CODEX_PROBE_RETRY_DELAY_SECONDS="${CODEX_PROBE_RETRY_DELAY_SECONDS:-2}"
 STRICT_CODEX_PROBES="${STRICT_CODEX_PROBES:-0}"
 SUMMARY_JSON_PATH="${ACP_SUITE_SUMMARY_JSON:-}"
-SUMMARY_SCHEMA_VERSION="2"
+SUMMARY_SCHEMA_VERSION="3"
 SUMMARY_LINES=""
 SUITE_RESULT="fail"
 SUITE_STARTED_AT_EPOCH="$(date +%s)"
@@ -73,9 +73,24 @@ write_summary_json() {
   local duration_seconds
   local summary_dir
   local summary_tmp
+  local count_total=0
+  local count_pass=0
+  local count_fail=0
+  local count_warn=0
+  local count_skipped=0
   finished_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((finished_at_epoch - SUITE_STARTED_AT_EPOCH))"
+  while IFS='|' read -r _index _stage _status _required _exit_code _started_at_utc _finished_at_utc _duration_seconds _attempts _message _log_path; do
+    [ -z "$_index" ] && continue
+    count_total=$((count_total + 1))
+    case "$_status" in
+      pass) count_pass=$((count_pass + 1)) ;;
+      fail) count_fail=$((count_fail + 1)) ;;
+      warn) count_warn=$((count_warn + 1)) ;;
+      skipped) count_skipped=$((count_skipped + 1)) ;;
+    esac
+  done <<< "$SUMMARY_LINES"
   summary_dir="$(dirname "$SUMMARY_JSON_PATH")"
   mkdir -p "$SUITE_LOG_DIR"
   mkdir -p "$summary_dir"
@@ -95,6 +110,13 @@ write_summary_json() {
     printf '  "startedAtUtc": "%s",\n' "$(json_escape "$SUITE_STARTED_AT_UTC")"
     printf '  "finishedAtUtc": "%s",\n' "$(json_escape "$finished_at_utc")"
     printf '  "durationSeconds": %s,\n' "$duration_seconds"
+    printf '  "stageCounts": {\n'
+    printf '    "total": %s,\n' "$count_total"
+    printf '    "pass": %s,\n' "$count_pass"
+    printf '    "fail": %s,\n' "$count_fail"
+    printf '    "warn": %s,\n' "$count_warn"
+    printf '    "skipped": %s\n' "$count_skipped"
+    printf '  },\n'
     printf '  "strictCodexProbes": %s,\n' "$STRICT_CODEX_PROBES"
     printf '  "runCodexProbes": %s,\n' "${RUN_CODEX_PROBES:-0}"
     printf '  "config": {\n'
@@ -135,6 +157,7 @@ write_summary_json() {
 
   # Lightweight guard against accidental format drift.
   if ! rg -q '"schemaVersion":' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"artifacts": \{' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stages": \[' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"logPath":' "$SUMMARY_JSON_PATH"; then
