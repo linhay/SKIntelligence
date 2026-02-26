@@ -254,6 +254,32 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--cmd is only valid for stdio transport"))
     }
 
+    func testClientWSRejectsArgsOption() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:8900",
+            "--args", "serve",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--args is only valid for stdio transport"))
+    }
+
+    func testClientWSCmdWithArgsShowsArgsEqualsHint() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:8900",
+            "--cmd", "/usr/bin/env",
+            "--args=--transport",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--cmd is only valid for stdio transport"))
+        XCTAssertTrue(result.stderr.contains("--args=--flag"))
+    }
+
     func testClientArgsOptionLikeTokenShowsHint() throws {
         let result = try runSKI(arguments: [
             "acp", "client", "connect",
