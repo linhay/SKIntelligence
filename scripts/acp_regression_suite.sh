@@ -9,6 +9,7 @@ CODEX_PROBE_RETRY_DELAY_SECONDS="${CODEX_PROBE_RETRY_DELAY_SECONDS:-2}"
 STRICT_CODEX_PROBES="${STRICT_CODEX_PROBES:-0}"
 SUMMARY_JSON_PATH="${ACP_SUITE_SUMMARY_JSON:-}"
 SUMMARY_SCHEMA_VERSION="3"
+SUMMARY_GENERATED_BY="scripts/acp_regression_suite.sh@1"
 SUMMARY_LINES=""
 SUITE_RESULT="fail"
 SUITE_STARTED_AT_EPOCH="$(date +%s)"
@@ -110,6 +111,7 @@ write_summary_json() {
   {
     printf '{\n'
     printf '  "schemaVersion": "%s",\n' "$(json_escape "$SUMMARY_SCHEMA_VERSION")"
+    printf '  "generatedBy": "%s",\n' "$(json_escape "$SUMMARY_GENERATED_BY")"
     printf '  "runId": "%s",\n' "$(json_escape "$SUITE_RUN_ID")"
     printf '  "gitHead": "%s",\n' "$(json_escape "$GIT_HEAD")"
     printf '  "gitDirty": %s,\n' "$GIT_DIRTY"
@@ -175,6 +177,7 @@ write_summary_json() {
 
   # Lightweight guard against accidental format drift.
   if ! rg -q '"schemaVersion":' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"generatedBy":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"exitCode":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
