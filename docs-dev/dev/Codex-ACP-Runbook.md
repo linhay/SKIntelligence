@@ -200,6 +200,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - summary 顶层 `artifacts.suiteLogDir` 给出本轮日志目录，每个 stage 追加 `logPath`，失败排查可直接跳转。
 - summary 顶层 `stageCounts` 提供 `total/pass/fail/warn/skipped` 聚合，适合 CI 直接做阈值判定。
 - summary 顶层 `failure` 提供首个失败 stage 与 exit code（成功时为 `null`），便于失败用例快速归因。
+- summary 顶层 `exitCode` 记录本次回归脚本退出码，便于 CI 统一消费 JSON 判定结果。
 - 脚本结束会输出一行 `[suite] counts ...`，包含分布与 `runCodexProbes/strictCodexProbes`，可直接在控制台/CI 日志快速观察本轮模式。
 
 示例：

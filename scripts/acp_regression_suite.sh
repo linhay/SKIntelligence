@@ -76,6 +76,7 @@ record_failure() {
 }
 
 write_summary_json() {
+  local suite_exit_code="$?"
   if [ -z "$SUMMARY_JSON_PATH" ]; then
     return 0
   fi
@@ -118,6 +119,7 @@ write_summary_json() {
     printf '    "arch": "%s"\n' "$(json_escape "$HOST_ARCH")"
     printf '  },\n'
     printf '  "result": "%s",\n' "$(json_escape "$SUITE_RESULT")"
+    printf '  "exitCode": %s,\n' "$suite_exit_code"
     if [ -n "$FAILURE_STAGE" ]; then
       printf '  "failure": {"stage":"%s","exitCode":%s},\n' "$(json_escape "$FAILURE_STAGE")" "$FAILURE_EXIT_CODE"
     else
@@ -173,6 +175,7 @@ write_summary_json() {
 
   # Lightweight guard against accidental format drift.
   if ! rg -q '"schemaVersion":' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"exitCode":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"artifacts": \{' "$SUMMARY_JSON_PATH" || \
