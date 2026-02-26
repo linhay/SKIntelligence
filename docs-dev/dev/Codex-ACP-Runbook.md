@@ -168,6 +168,7 @@ swift test --filter SKIToolShellTests --filter SKICLIProcessTests.testClientConn
 2. `ws` 跨连接 session 复用
 3. `stdio` 跨连接 session 复用失败边界
 4. `ws` `--session-ttl-ms=0` 立即过期边界（预期 `Session not found`, exit=4）
+5. `ws` `--request-timeout-ms=0` 禁用超时边界（预期 `stopReason=end_turn`）
 
 可选附加（需要 codex 环境）：
 ```bash
@@ -177,5 +178,5 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 说明：
 - `RUN_CODEX_PROBES=1` 会附加执行 `codex_acp_permission_probe.sh` 与 `codex_acp_multiturn_smoke.sh`。
 - 两个 codex 可选阶段都带 1 次自动重试，降低瞬时波动导致的假失败。
-- codex 阶段失败时会输出 `WARN` 但不阻断主套件 PASS/FAIL（主套件仅由前 4 个本地 ACP 阶段决定）。
+- codex 阶段失败时会输出 `WARN` 但不阻断主套件 PASS/FAIL（主套件仅由前 5 个本地 ACP 阶段决定）。
 - 可通过 `CODEX_ACP_TIMEOUT_MS` 调整 codex multi-turn 探针超时（默认 `60000`ms）。
