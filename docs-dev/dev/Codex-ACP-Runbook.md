@@ -103,6 +103,7 @@ swift run ski acp client connect \
 补充（本地 ws）：
 - 在同一个 `acp serve --transport ws` 进程生命周期内，`--session-id` 可跨连接复用。
 - 可用 `./scripts/acp_ws_session_reuse_probe.sh` 验证。
+- 若传入不存在的 `--session-id`，预期 upstream failure（exit=4）。
 
 ### 5.5 `--permission-decision deny` 与 allow 行为无明显差异
 

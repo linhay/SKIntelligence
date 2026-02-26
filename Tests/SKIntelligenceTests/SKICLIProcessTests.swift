@@ -827,6 +827,50 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertEqual(secondObject["sessionId"], reusedSessionID, "stdout: \(second.stdout)")
         XCTAssertEqual(secondObject["stopReason"], "end_turn")
     }
+
+    func testClientConnectViaWSWithNonexistentSessionIDFails() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18916
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--permission-mode", "permissive",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let result = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--session-id", "sess_nonexistent",
+                "--prompt", "hello",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(result.exitCode, 4, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        XCTAssertTrue(
+            result.stderr.contains("Could not route request to client owner by sessionId") || result.stderr.contains("Error:"),
+            "stderr: \(result.stderr)"
+        )
+    }
 }
 
 private extension SKICLIProcessTests {
