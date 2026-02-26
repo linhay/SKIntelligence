@@ -1064,6 +1064,45 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("stopReason: end_turn"), "stdout: \(result.stdout)")
     }
 
+    func testClientConnectViaWSServeProcessTimeoutZeroDisablesTimeout() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18917
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let result = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--request-timeout-ms", "0",
+                "--prompt", "ws process timeout zero check"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        XCTAssertTrue(result.stdout.contains("stopReason: end_turn"), "stdout: \(result.stdout)")
+    }
+
     func testClientConnectViaStdioWithNonexistentSessionIDFails() throws {
         guard let skiURL = findSKIBinary() else {
             throw XCTSkip("ski binary not found under .build")
