@@ -172,3 +172,7 @@ swift test --filter SKIToolShellTests --filter SKICLIProcessTests.testClientConn
 ```bash
 RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 ```
+
+说明：
+- `RUN_CODEX_PROBES=1` 会附加执行 `codex_acp_permission_probe.sh` 与 `codex_acp_multiturn_smoke.sh`。
+- 两个 codex 可选阶段都带 1 次自动重试，降低瞬时波动导致的假失败。
