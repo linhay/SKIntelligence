@@ -44,6 +44,24 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--prompt must be provided at least once"))
     }
 
+    func testClientConnectStdioRejectsMissingCmd() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-stdio",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--cmd is required for stdio transport"))
+    }
+
+    func testClientConnectWSRejectsMissingEndpoint() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--endpoint is required for ws transport"))
+    }
+
     func testClientConnectHelpContainsExamples() throws {
         let result = try runSKI(arguments: ["acp", "client", "connect", "--help"])
         XCTAssertEqual(result.exitCode, 0)
