@@ -122,14 +122,6 @@ struct ACPServeCommand: AsyncParsableCommand {
             fputs("Error: --session-ttl-ms must be >= 0\n", stderr)
             throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
         }
-        if permissionTimeoutMS < 0 {
-            fputs("Error: --permission-timeout-ms must be >= 0\n", stderr)
-            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
-        }
-        if maxInFlightSends <= 0 {
-            fputs("Error: --max-in-flight-sends must be > 0\n", stderr)
-            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
-        }
         if transport == .stdio, hasExplicitOption("--listen") {
             fputs("Error: --listen is only valid for ws transport\n", stderr)
             throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
@@ -140,6 +132,14 @@ struct ACPServeCommand: AsyncParsableCommand {
         }
         if permissionMode == .disabled, hasExplicitOption("--permission-timeout-ms") {
             fputs("Error: --permission-timeout-ms is only valid when --permission-mode is permissive or required\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if permissionTimeoutMS < 0 {
+            fputs("Error: --permission-timeout-ms must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if maxInFlightSends <= 0 {
+            fputs("Error: --max-in-flight-sends must be > 0\n", stderr)
             throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
         }
 

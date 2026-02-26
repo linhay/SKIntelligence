@@ -429,6 +429,18 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--permission-timeout-ms is only valid when --permission-mode is permissive or required"))
     }
 
+    func testServePermissionTimeoutScopeErrorOverridesRangeErrorWhenDisabled() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--permission-mode", "disabled",
+            "--permission-timeout-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--permission-timeout-ms is only valid when --permission-mode is permissive or required"))
+        XCTAssertFalse(result.stderr.contains("--permission-timeout-ms must be >= 0"))
+    }
+
     func testClientStdioRejectsEndpointOption() throws {
         let result = try runSKI(arguments: [
             "acp", "client", "connect",
@@ -602,6 +614,17 @@ final class SKICLIProcessTests: XCTestCase {
         ])
         XCTAssertEqual(result.exitCode, 2)
         XCTAssertTrue(result.stderr.contains("--max-in-flight-sends must be > 0"))
+    }
+
+    func testServeStdioMaxInFlightScopeErrorOverridesRangeError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--max-in-flight-sends=0"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--max-in-flight-sends is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--max-in-flight-sends must be > 0"))
     }
 
     func testClientConnectViaStdioServeProcessSucceeds() throws {
