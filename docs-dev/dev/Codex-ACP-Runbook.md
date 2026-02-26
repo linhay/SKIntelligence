@@ -99,6 +99,10 @@ swift run ski acp client connect \
 1. 使用 `session/new` 新建会话（默认行为）。
 2. 若需要会话连续性，优先在一次 `connect` 中重复使用多个 `--prompt`（单连接多轮）。
 
+补充（本地 ws）：
+- 在同一个 `acp serve --transport ws` 进程生命周期内，`--session-id` 可跨连接复用。
+- 可用 `./scripts/acp_ws_session_reuse_probe.sh` 验证。
+
 ### 5.5 `--permission-decision deny` 与 allow 行为无明显差异
 
 症状：某些 prompt 下 deny 仍可得到正常执行结果。

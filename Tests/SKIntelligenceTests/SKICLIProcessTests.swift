@@ -688,6 +688,72 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 4, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
         XCTAssertTrue(result.stderr.contains("Error:"), "stderr: \(result.stderr)")
     }
+
+    func testClientConnectViaWSReusingSessionIDAcrossConnectionsSucceeds() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18915
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--permission-mode", "permissive",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let first = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--prompt", "first",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+        XCTAssertEqual(first.exitCode, 0, "stderr: \(first.stderr)\nstdout: \(first.stdout)")
+        let lines = first.stdout
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { $0.contains("\"type\":\"prompt_result\"") }
+        let firstPromptResult = try XCTUnwrap(lines.last, "stdout: \(first.stdout)")
+        let firstObject = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(firstPromptResult.utf8)) as? [String: String])
+        let reusedSessionID = try XCTUnwrap(firstObject["sessionId"], "stdout: \(first.stdout)")
+
+        let second = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--session-id", reusedSessionID,
+                "--prompt", "second",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(second.exitCode, 0, "stderr: \(second.stderr)\nstdout: \(second.stdout)")
+        let secondLines = second.stdout
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { $0.contains("\"type\":\"prompt_result\"") }
+        let secondPromptResult = try XCTUnwrap(secondLines.last, "stdout: \(second.stdout)")
+        let secondObject = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(secondPromptResult.utf8)) as? [String: String])
+        XCTAssertEqual(secondObject["sessionId"], reusedSessionID, "stdout: \(second.stdout)")
+        XCTAssertEqual(secondObject["stopReason"], "end_turn")
+    }
 }
 
 private extension SKICLIProcessTests {
