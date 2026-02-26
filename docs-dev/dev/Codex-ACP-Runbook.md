@@ -182,4 +182,5 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - 可通过 `CODEX_ACP_TIMEOUT_MS` 调整 codex multi-turn 探针超时（默认 `60000`ms）。
 - 可通过 `CODEX_PROBE_RETRIES` 调整 codex 可选探针重试次数（默认 `2`，即失败后再重试 1 次）。
 - 可通过 `CODEX_PROBE_RETRY_DELAY_SECONDS` 设置 codex 可选探针重试间隔（默认 `2` 秒）。
+- 可通过 `STRICT_CODEX_PROBES=1` 启用严格模式：codex 可选探针失败会让套件直接失败（默认 `0` 为仅告警继续）。
 - 可通过 `ACP_PORT_BASE` 覆盖本地 ws 探针端口基线（默认 `18920`），用于并行执行多套回归避免端口冲突。

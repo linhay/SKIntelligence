@@ -6,6 +6,7 @@ cd "$ROOT_DIR"
 PORT_BASE="${ACP_PORT_BASE:-18920}"
 CODEX_PROBE_RETRIES="${CODEX_PROBE_RETRIES:-2}"
 CODEX_PROBE_RETRY_DELAY_SECONDS="${CODEX_PROBE_RETRY_DELAY_SECONDS:-2}"
+STRICT_CODEX_PROBES="${STRICT_CODEX_PROBES:-0}"
 
 if ! [[ "$CODEX_PROBE_RETRIES" =~ ^[0-9]+$ ]] || [ "$CODEX_PROBE_RETRIES" -lt 1 ]; then
   echo "CODEX_PROBE_RETRIES must be a positive integer" >&2
@@ -13,6 +14,10 @@ if ! [[ "$CODEX_PROBE_RETRIES" =~ ^[0-9]+$ ]] || [ "$CODEX_PROBE_RETRIES" -lt 1 
 fi
 if ! [[ "$CODEX_PROBE_RETRY_DELAY_SECONDS" =~ ^[0-9]+$ ]]; then
   echo "CODEX_PROBE_RETRY_DELAY_SECONDS must be a non-negative integer" >&2
+  exit 2
+fi
+if [ "$STRICT_CODEX_PROBES" != "0" ] && [ "$STRICT_CODEX_PROBES" != "1" ]; then
+  echo "STRICT_CODEX_PROBES must be 0 or 1" >&2
   exit 2
 fi
 
@@ -63,12 +68,22 @@ echo "[suite] 5/5 ws timeout-zero no-timeout boundary"
 
 if [ "${RUN_CODEX_PROBES:-0}" = "1" ]; then
   echo "[suite] 6/7 codex permission probe (optional)"
-  run_with_retry "./scripts/codex_acp_permission_probe.sh" "codex permission probe" "$CODEX_PROBE_RETRIES" "$CODEX_PROBE_RETRY_DELAY_SECONDS" || \
+  if ! run_with_retry "./scripts/codex_acp_permission_probe.sh" "codex permission probe" "$CODEX_PROBE_RETRIES" "$CODEX_PROBE_RETRY_DELAY_SECONDS"; then
+    if [ "$STRICT_CODEX_PROBES" = "1" ]; then
+      echo "[suite] FAIL codex permission probe failed under strict mode"
+      exit 1
+    fi
     echo "[suite] WARN codex permission probe exhausted retries (continuing)"
+  fi
 
   echo "[suite] 7/7 codex multi-turn smoke (optional)"
-  run_with_retry "./scripts/codex_acp_multiturn_smoke.sh" "codex multi-turn smoke" "$CODEX_PROBE_RETRIES" "$CODEX_PROBE_RETRY_DELAY_SECONDS" || \
+  if ! run_with_retry "./scripts/codex_acp_multiturn_smoke.sh" "codex multi-turn smoke" "$CODEX_PROBE_RETRIES" "$CODEX_PROBE_RETRY_DELAY_SECONDS"; then
+    if [ "$STRICT_CODEX_PROBES" = "1" ]; then
+      echo "[suite] FAIL codex multi-turn smoke failed under strict mode"
+      exit 1
+    fi
     echo "[suite] WARN codex multi-turn smoke exhausted retries (continuing)"
+  fi
 fi
 
 echo "[suite] PASS"
