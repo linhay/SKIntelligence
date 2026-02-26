@@ -194,6 +194,20 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Informational only."))
     }
 
+    func testServeHelpContainsTimeoutAndTTLParameters() throws {
+        let result = try runSKI(arguments: ["acp", "serve", "--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("--prompt-timeout-ms"))
+        XCTAssertTrue(result.stdout.contains("--session-ttl-ms"))
+        XCTAssertTrue(result.stdout.contains("--permission-timeout-ms"))
+    }
+
+    func testServeHelpMentionsPermissionModeValues() throws {
+        let result = try runSKI(arguments: ["acp", "serve", "--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("disabled | permissive | required"))
+    }
+
     func testClientConnectHelpMentionsCWDIsSentToServer() throws {
         let result = try runSKI(arguments: ["acp", "client", "connect", "--help"])
         XCTAssertEqual(result.exitCode, 0)
