@@ -478,6 +478,45 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertFalse(result.stderr.contains("--ws-heartbeat-ms must be >= 0"))
     }
 
+    func testClientStdioWSReconnectAttemptsScopeErrorOverridesRangeError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--ws-reconnect-attempts=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-attempts is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--ws-reconnect-attempts must be >= 0"))
+    }
+
+    func testClientStdioWSReconnectBaseDelayScopeErrorOverridesRangeError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--ws-reconnect-base-delay-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-base-delay-ms is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--ws-reconnect-base-delay-ms must be >= 0"))
+    }
+
+    func testClientStdioMaxInFlightScopeErrorOverridesRangeError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--max-in-flight-sends=0",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--max-in-flight-sends is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--max-in-flight-sends must be > 0"))
+    }
+
     func testClientStdioRejectsWSReconnectAttemptsOption() throws {
         let result = try runSKI(arguments: [
             "acp", "client", "connect",
