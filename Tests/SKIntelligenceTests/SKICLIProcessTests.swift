@@ -208,6 +208,13 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("disabled | permissive | required"))
     }
 
+    func testServeHelpContainsWSListenAndBackpressureOptions() throws {
+        let result = try runSKI(arguments: ["acp", "serve", "--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("--listen"))
+        XCTAssertTrue(result.stdout.contains("--max-in-flight-sends"))
+    }
+
     func testClientConnectHelpMentionsCWDIsSentToServer() throws {
         let result = try runSKI(arguments: ["acp", "client", "connect", "--help"])
         XCTAssertEqual(result.exitCode, 0)
