@@ -20,6 +20,11 @@ fi
 if [ -z "$SUITE_RUN_ID" ]; then
   SUITE_RUN_ID="$(date +%s)"
 fi
+GIT_HEAD="$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
+GIT_DIRTY="false"
+if ! git diff --quiet --ignore-submodules -- 2>/dev/null || ! git diff --cached --quiet --ignore-submodules -- 2>/dev/null; then
+  GIT_DIRTY="true"
+fi
 RETRY_LAST_ATTEMPTS=0
 RETRY_LAST_EXIT_CODE=0
 
@@ -73,6 +78,8 @@ write_summary_json() {
     printf '{\n'
     printf '  "schemaVersion": "%s",\n' "$(json_escape "$SUMMARY_SCHEMA_VERSION")"
     printf '  "runId": "%s",\n' "$(json_escape "$SUITE_RUN_ID")"
+    printf '  "gitHead": "%s",\n' "$(json_escape "$GIT_HEAD")"
+    printf '  "gitDirty": %s,\n' "$GIT_DIRTY"
     printf '  "result": "%s",\n' "$(json_escape "$SUITE_RESULT")"
     printf '  "startedAtUtc": "%s",\n' "$(json_escape "$SUITE_STARTED_AT_UTC")"
     printf '  "finishedAtUtc": "%s",\n' "$(json_escape "$finished_at_utc")"
