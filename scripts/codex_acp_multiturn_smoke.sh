@@ -45,8 +45,8 @@ fi
   --args=-y \
   --args=@zed-industries/codex-acp \
   --cwd "$ROOT_DIR" \
-  --prompt "multi-turn smoke one" \
-  --prompt "multi-turn smoke two" \
+  --prompt "reply OK-1 only" \
+  --prompt "reply OK-2 only" \
   --request-timeout-ms 30000 \
   --json >"$OUT" 2>"$ERR"
 
