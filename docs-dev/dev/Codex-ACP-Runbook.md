@@ -195,6 +195,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - 可通过 `ACP_SUITE_RUN_ID` 覆盖 `runId`（例如注入 CI job/build id）。
 - 每个 stage 记录 `startedAtUtc/finishedAtUtc`，可与外部日志按时间戳精确对齐。
 - 顶层包含 `gitHead` 与 `gitDirty`，用于把回归结果绑定到具体代码快照及工作区状态。
+- 顶层 `host`（`name/os/arch`）用于跨机器对比联调结果。
 
 示例：
 ```bash

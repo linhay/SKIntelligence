@@ -25,6 +25,9 @@ GIT_DIRTY="false"
 if ! git diff --quiet --ignore-submodules -- 2>/dev/null || ! git diff --cached --quiet --ignore-submodules -- 2>/dev/null; then
   GIT_DIRTY="true"
 fi
+HOST_NAME="$(hostname -s 2>/dev/null || hostname 2>/dev/null || echo unknown)"
+HOST_OS="$(uname -s 2>/dev/null || echo unknown)"
+HOST_ARCH="$(uname -m 2>/dev/null || echo unknown)"
 RETRY_LAST_ATTEMPTS=0
 RETRY_LAST_EXIT_CODE=0
 
@@ -80,6 +83,11 @@ write_summary_json() {
     printf '  "runId": "%s",\n' "$(json_escape "$SUITE_RUN_ID")"
     printf '  "gitHead": "%s",\n' "$(json_escape "$GIT_HEAD")"
     printf '  "gitDirty": %s,\n' "$GIT_DIRTY"
+    printf '  "host": {\n'
+    printf '    "name": "%s",\n' "$(json_escape "$HOST_NAME")"
+    printf '    "os": "%s",\n' "$(json_escape "$HOST_OS")"
+    printf '    "arch": "%s"\n' "$(json_escape "$HOST_ARCH")"
+    printf '  },\n'
     printf '  "result": "%s",\n' "$(json_escape "$SUITE_RESULT")"
     printf '  "startedAtUtc": "%s",\n' "$(json_escape "$SUITE_STARTED_AT_UTC")"
     printf '  "finishedAtUtc": "%s",\n' "$(json_escape "$finished_at_utc")"
