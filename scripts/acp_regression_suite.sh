@@ -12,10 +12,14 @@ run_with_retry() {
   local exit_code=0
 
   while [ "$attempt" -le "$max_attempts" ]; do
-    if eval "$cmd"; then
+    set +e
+    eval "$cmd"
+    exit_code=$?
+    set -e
+
+    if [ "$exit_code" -eq 0 ]; then
       return 0
     fi
-    exit_code=$?
     if [ "$attempt" -lt "$max_attempts" ]; then
       echo "[suite] WARN ${label} failed with exit=${exit_code}, retry ${attempt}/${max_attempts}"
     fi
