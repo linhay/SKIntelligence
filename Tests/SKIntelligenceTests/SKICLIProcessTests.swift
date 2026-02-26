@@ -689,6 +689,49 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("Error:"), "stderr: \(result.stderr)")
     }
 
+    func testClientConnectViaStdioReusingSessionIDAcrossConnectionsFails() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let first = try runSKI(
+            arguments: [
+                "acp", "client", "connect-stdio",
+                "--cmd", skiURL.path,
+                "--args", "acp", "--args", "serve", "--args=--transport", "--args=stdio",
+                "--prompt", "first",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+        XCTAssertEqual(first.exitCode, 0, "stderr: \(first.stderr)\nstdout: \(first.stdout)")
+        let firstLines = first.stdout
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { $0.contains("\"type\":\"prompt_result\"") }
+        let firstPromptResult = try XCTUnwrap(firstLines.last, "stdout: \(first.stdout)")
+        let firstObject = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(firstPromptResult.utf8)) as? [String: String])
+        let reusedSessionID = try XCTUnwrap(firstObject["sessionId"], "stdout: \(first.stdout)")
+
+        let second = try runSKI(
+            arguments: [
+                "acp", "client", "connect-stdio",
+                "--cmd", skiURL.path,
+                "--args", "acp", "--args", "serve", "--args=--transport", "--args=stdio",
+                "--session-id", reusedSessionID,
+                "--prompt", "second",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(second.exitCode, 4, "stderr: \(second.stderr)\nstdout: \(second.stdout)")
+        XCTAssertTrue(
+            second.stderr.contains("Resource not found") || second.stderr.contains("Error:"),
+            "stderr: \(second.stderr)"
+        )
+    }
+
     func testClientConnectViaWSReusingSessionIDAcrossConnectionsSucceeds() throws {
         guard let skiURL = findSKIBinary() else {
             throw XCTSkip("ski binary not found under .build")

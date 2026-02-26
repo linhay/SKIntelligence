@@ -98,6 +98,7 @@ swift run ski acp client connect \
 处理：
 1. 使用 `session/new` 新建会话（默认行为）。
 2. 若需要会话连续性，优先在一次 `connect` 中重复使用多个 `--prompt`（单连接多轮）。
+3. 可用 `./scripts/acp_stdio_session_reuse_probe.sh` 验证该失败边界（预期 exit=4）。
 
 补充（本地 ws）：
 - 在同一个 `acp serve --transport ws` 进程生命周期内，`--session-id` 可跨连接复用。
