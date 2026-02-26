@@ -12,6 +12,8 @@ SUMMARY_LINES=""
 SUITE_RESULT="fail"
 SUITE_STARTED_AT_EPOCH="$(date +%s)"
 SUITE_STARTED_AT_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+RETRY_LAST_ATTEMPTS=0
+RETRY_LAST_EXIT_CODE=0
 
 if ! [[ "$CODEX_PROBE_RETRIES" =~ ^[0-9]+$ ]] || [ "$CODEX_PROBE_RETRIES" -lt 1 ]; then
   echo "CODEX_PROBE_RETRIES must be a positive integer" >&2
@@ -35,8 +37,10 @@ append_summary() {
   local status="$2"
   local required="$3"
   local exit_code="$4"
-  local message="$5"
-  SUMMARY_LINES+="${stage}|${status}|${required}|${exit_code}|${message}"$'\n'
+  local duration_seconds="$5"
+  local attempts="$6"
+  local message="$7"
+  SUMMARY_LINES+="${stage}|${status}|${required}|${exit_code}|${duration_seconds}|${attempts}|${message}"$'\n'
 }
 
 write_summary_json() {
@@ -67,17 +71,19 @@ write_summary_json() {
     printf '  },\n'
     printf '  "stages": [\n'
     local first=1
-    while IFS='|' read -r stage status required exit_code message; do
+    while IFS='|' read -r stage status required exit_code duration_seconds attempts message; do
       [ -z "$stage" ] && continue
       if [ "$first" -eq 0 ]; then
         printf ',\n'
       fi
       first=0
-      printf '    {"stage":"%s","status":"%s","required":%s,"exitCode":%s,"message":"%s"}' \
+      printf '    {"stage":"%s","status":"%s","required":%s,"exitCode":%s,"durationSeconds":%s,"attempts":%s,"message":"%s"}' \
         "$(json_escape "$stage")" \
         "$(json_escape "$status")" \
         "$required" \
         "$exit_code" \
+        "$duration_seconds" \
+        "$attempts" \
         "$(json_escape "$message")"
     done <<< "$SUMMARY_LINES"
     printf '\n  ]\n'
@@ -95,6 +101,8 @@ run_with_retry() {
   local attempt=1
   local exit_code=0
 
+  RETRY_LAST_ATTEMPTS=0
+  RETRY_LAST_EXIT_CODE=0
   while [ "$attempt" -le "$max_attempts" ]; do
     set +e
     eval "$cmd"
@@ -102,6 +110,8 @@ run_with_retry() {
     set -e
 
     if [ "$exit_code" -eq 0 ]; then
+      RETRY_LAST_ATTEMPTS="$attempt"
+      RETRY_LAST_EXIT_CODE="$exit_code"
       return 0
     fi
     if [ "$attempt" -lt "$max_attempts" ]; then
@@ -113,6 +123,8 @@ run_with_retry() {
     attempt=$((attempt + 1))
   done
 
+  RETRY_LAST_ATTEMPTS="$max_attempts"
+  RETRY_LAST_EXIT_CODE="$exit_code"
   echo "[suite] FAIL ${label} exit=${exit_code}"
   return "$exit_code"
 }
@@ -121,16 +133,22 @@ run_required_stage() {
   local stage="$1"
   local label="$2"
   local cmd="$3"
+  local started_at_epoch
+  local ended_at_epoch
+  local duration_seconds
+  started_at_epoch="$(date +%s)"
   echo "$label"
   set +e
   eval "$cmd"
   local exit_code=$?
   set -e
+  ended_at_epoch="$(date +%s)"
+  duration_seconds="$((ended_at_epoch - started_at_epoch))"
   if [ "$exit_code" -eq 0 ]; then
-    append_summary "$stage" "pass" "true" "$exit_code" "ok"
+    append_summary "$stage" "pass" "true" "$exit_code" "$duration_seconds" "1" "ok"
     return 0
   fi
-  append_summary "$stage" "fail" "true" "$exit_code" "required stage failed"
+  append_summary "$stage" "fail" "true" "$exit_code" "$duration_seconds" "1" "required stage failed"
   return "$exit_code"
 }
 
@@ -138,17 +156,25 @@ run_optional_stage() {
   local stage="$1"
   local label="$2"
   local cmd="$3"
+  local started_at_epoch
+  local ended_at_epoch
+  local duration_seconds
+  started_at_epoch="$(date +%s)"
   echo "$label"
   if run_with_retry "$cmd" "$stage" "$CODEX_PROBE_RETRIES" "$CODEX_PROBE_RETRY_DELAY_SECONDS"; then
-    append_summary "$stage" "pass" "false" "0" "ok"
+    ended_at_epoch="$(date +%s)"
+    duration_seconds="$((ended_at_epoch - started_at_epoch))"
+    append_summary "$stage" "pass" "false" "0" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "ok"
     return 0
   fi
+  ended_at_epoch="$(date +%s)"
+  duration_seconds="$((ended_at_epoch - started_at_epoch))"
   if [ "$STRICT_CODEX_PROBES" = "1" ]; then
-    append_summary "$stage" "fail" "false" "1" "failed under strict mode"
+    append_summary "$stage" "fail" "false" "$RETRY_LAST_EXIT_CODE" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed under strict mode"
     echo "[suite] FAIL ${stage} failed under strict mode"
     return 1
   fi
-  append_summary "$stage" "warn" "false" "1" "failed but allowed in non-strict mode"
+  append_summary "$stage" "warn" "false" "$RETRY_LAST_EXIT_CODE" "$duration_seconds" "$RETRY_LAST_ATTEMPTS" "failed but allowed in non-strict mode"
   echo "[suite] WARN ${stage} exhausted retries (continuing)"
   return 0
 }

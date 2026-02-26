@@ -186,6 +186,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - 可通过 `ACP_PORT_BASE` 覆盖本地 ws 探针端口基线（默认 `18920`），用于并行执行多套回归避免端口冲突。
 - 可通过 `ACP_SUITE_SUMMARY_JSON=/path/to/summary.json` 输出机器可读的回归汇总（包含每阶段 `status/exitCode`）。
 - 汇总中包含 `startedAtUtc/finishedAtUtc/durationSeconds` 与 `config`（端口基线、重试参数、strict 开关）便于排障追踪。
+- 每个 `stages[]` 项含 `durationSeconds` 与 `attempts`，可快速识别慢阶段和重试抖动阶段。
 
 示例：
 ```bash
