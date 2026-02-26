@@ -205,6 +205,10 @@ run_required_stage() {
   local log_path="${SUITE_LOG_DIR}/${index}_${stage}.log"
   mkdir -p "$SUITE_LOG_DIR"
   : > "$log_path"
+  {
+    echo "[attempt 1/1] $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    echo "$ $cmd"
+  } >> "$log_path"
   started_at_epoch="$(date +%s)"
   started_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo "$label"
