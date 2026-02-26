@@ -472,6 +472,19 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--permission-timeout-ms is only valid when --permission-mode is permissive or required"))
     }
 
+    func testServeWSPermissionTimeoutScopeErrorOverridesRangeErrorWhenDisabled() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:8900",
+            "--permission-mode", "disabled",
+            "--permission-timeout-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--permission-timeout-ms is only valid when --permission-mode is permissive or required"))
+        XCTAssertFalse(result.stderr.contains("--permission-timeout-ms must be >= 0"))
+    }
+
     func testServePermissionTimeoutScopeErrorOverridesRangeErrorWhenDisabled() throws {
         let result = try runSKI(arguments: [
             "acp", "serve",

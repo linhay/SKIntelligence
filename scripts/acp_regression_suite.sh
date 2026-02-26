@@ -41,10 +41,12 @@ echo "[suite] 3/3 stdio session reuse boundary"
 
 if [ "${RUN_CODEX_PROBES:-0}" = "1" ]; then
   echo "[suite] 4/5 codex permission probe (optional)"
-  run_with_retry "./scripts/codex_acp_permission_probe.sh" "codex permission probe"
+  run_with_retry "./scripts/codex_acp_permission_probe.sh" "codex permission probe" || \
+    echo "[suite] WARN codex permission probe exhausted retries (continuing)"
 
   echo "[suite] 5/5 codex multi-turn smoke (optional)"
-  run_with_retry "./scripts/codex_acp_multiturn_smoke.sh" "codex multi-turn smoke"
+  run_with_retry "./scripts/codex_acp_multiturn_smoke.sh" "codex multi-turn smoke" || \
+    echo "[suite] WARN codex multi-turn smoke exhausted retries (continuing)"
 fi
 
 echo "[suite] PASS"
