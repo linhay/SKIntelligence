@@ -134,8 +134,11 @@ write_summary_json() {
   mv "$summary_tmp" "$SUMMARY_JSON_PATH"
 
   # Lightweight guard against accidental format drift.
-  if ! rg -q '"schemaVersion":' "$SUMMARY_JSON_PATH" || ! rg -q '"stages": \[' "$SUMMARY_JSON_PATH"; then
-    echo "summary json validation failed: missing schemaVersion or stages" >&2
+  if ! rg -q '"schemaVersion":' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"artifacts": \{' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"stages": \[' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"logPath":' "$SUMMARY_JSON_PATH"; then
+    echo "summary json validation failed: missing required fields" >&2
     return 1
   fi
 }
