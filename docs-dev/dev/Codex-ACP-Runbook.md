@@ -191,6 +191,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - summary 文件采用原子写入（临时文件后 `mv`），避免 CI 读取到半写入内容。
 - summary 顶层包含 `schemaVersion`（当前为 `1`），下游解析建议先校验版本再消费字段。
 - `stages[]` 包含固定 `index`（1..7），便于前端/报表按稳定顺序展示。
+- 顶层 `runId` 为单次套件执行唯一标识，可用于关联同轮的日志与 summary。
 
 示例：
 ```bash

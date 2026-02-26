@@ -13,6 +13,10 @@ SUMMARY_LINES=""
 SUITE_RESULT="fail"
 SUITE_STARTED_AT_EPOCH="$(date +%s)"
 SUITE_STARTED_AT_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+SUITE_RUN_ID="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 12 || true)"
+if [ -z "$SUITE_RUN_ID" ]; then
+  SUITE_RUN_ID="$(date +%s)"
+fi
 RETRY_LAST_ATTEMPTS=0
 RETRY_LAST_EXIT_CODE=0
 
@@ -63,6 +67,7 @@ write_summary_json() {
   {
     printf '{\n'
     printf '  "schemaVersion": "%s",\n' "$(json_escape "$SUMMARY_SCHEMA_VERSION")"
+    printf '  "runId": "%s",\n' "$(json_escape "$SUITE_RUN_ID")"
     printf '  "result": "%s",\n' "$(json_escape "$SUITE_RESULT")"
     printf '  "startedAtUtc": "%s",\n' "$(json_escape "$SUITE_STARTED_AT_UTC")"
     printf '  "finishedAtUtc": "%s",\n' "$(json_escape "$finished_at_utc")"
