@@ -62,6 +62,29 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--endpoint is required for ws transport"))
     }
 
+    func testClientConnectStdioRejectsNegativeRequestTimeout() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-stdio",
+            "--cmd", "/usr/bin/env",
+            "--args", "cat",
+            "--request-timeout-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--request-timeout-ms must be >= 0"))
+    }
+
+    func testClientConnectWSRejectsNegativeRequestTimeout() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--request-timeout-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--request-timeout-ms must be >= 0"))
+    }
+
     func testClientConnectHelpContainsExamples() throws {
         let result = try runSKI(arguments: ["acp", "client", "connect", "--help"])
         XCTAssertEqual(result.exitCode, 0)
