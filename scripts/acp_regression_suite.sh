@@ -302,7 +302,7 @@ print_stage_counts_line() {
       skipped) count_skipped=$((count_skipped + 1)) ;;
     esac
   done <<< "$SUMMARY_LINES"
-  echo "[suite] counts total=${count_total} pass=${count_pass} fail=${count_fail} warn=${count_warn} skipped=${count_skipped}"
+  echo "[suite] counts total=${count_total} pass=${count_pass} fail=${count_fail} warn=${count_warn} skipped=${count_skipped} runCodexProbes=${RUN_CODEX_PROBES:-0} strictCodexProbes=${STRICT_CODEX_PROBES}"
 }
 
 run_required_stage "1" "ws_permission_matrix" "[suite] 1/5 ws permission matrix" "./scripts/acp_ws_permission_matrix.sh \"$((PORT_BASE + 0))\""
