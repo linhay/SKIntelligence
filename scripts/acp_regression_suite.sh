@@ -30,21 +30,24 @@ run_with_retry() {
   return "$exit_code"
 }
 
-echo "[suite] 1/3 ws permission matrix"
+echo "[suite] 1/4 ws permission matrix"
 ./scripts/acp_ws_permission_matrix.sh
 
-echo "[suite] 2/3 ws session reuse"
+echo "[suite] 2/4 ws session reuse"
 ./scripts/acp_ws_session_reuse_probe.sh
 
-echo "[suite] 3/3 stdio session reuse boundary"
+echo "[suite] 3/4 stdio session reuse boundary"
 ./scripts/acp_stdio_session_reuse_probe.sh
 
+echo "[suite] 4/4 ws ttl-zero immediate-expiry boundary"
+./scripts/acp_ws_ttl_zero_probe.sh
+
 if [ "${RUN_CODEX_PROBES:-0}" = "1" ]; then
-  echo "[suite] 4/5 codex permission probe (optional)"
+  echo "[suite] 5/6 codex permission probe (optional)"
   run_with_retry "./scripts/codex_acp_permission_probe.sh" "codex permission probe" || \
     echo "[suite] WARN codex permission probe exhausted retries (continuing)"
 
-  echo "[suite] 5/5 codex multi-turn smoke (optional)"
+  echo "[suite] 6/6 codex multi-turn smoke (optional)"
   run_with_retry "./scripts/codex_acp_multiturn_smoke.sh" "codex multi-turn smoke" || \
     echo "[suite] WARN codex multi-turn smoke exhausted retries (continuing)"
 fi
