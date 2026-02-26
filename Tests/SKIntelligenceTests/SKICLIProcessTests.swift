@@ -245,6 +245,29 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--session-id must not be empty when provided"))
     }
 
+    func testClientConnectWSRejectsEmptySessionID() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--session-id", "   ",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--session-id must not be empty when provided"))
+    }
+
+    func testClientConnectGenericWSRejectsEmptySessionID() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--session-id", "   ",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--session-id must not be empty when provided"))
+    }
+
     func testClientConnectRejectsEmptyCmdForStdio() throws {
         let result = try runSKI(arguments: [
             "acp", "client", "connect",
