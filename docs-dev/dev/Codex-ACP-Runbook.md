@@ -181,4 +181,5 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - codex 阶段失败时会输出 `WARN` 但不阻断主套件 PASS/FAIL（主套件仅由前 5 个本地 ACP 阶段决定）。
 - 可通过 `CODEX_ACP_TIMEOUT_MS` 调整 codex multi-turn 探针超时（默认 `60000`ms）。
 - 可通过 `CODEX_PROBE_RETRIES` 调整 codex 可选探针重试次数（默认 `2`，即失败后再重试 1 次）。
+- 可通过 `CODEX_PROBE_RETRY_DELAY_SECONDS` 设置 codex 可选探针重试间隔（默认 `2` 秒）。
 - 可通过 `ACP_PORT_BASE` 覆盖本地 ws 探针端口基线（默认 `18920`），用于并行执行多套回归避免端口冲突。
