@@ -418,6 +418,37 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--listen must be in host:port format with port in 1...65535"))
     }
 
+    func testServeRejectsNegativePromptTimeout() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--prompt-timeout-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--prompt-timeout-ms must be >= 0"))
+    }
+
+    func testServeRejectsNegativeSessionTTL() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--session-ttl-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--session-ttl-ms must be >= 0"))
+    }
+
+    func testServeRejectsNegativePermissionTimeoutWhenModeEnabled() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--permission-mode", "permissive",
+            "--permission-timeout-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--permission-timeout-ms must be >= 0"))
+    }
+
     func testServePermissionTimeoutOptionRejectedWhenPermissionModeDisabled() throws {
         let result = try runSKI(arguments: [
             "acp", "serve",
