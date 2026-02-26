@@ -11,6 +11,7 @@ fi
 
 OUT="/tmp/codex_acp_multiturn_smoke.jsonl"
 ERR="/tmp/codex_acp_multiturn_smoke.err"
+TIMEOUT_MS="${CODEX_ACP_TIMEOUT_MS:-60000}"
 
 BIN=""
 for c in \
@@ -47,7 +48,7 @@ fi
   --cwd "$ROOT_DIR" \
   --prompt "reply OK-1 only" \
   --prompt "reply OK-2 only" \
-  --request-timeout-ms 30000 \
+  --request-timeout-ms "$TIMEOUT_MS" \
   --json >"$OUT" 2>"$ERR"
 
 count="$(rg -c '"type":"prompt_result"' "$OUT" || true)"

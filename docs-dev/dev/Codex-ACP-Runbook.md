@@ -178,3 +178,4 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - `RUN_CODEX_PROBES=1` 会附加执行 `codex_acp_permission_probe.sh` 与 `codex_acp_multiturn_smoke.sh`。
 - 两个 codex 可选阶段都带 1 次自动重试，降低瞬时波动导致的假失败。
 - codex 阶段失败时会输出 `WARN` 但不阻断主套件 PASS/FAIL（主套件仅由前 4 个本地 ACP 阶段决定）。
+- 可通过 `CODEX_ACP_TIMEOUT_MS` 调整 codex multi-turn 探针超时（默认 `60000`ms）。
