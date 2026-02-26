@@ -453,6 +453,19 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--endpoint is only valid for ws transport"))
     }
 
+    func testClientStdioEndpointScopeErrorOverridesEndpointFormatError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--endpoint", "invalid",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--endpoint is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--endpoint must use ws:// or wss://"))
+    }
+
     func testClientStdioRejectsWSHeartbeatOption() throws {
         let result = try runSKI(arguments: [
             "acp", "client", "connect",
@@ -571,6 +584,17 @@ final class SKICLIProcessTests: XCTestCase {
         ])
         XCTAssertEqual(result.exitCode, 2)
         XCTAssertTrue(result.stderr.contains("--listen is only valid for ws transport"))
+    }
+
+    func testServeStdioListenScopeErrorOverridesListenFormatError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--listen", "invalid"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--listen is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--listen must be in host:port format"))
     }
 
     func testClientStdioRejectsMaxInFlightSendsOption() throws {
