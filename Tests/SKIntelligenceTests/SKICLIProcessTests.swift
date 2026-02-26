@@ -303,7 +303,7 @@ final class SKICLIProcessTests: XCTestCase {
             "--prompt", "hi"
         ])
         XCTAssertEqual(result.exitCode, 2)
-        XCTAssertTrue(result.stderr.contains("--cmd is only valid for stdio transport"))
+        XCTAssertTrue(result.stderr.contains("--cmd is only valid for stdio transport (if child args start with '-', pass as --args=--flag)"))
         XCTAssertTrue(result.stderr.contains("--args=--flag"))
     }
 
