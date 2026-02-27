@@ -102,6 +102,7 @@ write_summary_json() {
   local required_failed=0
   local counts_consistent="true"
   local ci_recommendation="fail"
+  local summary_hash="unavailable"
   finished_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((finished_at_epoch - SUITE_STARTED_AT_EPOCH))"
@@ -143,6 +144,17 @@ write_summary_json() {
   else
     ci_recommendation="pass"
   fi
+  if command -v shasum >/dev/null 2>&1; then
+    summary_hash="$(printf '%s|%s|%s|%s|%s|%s|%s\n%s\n' \
+      "$SUITE_RUN_ID" \
+      "$GIT_HEAD" \
+      "$PORT_BASE" \
+      "$CODEX_PROBE_RETRIES" \
+      "$CODEX_PROBE_RETRY_DELAY_SECONDS" \
+      "$STRICT_CODEX_PROBES" \
+      "${RUN_CODEX_PROBES:-0}" \
+      "$SUMMARY_LINES" | shasum -a 256 | awk '{print $1}')"
+  fi
   summary_dir="$(dirname "$SUMMARY_JSON_PATH")"
   mkdir -p "$SUITE_LOG_DIR"
   mkdir -p "$summary_dir"
@@ -152,6 +164,7 @@ write_summary_json() {
     printf '  "schemaVersion": "%s",\n' "$(json_escape "$SUMMARY_SCHEMA_VERSION")"
     printf '  "generatedBy": "%s",\n' "$(json_escape "$SUMMARY_GENERATED_BY")"
     printf '  "runId": "%s",\n' "$(json_escape "$SUITE_RUN_ID")"
+    printf '  "summaryHash": "%s",\n' "$(json_escape "$summary_hash")"
     printf '  "gitHead": "%s",\n' "$(json_escape "$GIT_HEAD")"
     printf '  "gitDirty": %s,\n' "$GIT_DIRTY"
     printf '  "host": {\n'
@@ -253,6 +266,7 @@ write_summary_json() {
     if ! jq -e '
       (.schemaVersion | type == "string") and
       (.generatedBy | type == "string") and
+      (.summaryHash | type == "string") and
       (.exitCode | type == "number") and
       (.stageCounts | type == "object") and
       (.ciRecommendation | type == "string") and
@@ -274,6 +288,7 @@ write_summary_json() {
   else
     if ! rg -q '"schemaVersion":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"generatedBy":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"summaryHash":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"exitCode":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
