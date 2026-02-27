@@ -103,6 +103,23 @@ json_object_stage_exit_code_map() {
   printf '}'
 }
 
+json_object_stage_duration_map() {
+  local lines="$1"
+  local first=1
+  local stage
+  local duration_seconds
+  printf '{'
+  while IFS='|' read -r _index stage _status _required _exit_code _started_at_utc _finished_at_utc duration_seconds _attempts _message _log_path; do
+    [ -z "$stage" ] && continue
+    if [ "$first" -eq 0 ]; then
+      printf ','
+    fi
+    first=0
+    printf '"%s":%s' "$(json_escape "$stage")" "$duration_seconds"
+  done <<< "$lines"
+  printf '}'
+}
+
 json_array_required_failed_stages() {
   local lines="$1"
   local first=1
@@ -278,6 +295,7 @@ write_summary_json() {
     printf '  "requiredFailedStages": %s,\n' "$(json_array_required_failed_stages "$SUMMARY_LINES")"
     printf '  "stageStatusMap": %s,\n' "$(json_object_stage_status_map "$SUMMARY_LINES")"
     printf '  "stageExitCodeMap": %s,\n' "$(json_object_stage_exit_code_map "$SUMMARY_LINES")"
+    printf '  "stageDurationSecondsMap": %s,\n' "$(json_object_stage_duration_map "$SUMMARY_LINES")"
     printf '  "ciRecommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
     printf '  "resultReason": "%s",\n' "$(json_escape "$result_reason")"
     if [ "$count_total" -eq "$count_pass" ]; then
@@ -364,6 +382,7 @@ write_summary_json() {
       (.requiredFailedStages | type == "array") and
       (.stageStatusMap | type == "object") and
       (.stageExitCodeMap | type == "object") and
+      (.stageDurationSecondsMap | type == "object") and
       (.ciRecommendation | type == "string") and
       (.resultReason | type == "string") and
       (.allStagesPassed | type == "boolean") and
@@ -393,6 +412,7 @@ write_summary_json() {
        ! rg -q '"requiredFailedStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageStatusMap":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageExitCodeMap":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"stageDurationSecondsMap":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"ciRecommendation":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"resultReason":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"allStagesPassed":' "$SUMMARY_JSON_PATH" || \
