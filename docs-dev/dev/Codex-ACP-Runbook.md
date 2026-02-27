@@ -214,6 +214,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - summary 增加 `failedStages` 与 `nonPassStages` 数组，直接列出失败/非通过阶段名，便于快速定位。
 - summary 增加 `stageStatusMap`（`stage -> status`），方便规则引擎直接按阶段键查询状态。
 - summary 增加 `requiredFailedStages`，只列出必跑且未通过的阶段，便于 CI 直接构建阻塞原因。
+- summary 增加 `stageExitCodeMap`（`stage -> exitCode`），便于失败归因规则直接读取阶段退出码。
 - 脚本结束会输出一行 `[suite] counts ...`，包含分布、`requiredPassed`、`ciRecommendation` 与 `runCodexProbes/strictCodexProbes`，可直接在控制台/CI 日志快速观察本轮模式。
 
 示例：
