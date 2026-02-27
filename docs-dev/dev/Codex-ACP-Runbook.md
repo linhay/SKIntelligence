@@ -231,3 +231,4 @@ cat /tmp/acp_suite_summary.json
 - summary 增加 `stageFinishedAtMap`（`stage -> finishedAtUtc`），可与 `stageStartedAtMap` 组合做阶段窗口分析。
 - summary 增加 `stageIndexMap`（`stage -> index`），便于外部系统快速恢复阶段执行顺序。
 - summary 增加 `probeMode`（`disabled | non_strict | strict`），用于直接表达探针运行策略。
+- summary 增加 `warnStages` 与 `skippedStages` 数组，便于告警系统直接消费异常阶段集合。

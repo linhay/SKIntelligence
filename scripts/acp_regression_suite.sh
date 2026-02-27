@@ -315,6 +315,8 @@ write_summary_json() {
   local summary_hash="unavailable"
   local failed_stages=""
   local non_pass_stages=""
+  local warn_stages=""
+  local skipped_stages=""
   finished_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((finished_at_epoch - SUITE_STARTED_AT_EPOCH))"
@@ -326,6 +328,12 @@ write_summary_json() {
     fi
     if [ "$_status" = "fail" ]; then
       failed_stages+="${_stage}"$'\n'
+    fi
+    if [ "$_status" = "warn" ]; then
+      warn_stages+="${_stage}"$'\n'
+    fi
+    if [ "$_status" = "skipped" ]; then
+      skipped_stages+="${_stage}"$'\n'
     fi
     if [ "$_required" = "true" ]; then
       required_total=$((required_total + 1))
@@ -419,6 +427,8 @@ write_summary_json() {
     printf '  },\n'
     printf '  "failedStages": %s,\n' "$(json_array_from_lines "$failed_stages")"
     printf '  "nonPassStages": %s,\n' "$(json_array_from_lines "$non_pass_stages")"
+    printf '  "warnStages": %s,\n' "$(json_array_from_lines "$warn_stages")"
+    printf '  "skippedStages": %s,\n' "$(json_array_from_lines "$skipped_stages")"
     printf '  "requiredFailedStages": %s,\n' "$(json_array_required_failed_stages "$SUMMARY_LINES")"
     printf '  "stageStatusMap": %s,\n' "$(json_object_stage_status_map "$SUMMARY_LINES")"
     printf '  "stageExitCodeMap": %s,\n' "$(json_object_stage_exit_code_map "$SUMMARY_LINES")"
@@ -514,6 +524,8 @@ write_summary_json() {
       (.stageCounts | type == "object") and
       (.failedStages | type == "array") and
       (.nonPassStages | type == "array") and
+      (.warnStages | type == "array") and
+      (.skippedStages | type == "array") and
       (.requiredFailedStages | type == "array") and
       (.stageStatusMap | type == "object") and
       (.stageExitCodeMap | type == "object") and
@@ -552,6 +564,8 @@ write_summary_json() {
        ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"failedStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"nonPassStages":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"warnStages":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"skippedStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredFailedStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageStatusMap":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageExitCodeMap":' "$SUMMARY_JSON_PATH" || \
