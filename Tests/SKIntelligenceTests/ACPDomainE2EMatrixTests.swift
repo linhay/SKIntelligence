@@ -51,6 +51,14 @@ final class ACPDomainE2EMatrixTests: XCTestCase {
         XCTAssertEqual(ws, .cancelled)
     }
 
+    func testSessionStopPromptContractConsistentBetweenStdioAndWebSocket() async throws {
+        let stdio = try await runSessionStopPromptScenario(transport: .stdioInProcess)
+        let ws = try await runSessionStopPromptScenario(transport: .wsInProcess)
+
+        XCTAssertEqual(stdio, .cancelled)
+        XCTAssertEqual(ws, .cancelled)
+    }
+
     func testCancelRequestPromptContractConsistentBetweenStdioAndWebSocket() async throws {
         let stdio = try await runCancelRequestPromptScenario(transport: .stdioInProcess)
         let ws = try await runCancelRequestPromptScenario(transport: .wsInProcess)
@@ -306,6 +314,23 @@ private extension ACPDomainE2EMatrixTests {
 
             try await Task.sleep(nanoseconds: 100_000_000)
             try await client.cancel(.init(sessionId: session.sessionId))
+
+            let result = try await promptTask.value
+            return result.stopReason
+        }
+    }
+
+    func runSessionStopPromptScenario(transport: MatrixTransport) async throws -> ACPStopReason {
+        try await withClient(transport: transport, allowPermission: true, modelBehavior: .slow) { client in
+            _ = try await client.initialize(.init(protocolVersion: 1))
+            let session = try await client.newSession(.init(cwd: FileManager.default.currentDirectoryPath))
+
+            let promptTask = Task {
+                try await client.prompt(.init(sessionId: session.sessionId, prompt: [.text("stop me")]))
+            }
+
+            try await Task.sleep(nanoseconds: 100_000_000)
+            _ = try await client.stopSession(.init(sessionId: session.sessionId))
 
             let result = try await promptTask.value
             return result.stopReason
