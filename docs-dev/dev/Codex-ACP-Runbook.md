@@ -235,3 +235,4 @@ cat /tmp/acp_suite_summary.json
 - summary 增加 `requiredStages` 与 `optionalStages` 数组，便于下游直接按必跑/可选阶段分组展示。
 - summary 增加 `nonPassOptionalStages`，用于直接获取“可选阶段非通过”集合（降级放行视角）。
 - summary 增加 `optionalPassStages`，与 `nonPassOptionalStages` 形成可选阶段通过/非通过对偶视图。
+- summary 增加 `hasOptionalNonPass`（boolean），用于快速判断可选阶段是否存在非通过。
