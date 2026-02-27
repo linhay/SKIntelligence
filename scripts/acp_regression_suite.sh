@@ -718,6 +718,13 @@ write_summary_json() {
     printf '    "compatPath": "%s",\n' "compatV4"
     printf '    "schemaVersionPath": "%s"\n' "schemaVersion"
     printf '  },\n'
+    printf '  "summaryIntegrity": {\n'
+    printf '    "countsConsistent": %s,\n' "$counts_consistent"
+    printf '    "hasSummaryHash": %s,\n' "$([ "$summary_hash" != "unavailable" ] && echo true || echo false)"
+    printf '    "hasRunId": %s,\n' "$([ -n "$SUITE_RUN_ID" ] && echo true || echo false)"
+    printf '    "hasStageLogs": %s,\n' "$([ -n "$SUITE_LOG_DIR" ] && echo true || echo false)"
+    printf '    "ok": %s\n' "$([ "$counts_consistent" = "true" ] && [ "$summary_hash" != "unavailable" ] && [ -n "$SUITE_RUN_ID" ] && [ -n "$SUITE_LOG_DIR" ] && echo true || echo false)"
+    printf '  },\n'
     printf '  "requiredStageCounts": {\n'
     printf '    "total": %s,\n' "$required_total"
     printf '    "pass": %s,\n' "$required_pass"
@@ -824,6 +831,7 @@ write_summary_json() {
       (.summaryCompact | type == "object") and
       (.compatV4 | type == "object") and
       (.consumerHints | type == "object") and
+      (.summaryIntegrity | type == "object") and
       (.requiredStageCounts | type == "object") and
       (.optionalStageCounts | type == "object") and
       (.requiredPassed | type == "boolean") and
@@ -885,6 +893,7 @@ write_summary_json() {
        ! rg -q '"summaryCompact": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"compatV4": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"consumerHints": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"summaryIntegrity": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredPassed":' "$SUMMARY_JSON_PATH" || \
