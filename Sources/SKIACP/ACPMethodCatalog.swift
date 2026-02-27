@@ -52,5 +52,11 @@ public enum ACPMethodCatalog {
         ACPMethods.sessionExport,
     ]
 
+    /// Compatibility-only methods tracked from upstream proposals.
+    /// They are intentionally excluded from ACP stable/unstable baselines.
+    public static let compatibilityExtensions: Set<String> = [
+        ACPMethods.sessionStop,
+    ]
+
     public static let allSupported: Set<String> = unstableBaseline.union(projectExtensions)
 }

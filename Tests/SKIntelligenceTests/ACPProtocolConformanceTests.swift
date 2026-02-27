@@ -37,6 +37,13 @@ final class ACPProtocolConformanceTests: XCTestCase {
         XCTAssertEqual(ACPMethodCatalog.allSupported, ACPMethodCatalog.unstableBaseline.union(ACPMethodCatalog.projectExtensions))
     }
 
+    func testCompatibilityExtensionsAreExplicitlyScopedAndIsolated() {
+        XCTAssertEqual(ACPMethodCatalog.compatibilityExtensions, [ACPMethods.sessionStop])
+        XCTAssertFalse(ACPMethodCatalog.unstableBaseline.contains(ACPMethods.sessionStop))
+        XCTAssertFalse(ACPMethodCatalog.stableBaseline.contains(ACPMethods.sessionStop))
+        XCTAssertFalse(ACPMethodCatalog.projectExtensions.contains(ACPMethods.sessionStop))
+    }
+
     private func loadMeta(named baseName: String) throws -> ACPMetaFile {
         guard let url = Bundle.module.url(forResource: baseName, withExtension: "json") else {
             throw XCTSkip("Missing fixture: \(baseName).json")
