@@ -100,6 +100,7 @@ write_summary_json() {
   local optional_warn=0
   local optional_skipped=0
   local required_failed=0
+  local counts_consistent="true"
   finished_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((finished_at_epoch - SUITE_STARTED_AT_EPOCH))"
@@ -128,6 +129,12 @@ write_summary_json() {
       skipped) count_skipped=$((count_skipped + 1)) ;;
     esac
   done <<< "$SUMMARY_LINES"
+  if [ "$count_total" -ne $((count_pass + count_fail + count_warn + count_skipped)) ] || \
+     [ "$count_total" -ne $((required_total + optional_total)) ] || \
+     [ "$required_total" -ne $((required_pass + required_fail)) ] || \
+     [ "$optional_total" -ne $((optional_pass + optional_fail + optional_warn + optional_skipped)) ]; then
+    counts_consistent="false"
+  fi
   summary_dir="$(dirname "$SUMMARY_JSON_PATH")"
   mkdir -p "$SUITE_LOG_DIR"
   mkdir -p "$summary_dir"
@@ -161,6 +168,7 @@ write_summary_json() {
     printf '    "warn": %s,\n' "$count_warn"
     printf '    "skipped": %s\n' "$count_skipped"
     printf '  },\n'
+    printf '  "countsConsistent": %s,\n' "$counts_consistent"
     printf '  "requiredStageCounts": {\n'
     printf '    "total": %s,\n' "$required_total"
     printf '    "pass": %s,\n' "$required_pass"
@@ -222,6 +230,7 @@ write_summary_json() {
      ! rg -q '"exitCode":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"countsConsistent":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"requiredPassed":' "$SUMMARY_JSON_PATH" || \
