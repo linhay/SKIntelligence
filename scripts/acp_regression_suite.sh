@@ -168,6 +168,11 @@ write_summary_json() {
     printf '    "warn": %s,\n' "$count_warn"
     printf '    "skipped": %s\n' "$count_skipped"
     printf '  },\n'
+    if [ "$count_total" -eq "$count_pass" ]; then
+      printf '  "allStagesPassed": true,\n'
+    else
+      printf '  "allStagesPassed": false,\n'
+    fi
     if [ "$count_warn" -gt 0 ]; then
       printf '  "hasWarnings": true,\n'
     else
@@ -240,6 +245,7 @@ write_summary_json() {
      ! rg -q '"exitCode":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"allStagesPassed":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"hasWarnings":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"hasSkipped":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"countsConsistent":' "$SUMMARY_JSON_PATH" || \
