@@ -360,6 +360,7 @@ public struct ACPSessionModelState: Codable, Sendable, Equatable {
 
 public enum ACPSessionConfigOptionKind: String, Codable, Sendable {
     case select
+    case boolean
 }
 
 public enum ACPSessionConfigOptionCategory: String, Codable, Sendable {
@@ -442,6 +443,59 @@ public struct ACPSessionConfigOption: Codable, Sendable, Equatable {
         self.category = category
         self.currentValue = currentValue
         self.options = options
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case id
+        case name
+        case description
+        case category
+        case currentValue
+        case options
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = try container.decodeIfPresent(ACPSessionConfigOptionKind.self, forKey: .type) ?? .select
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        category = try container.decodeIfPresent(ACPSessionConfigOptionCategory.self, forKey: .category)
+        if let stringValue = try? container.decode(String.self, forKey: .currentValue) {
+            currentValue = stringValue
+        } else if let boolValue = try? container.decode(Bool.self, forKey: .currentValue) {
+            currentValue = boolValue ? "true" : "false"
+        } else if let intValue = try? container.decode(Int.self, forKey: .currentValue) {
+            currentValue = String(intValue)
+        } else if let doubleValue = try? container.decode(Double.self, forKey: .currentValue) {
+            currentValue = String(doubleValue)
+        } else {
+            throw DecodingError.dataCorruptedError(forKey: .currentValue, in: container, debugDescription: "Unsupported currentValue type")
+        }
+        options = try container.decodeIfPresent(ACPSessionConfigSelectOptions.self, forKey: .options) ?? .ungrouped([])
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(type, forKey: .type)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encodeIfPresent(description, forKey: .description)
+        try container.encodeIfPresent(category, forKey: .category)
+        if type == .boolean {
+            switch currentValue.lowercased() {
+            case "true":
+                try container.encode(true, forKey: .currentValue)
+            case "false":
+                try container.encode(false, forKey: .currentValue)
+            default:
+                try container.encode(currentValue, forKey: .currentValue)
+            }
+        } else {
+            try container.encode(currentValue, forKey: .currentValue)
+        }
+        try container.encode(options, forKey: .options)
     }
 }
 
@@ -1094,6 +1148,10 @@ public struct ACPSessionCancelParams: Codable, Sendable, Equatable {
     public init(sessionId: String) {
         self.sessionId = sessionId
     }
+}
+
+public struct ACPSessionStopResult: Codable, Sendable, Equatable {
+    public init() {}
 }
 
 public struct ACPCancelRequestParams: Codable, Sendable, Equatable {

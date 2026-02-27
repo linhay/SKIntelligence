@@ -17,6 +17,7 @@ public enum ACPMethods {
     public static let sessionSetModel = "session/set_model"
     public static let sessionSetConfigOption = "session/set_config_option"
     public static let sessionCancel = "session/cancel"
+    public static let sessionStop = "session/stop"
     public static let sessionUpdate = "session/update"
     public static let sessionRequestPermission = "session/request_permission"
     public static let fsReadTextFile = "fs/read_text_file"

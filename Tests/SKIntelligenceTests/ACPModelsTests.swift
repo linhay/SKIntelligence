@@ -202,6 +202,25 @@ final class ACPModelsTests: XCTestCase {
         XCTAssertEqual(decoded.modelId, "gpt-5")
     }
 
+    func testBooleanConfigOptionDecodesFromBoolCurrentValue() throws {
+        let json: JSONValue = .object([
+            "type": .string("boolean"),
+            "id": .string("streaming"),
+            "name": .string("Streaming"),
+            "currentValue": .bool(true)
+        ])
+        let decoded = try ACPCodec.decodeParams(json, as: ACPSessionConfigOption.self)
+        XCTAssertEqual(decoded.type, .boolean)
+        XCTAssertEqual(decoded.currentValue, "true")
+
+        let reencoded = try ACPCodec.encodeParams(decoded)
+        guard case .object(let root) = reencoded else {
+            return XCTFail("Expected object")
+        }
+        XCTAssertEqual(root["type"], .string("boolean"))
+        XCTAssertEqual(root["currentValue"], .bool(true))
+    }
+
     func testCancelRequestParamsRoundTrip() throws {
         let params = ACPCancelRequestParams(requestId: .int(123))
         let encoded = try ACPCodec.encodeParams(params)
