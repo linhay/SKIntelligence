@@ -356,6 +356,7 @@ write_summary_json() {
   local probe_mode="disabled"
   local has_optional_non_pass="false"
   local has_required_failures="false"
+  local optional_outcome="clean"
   local summary_hash="unavailable"
   local failed_stages=""
   local non_pass_stages=""
@@ -426,6 +427,7 @@ write_summary_json() {
   fi
   if [ "$optional_total" -ne "$optional_pass" ]; then
     has_optional_non_pass="true"
+    optional_outcome="degraded"
   fi
   if [ "$required_failed" -gt 0 ]; then
     has_required_failures="true"
@@ -493,6 +495,7 @@ write_summary_json() {
     printf '  "optionalPassStages": %s,\n' "$(json_array_optional_pass_stages "$SUMMARY_LINES")"
     printf '  "hasOptionalNonPass": %s,\n' "$has_optional_non_pass"
     printf '  "hasRequiredFailures": %s,\n' "$has_required_failures"
+    printf '  "optionalOutcome": "%s",\n' "$(json_escape "$optional_outcome")"
     printf '  "stageStatusMap": %s,\n' "$(json_object_stage_status_map "$SUMMARY_LINES")"
     printf '  "stageExitCodeMap": %s,\n' "$(json_object_stage_exit_code_map "$SUMMARY_LINES")"
     printf '  "stageDurationSecondsMap": %s,\n' "$(json_object_stage_duration_map "$SUMMARY_LINES")"
@@ -596,6 +599,7 @@ write_summary_json() {
       (.optionalPassStages | type == "array") and
       (.hasOptionalNonPass | type == "boolean") and
       (.hasRequiredFailures | type == "boolean") and
+      (.optionalOutcome | type == "string") and
       (.stageStatusMap | type == "object") and
       (.stageExitCodeMap | type == "object") and
       (.stageDurationSecondsMap | type == "object") and
@@ -642,6 +646,7 @@ write_summary_json() {
        ! rg -q '"optionalPassStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"hasOptionalNonPass":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"hasRequiredFailures":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"optionalOutcome":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageStatusMap":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageExitCodeMap":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageDurationSecondsMap":' "$SUMMARY_JSON_PATH" || \
