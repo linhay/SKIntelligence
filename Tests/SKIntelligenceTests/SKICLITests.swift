@@ -194,6 +194,15 @@ final class SKICLITests: XCTestCase {
         XCTAssertEqual(object["stopReason"], "end_turn")
     }
 
+    func testSessionStopJSONPayloadShape() throws {
+        let json = try ACPCLIOutputFormatter.sessionStopJSON(sessionId: "sess_3")
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: String]
+        )
+        XCTAssertEqual(object["type"], "session_stop")
+        XCTAssertEqual(object["sessionId"], "sess_3")
+    }
+
     func testServePermissionModeSemantics() {
         XCTAssertFalse(SKICLIServePermissionMode.disabled.enabled)
         XCTAssertFalse(SKICLIServePermissionMode.disabled.allowOnBridgeError)

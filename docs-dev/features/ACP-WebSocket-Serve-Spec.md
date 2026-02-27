@@ -307,5 +307,9 @@
     When 执行 `session/delete` 或 `logout`
     Then 对应 session 的权限记忆必须清理，后续请求不应命中旧决策。
 
+67. Given client 调用兼容扩展方法 `session/stop(sessionId)`
+    When 目标 session 存在运行中的 `session/prompt`
+    Then prompt 应被终止并返回 `stopReason=cancelled`，且 stdio/ws 语义一致。
+
 ## 非目标
 - 不引入鉴权与远程公网部署策略（当前仅本地模式）。

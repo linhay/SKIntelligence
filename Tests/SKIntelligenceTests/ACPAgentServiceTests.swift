@@ -212,6 +212,44 @@ final class ACPAgentServiceTests: XCTestCase {
         XCTAssertEqual(promptResult.stopReason, .cancelled)
     }
 
+    func testPromptCanBeStoppedBySessionStopRequest() async throws {
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: SlowCancellableClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            notificationSink: { _ in }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(210),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        let promptReq = JSONRPCRequest(
+            id: .int(211),
+            method: ACPMethods.sessionPrompt,
+            params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("will stop")]))
+        )
+        let promptTask = Task { await service.handle(promptReq) }
+
+        try await Task.sleep(nanoseconds: 60_000_000)
+        let stopReq = JSONRPCRequest(
+            id: .int(212),
+            method: ACPMethods.sessionStop,
+            params: try ACPCodec.encodeParams(ACPSessionCancelParams(sessionId: newResult.sessionId))
+        )
+        let stopResp = await service.handle(stopReq)
+        XCTAssertNil(stopResp.error)
+        _ = try ACPCodec.decodeResult(stopResp.result, as: ACPSessionStopResult.self)
+
+        let promptResp = await promptTask.value
+        let promptResult = try ACPCodec.decodeResult(promptResp.result, as: ACPSessionPromptResult.self)
+        XCTAssertEqual(promptResult.stopReason, .cancelled)
+    }
+
     func testPromptCanBeCancelledByProtocolCancelRequest() async throws {
         let service = ACPAgentService(
             sessionFactory: { SKILanguageModelSession(client: SlowCancellableClient()) },
@@ -1222,6 +1260,38 @@ final class ACPAgentServiceTests: XCTestCase {
         XCTAssertEqual(params.update.sessionUpdate, .configOptionUpdate)
         XCTAssertEqual(params.update.configOptions.first?.id, "mode")
         XCTAssertEqual(params.update.configOptions.first?.currentValue, "safe")
+    }
+
+    func testSetConfigOptionBooleanValueUsesBooleanKind() async throws {
+        let service = ACPAgentService(
+            sessionFactory: { SKILanguageModelSession(client: EchoTestClient()) },
+            agentInfo: .init(name: "ski", version: "0.1.0"),
+            capabilities: .init(loadSession: true),
+            notificationSink: { _ in }
+        )
+
+        let newReq = JSONRPCRequest(
+            id: .int(113),
+            method: ACPMethods.sessionNew,
+            params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
+        )
+        let newResp = await service.handle(newReq)
+        let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
+
+        let setConfigReq = JSONRPCRequest(
+            id: .int(114),
+            method: ACPMethods.sessionSetConfigOption,
+            params: try ACPCodec.encodeParams(ACPSessionSetConfigOptionParams(
+                sessionId: session.sessionId,
+                configId: "streaming",
+                value: "true"
+            ))
+        )
+        let setConfigResp = await service.handle(setConfigReq)
+        let setConfigResult = try ACPCodec.decodeResult(setConfigResp.result, as: ACPSessionSetConfigOptionResult.self)
+        XCTAssertEqual(setConfigResult.configOptions.first?.id, "streaming")
+        XCTAssertEqual(setConfigResult.configOptions.first?.type, .boolean)
+        XCTAssertEqual(setConfigResult.configOptions.first?.currentValue, "true")
     }
 
     func testSetModelUpdatesCurrentModelAndLoadReflectsChange() async throws {

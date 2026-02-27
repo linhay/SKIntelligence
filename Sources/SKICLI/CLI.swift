@@ -240,8 +240,142 @@ struct ACPClientCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "client",
         abstract: "Run as ACP client",
-        subcommands: [ACPClientConnectCommand.self, ACPClientConnectStdioCommand.self, ACPClientConnectWSCommand.self]
+        subcommands: [ACPClientConnectCommand.self, ACPClientConnectStdioCommand.self, ACPClientConnectWSCommand.self, ACPClientStopCommand.self, ACPClientStopStdioCommand.self, ACPClientStopWSCommand.self]
     )
+}
+
+struct ACPClientStopCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "stop",
+        abstract: "Send session/stop for an existing ACP session",
+        discussion: """
+            Examples:
+              ski acp client stop --transport stdio --cmd ./ski --args acp --args serve --args=--transport --args=stdio --session-id sess_123
+              ski acp client stop --transport ws --endpoint ws://127.0.0.1:8900 --session-id sess_123 --json
+            Note:
+              For child arguments starting with '-', use --args=--flag to avoid parent option parsing.
+            """
+    )
+
+    @Option(name: .long)
+    var transport: CLITransport = .stdio
+
+    @Option(name: .long, help: "Child executable path or command name in PATH")
+    var cmd: String?
+
+    @Option(name: .long, parsing: .upToNextOption)
+    var args: [String] = []
+
+    @Option(name: .long)
+    var endpoint: String?
+
+    @Option(name: .long, help: "Existing ACP session ID to stop")
+    var sessionID: String?
+
+    @Flag(name: .long)
+    var json: Bool = false
+
+    @Option(name: .long, help: "Request timeout in milliseconds (0 disables)")
+    var requestTimeoutMS: Int = 60_000
+
+    @Option(name: .long)
+    var logLevel: CLILogLevel = .info
+
+    @Option(name: .long, help: "WebSocket heartbeat interval in milliseconds (0 disables)")
+    var wsHeartbeatMS: Int = 15_000
+
+    @Option(name: .long, help: "WebSocket reconnect max attempts")
+    var wsReconnectAttempts: Int = 2
+
+    @Option(name: .long, help: "WebSocket reconnect base delay in milliseconds")
+    var wsReconnectBaseDelayMS: Int = 200
+
+    @Option(name: .long, help: "Maximum in-flight websocket sends")
+    var maxInFlightSends: Int = 64
+
+    private func hasExplicitOption(_ option: String) -> Bool {
+        CommandLine.arguments.contains { arg in
+            arg == option || arg.hasPrefix("\(option)=")
+        }
+    }
+
+    mutating func run() async throws {
+        guard let sessionID else {
+            fputs("Error: --session-id is required\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if sessionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            fputs("Error: --session-id must not be empty\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if transport == .stdio, hasExplicitOption("--endpoint") {
+            fputs("Error: --endpoint is only valid for ws transport\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if transport == .stdio, hasExplicitOption("--ws-heartbeat-ms") {
+            fputs("Error: --ws-heartbeat-ms is only valid for ws transport\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if transport == .stdio, hasExplicitOption("--ws-reconnect-attempts") {
+            fputs("Error: --ws-reconnect-attempts is only valid for ws transport\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if transport == .stdio, hasExplicitOption("--ws-reconnect-base-delay-ms") {
+            fputs("Error: --ws-reconnect-base-delay-ms is only valid for ws transport\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if transport == .stdio, hasExplicitOption("--max-in-flight-sends") {
+            fputs("Error: --max-in-flight-sends is only valid for ws transport\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if transport == .ws, cmd != nil {
+            if hasExplicitOption("--args") {
+                fputs("Error: --cmd is only valid for stdio transport (if child args start with '-', pass as --args=--flag)\n", stderr)
+                throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+            }
+            fputs("Error: --cmd is only valid for stdio transport\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if transport == .ws, !args.isEmpty {
+            fputs("Error: --args is only valid for stdio transport\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if requestTimeoutMS < 0 {
+            fputs("Error: --request-timeout-ms must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if wsHeartbeatMS < 0 {
+            fputs("Error: --ws-heartbeat-ms must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if wsReconnectAttempts < 0 {
+            fputs("Error: --ws-reconnect-attempts must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if wsReconnectBaseDelayMS < 0 {
+            fputs("Error: --ws-reconnect-base-delay-ms must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if maxInFlightSends <= 0 {
+            fputs("Error: --max-in-flight-sends must be > 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+
+        try await runACPClientStop(
+            transport: transport,
+            cmd: cmd,
+            args: args,
+            endpoint: endpoint,
+            sessionID: sessionID,
+            jsonOutput: json,
+            requestTimeoutMS: requestTimeoutMS,
+            logLevel: logLevel,
+            wsHeartbeatMS: wsHeartbeatMS,
+            wsReconnectAttempts: wsReconnectAttempts,
+            wsReconnectBaseDelayMS: wsReconnectBaseDelayMS,
+            maxInFlightSends: maxInFlightSends
+        )
+    }
 }
 
 struct ACPClientConnectStdioCommand: AsyncParsableCommand {
@@ -326,6 +460,60 @@ struct ACPClientConnectStdioCommand: AsyncParsableCommand {
             maxInFlightSends: 64,
             permissionDecision: permissionDecision,
             permissionMessage: permissionMessage
+        )
+    }
+}
+
+struct ACPClientStopStdioCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "stop-stdio",
+        abstract: "Connect via stdio and send session/stop"
+    )
+
+    @Option(name: .long, help: "Child executable path or command name in PATH")
+    var cmd: String?
+
+    @Option(name: .long, parsing: .upToNextOption)
+    var args: [String] = []
+
+    @Option(name: .long, help: "Existing ACP session ID to stop")
+    var sessionID: String?
+
+    @Flag(name: .long)
+    var json: Bool = false
+
+    @Option(name: .long, help: "Request timeout in milliseconds (0 disables)")
+    var requestTimeoutMS: Int = 60_000
+
+    @Option(name: .long)
+    var logLevel: CLILogLevel = .info
+
+    mutating func run() async throws {
+        guard let sessionID else {
+            fputs("Error: --session-id is required\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if sessionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            fputs("Error: --session-id must not be empty\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if requestTimeoutMS < 0 {
+            fputs("Error: --request-timeout-ms must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        try await runACPClientStop(
+            transport: .stdio,
+            cmd: cmd,
+            args: args,
+            endpoint: nil,
+            sessionID: sessionID,
+            jsonOutput: json,
+            requestTimeoutMS: requestTimeoutMS,
+            logLevel: logLevel,
+            wsHeartbeatMS: 15_000,
+            wsReconnectAttempts: 2,
+            wsReconnectBaseDelayMS: 200,
+            maxInFlightSends: 64
         )
     }
 }
@@ -426,6 +614,85 @@ struct ACPClientConnectWSCommand: AsyncParsableCommand {
             maxInFlightSends: maxInFlightSends,
             permissionDecision: permissionDecision,
             permissionMessage: permissionMessage
+        )
+    }
+}
+
+struct ACPClientStopWSCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "stop-ws",
+        abstract: "Connect via websocket and send session/stop"
+    )
+
+    @Option(name: .long)
+    var endpoint: String?
+
+    @Option(name: .long, help: "Existing ACP session ID to stop")
+    var sessionID: String?
+
+    @Flag(name: .long)
+    var json: Bool = false
+
+    @Option(name: .long, help: "Request timeout in milliseconds (0 disables)")
+    var requestTimeoutMS: Int = 60_000
+
+    @Option(name: .long)
+    var logLevel: CLILogLevel = .info
+
+    @Option(name: .long, help: "WebSocket heartbeat interval in milliseconds (0 disables)")
+    var wsHeartbeatMS: Int = 15_000
+
+    @Option(name: .long, help: "WebSocket reconnect max attempts")
+    var wsReconnectAttempts: Int = 2
+
+    @Option(name: .long, help: "WebSocket reconnect base delay in milliseconds")
+    var wsReconnectBaseDelayMS: Int = 200
+
+    @Option(name: .long, help: "Maximum in-flight websocket sends")
+    var maxInFlightSends: Int = 64
+
+    mutating func run() async throws {
+        guard let sessionID else {
+            fputs("Error: --session-id is required\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if sessionID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            fputs("Error: --session-id must not be empty\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if requestTimeoutMS < 0 {
+            fputs("Error: --request-timeout-ms must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if wsHeartbeatMS < 0 {
+            fputs("Error: --ws-heartbeat-ms must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if wsReconnectAttempts < 0 {
+            fputs("Error: --ws-reconnect-attempts must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if wsReconnectBaseDelayMS < 0 {
+            fputs("Error: --ws-reconnect-base-delay-ms must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if maxInFlightSends <= 0 {
+            fputs("Error: --max-in-flight-sends must be > 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        try await runACPClientStop(
+            transport: .ws,
+            cmd: nil,
+            args: [],
+            endpoint: endpoint,
+            sessionID: sessionID,
+            jsonOutput: json,
+            requestTimeoutMS: requestTimeoutMS,
+            logLevel: logLevel,
+            wsHeartbeatMS: wsHeartbeatMS,
+            wsReconnectAttempts: wsReconnectAttempts,
+            wsReconnectBaseDelayMS: wsReconnectBaseDelayMS,
+            maxInFlightSends: maxInFlightSends
         )
     }
 }
@@ -700,6 +967,69 @@ private func runACPClientConnect(
         if logLevel == .debug || logLevel == .info {
             let permissionCount = await permissionCounter.value()
             fputs("[SKI] ACP client permission requests=\(permissionCount)\n", stderr)
+        }
+    } catch {
+        let code = SKICLIExitCodeMapper.exitCode(for: error)
+        fputs("Error: \(error.localizedDescription)\n", stderr)
+        throw ExitCode(Int32(code.rawValue))
+    }
+}
+
+private func runACPClientStop(
+    transport: CLITransport,
+    cmd: String?,
+    args: [String],
+    endpoint: String?,
+    sessionID: String,
+    jsonOutput: Bool,
+    requestTimeoutMS: Int,
+    logLevel: CLILogLevel,
+    wsHeartbeatMS: Int,
+    wsReconnectAttempts: Int,
+    wsReconnectBaseDelayMS: Int,
+    maxInFlightSends: Int
+) async throws {
+    let requestTimeoutNanos: UInt64? = requestTimeoutMS == 0
+        ? nil
+        : ACPCLITransportFactory.millisecondsToNanosecondsNonNegative(requestTimeoutMS)
+    let transportKind: SKICLITransportKind = transport == .ws ? .ws : .stdio
+    let transportImpl: any ACPTransport
+    do {
+        transportImpl = try ACPCLITransportFactory.makeClientTransport(
+            kind: transportKind,
+            cmd: cmd,
+            args: args,
+            endpoint: endpoint,
+            wsHeartbeatMS: wsHeartbeatMS,
+            wsReconnectAttempts: wsReconnectAttempts,
+            wsReconnectBaseDelayMS: wsReconnectBaseDelayMS,
+            maxInFlightSends: maxInFlightSends
+        )
+    } catch let error as SKICLIValidationError {
+        fputs("Error: \(error.localizedDescription)\n", stderr)
+        throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+    }
+
+    do {
+        if logLevel == .debug || logLevel == .info {
+            fputs("[SKI] ACP client connecting transport=\(transport.rawValue)\n", stderr)
+        }
+
+        let client = ACPClientService(transport: transportImpl, requestTimeoutNanoseconds: requestTimeoutNanos)
+        try await client.connect()
+        defer { Task { await client.close() } }
+
+        _ = try await client.initialize(.init(
+            protocolVersion: 1,
+            clientCapabilities: .init(fs: .init(readTextFile: true, writeTextFile: true), terminal: true),
+            clientInfo: .init(name: "ski", title: "SKI ACP Client", version: "0.1.0")
+        ))
+
+        _ = try await client.stopSession(.init(sessionId: sessionID))
+        if jsonOutput {
+            print(try ACPCLIOutputFormatter.sessionStopJSON(sessionId: sessionID))
+        } else {
+            print("stopped: \(sessionID)")
         }
     } catch {
         let code = SKICLIExitCodeMapper.exitCode(for: error)

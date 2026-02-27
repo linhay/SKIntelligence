@@ -16,6 +16,7 @@
 | --- | --- | --- | --- |
 | `ACPAgentService` 方法处理（`session/*`, `authenticate`, `logout`） | 协议域 | ACP method 编排 | 仅使用 ACP 定义字段 |
 | `session/update` 业务事件 | 协议域 | 对外协议事件流 | 仅允许 schema 支持的 update kind 与字段 |
+| `session/stop` 兼容支持（client request + agent alias） | 扩展域 | 对齐上游提案演进的兼容入口 | 不纳入 `stable/unstable` baseline；仅作为兼容能力 |
 | `ACPAgentTelemetryEvent` / `telemetrySink` | 扩展域 | 本地观测事件 | 不得序列化进 ACP payload |
 | `session/export`（project extension） | 扩展域 | 会话导出（JSONL）能力，对标 pi 会话维护 | 必须显式能力位门禁，且不纳入 ACP stable/unstable 基线 |
 | `ACPFilesystemRuntime` / `ACPTerminalRuntime` | 扩展域 | client 侧本地 runtime 接口 | 不新增 ACP method |

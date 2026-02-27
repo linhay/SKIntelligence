@@ -540,12 +540,19 @@ public actor ACPAgentService {
                     throw ACPAgentServiceError.sessionNotFound(params.sessionId)
                 }
                 let optionName = params.configId.replacingOccurrences(of: "_", with: " ").capitalized
+                let optionType: ACPSessionConfigOptionKind = {
+                    let v = params.value.lowercased()
+                    return (v == "true" || v == "false") ? .boolean : .select
+                }()
                 let option = ACPSessionConfigOption(
+                    type: optionType,
                     id: params.configId,
                     name: optionName,
                     category: .other,
                     currentValue: params.value,
-                    options: .ungrouped([.init(value: params.value, name: params.value.capitalized)])
+                    options: optionType == .boolean
+                        ? .ungrouped([])
+                        : .ungrouped([.init(value: params.value, name: params.value.capitalized)])
                 )
                 if let index = entry.configOptions.firstIndex(where: { $0.id == params.configId }) {
                     entry.configOptions[index] = option
@@ -567,6 +574,14 @@ public actor ACPAgentService {
                     try await emitSessionUpdate(update)
                 }
                 return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
+
+            case ACPMethods.sessionStop:
+                let params = try ACPCodec.decodeParams(request.params, as: ACPSessionCancelParams.self)
+                runningPrompts[params.sessionId]?.cancel()
+                runningPrompts[params.sessionId] = nil
+                promptRequestToSession = promptRequestToSession.filter { $0.value != params.sessionId }
+                protocolCancelledSessions.remove(params.sessionId)
+                return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(ACPSessionStopResult()))
 
             case ACPMethods.sessionPrompt:
                 let params = try ACPCodec.decodeParams(request.params, as: ACPSessionPromptParams.self)
@@ -757,7 +772,7 @@ public actor ACPAgentService {
     }
 
     public func handleCancel(_ notification: JSONRPCNotification) async {
-        if notification.method == ACPMethods.sessionCancel {
+        if notification.method == ACPMethods.sessionCancel || notification.method == ACPMethods.sessionStop {
             guard let params = try? ACPCodec.decodeParams(notification.params, as: ACPSessionCancelParams.self) else { return }
             runningPrompts[params.sessionId]?.cancel()
             runningPrompts[params.sessionId] = nil

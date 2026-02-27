@@ -394,6 +394,61 @@ actor SessionDomainTransport: ACPTransport {
 }
 
 final class ACPClientServiceTests: XCTestCase {
+    func testStopSessionSendsRequestAndDecodesResult() async throws {
+        actor StopSessionTransport: ACPTransport {
+            private(set) var sent: [JSONRPCMessage] = []
+            private var inbox: [JSONRPCMessage] = []
+            private var connected = false
+
+            func connect() async throws { connected = true }
+
+            func send(_ message: JSONRPCMessage) async throws {
+                guard connected else { throw ACPTransportError.notConnected }
+                sent.append(message)
+                guard case .request(let request) = message else { return }
+
+                switch request.method {
+                case ACPMethods.initialize:
+                    let result = ACPInitializeResult(
+                        protocolVersion: 1,
+                        agentCapabilities: .init(loadSession: true),
+                        agentInfo: .init(name: "stop-agent", version: "1.0.0")
+                    )
+                    inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+                case ACPMethods.sessionStop:
+                    inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(ACPSessionStopResult()))))
+                default:
+                    inbox.append(.response(.init(id: request.id, error: .init(code: -32601, message: "unsupported"))))
+                }
+            }
+
+            func receive() async throws -> JSONRPCMessage? {
+                guard connected else { throw ACPTransportError.notConnected }
+                while inbox.isEmpty {
+                    try await Task.sleep(nanoseconds: 1_000_000)
+                }
+                return inbox.removeFirst()
+            }
+
+            func close() async { connected = false }
+        }
+
+        let transport = StopSessionTransport()
+        let client = ACPClientService(transport: transport)
+        try await client.connect()
+        defer { Task { await client.close() } }
+
+        _ = try await client.initialize(.init(protocolVersion: 1))
+        _ = try await client.stopSession(.init(sessionId: "sess_test_stop"))
+
+        let sent = await transport.sent
+        let hasStopRequest = sent.contains { message in
+            guard case .request(let request) = message else { return false }
+            return request.method == ACPMethods.sessionStop
+        }
+        XCTAssertTrue(hasStopRequest)
+    }
+
     func testCancelRequestSendsProtocolNotification() async throws {
         let transport = ScriptedTransport()
         let client = ACPClientService(transport: transport)
