@@ -61,6 +61,26 @@ final class ACPProtocolConformanceTests: XCTestCase {
         }
     }
 
+    func testCompatibilityExtensionsAreNotPresentInOfficialMetaSnapshots() throws {
+        let stable = try loadMeta(named: "meta")
+        let unstable = try loadMeta(named: "meta.unstable")
+        let officialFixtureMethods = Set(stable.agentMethods.values)
+            .union(stable.clientMethods.values)
+            .union(Set(Array(stable.protocolMethods?.values ?? [:].values)))
+            .union(unstable.agentMethods.values)
+            .union(unstable.clientMethods.values)
+            .union(Set(Array(unstable.protocolMethods?.values ?? [:].values)))
+
+        let overlap = ACPMethodCatalog.compatibilityExtensions.intersection(officialFixtureMethods)
+        XCTAssertTrue(
+            overlap.isEmpty,
+            """
+            Compatibility methods already exist in official ACP fixtures: \(overlap.sorted()).
+            Migrate them from compatibilityExtensions into official baselines.
+            """
+        )
+    }
+
     private func loadMeta(named baseName: String) throws -> ACPMetaFile {
         guard let url = Bundle.module.url(forResource: baseName, withExtension: "json") else {
             throw XCTSkip("Missing fixture: \(baseName).json")
