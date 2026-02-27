@@ -67,6 +67,8 @@
   - `SKIntelligenceTests.ACPAgentServiceTests/testLogoutClearsSessionsWhenCapabilityEnabled`
   - `SKIntelligenceTests.ACPWebSocketRoutingTests/testCancelRequestNotificationRequestIDIsRemappedToInternalID`
   - `SKIntelligenceTests.ACPProtocolConformanceTests/testStableMethodBaselineMatchesOfficialMetaSnapshot`
+- 场景 67: `covered`
+  - `SKIntelligenceTests.ACPDomainE2EMatrixTests/testSessionStopPromptContractConsistentBetweenStdioAndWebSocket`
 - 场景 63,64（端口冲突/清理）: `covered`
   - `SKIntelligenceTests.ACPWebSocketTestHarnessTests/testMakeServerTransportRetriesWhenPreferredPortIsOccupied`
   - `Tests/SKIntelligenceTests/ACPWebSocketPermissionRoundtripTests.swift`
