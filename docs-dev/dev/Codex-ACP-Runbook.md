@@ -203,6 +203,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - summary 顶层 `exitCode` 记录本次回归脚本退出码，便于 CI 统一消费 JSON 判定结果。
 - summary 顶层 `generatedBy` 标识产物来源（当前为 `scripts/acp_regression_suite.sh@1`），便于多工具并行产物治理。
 - summary 顶层 `requiredPassed` 标识必选阶段是否全部通过，便于区分“主链失败”与“可选探针告警”。
+- summary 增加 `requiredStageCounts/optionalStageCounts`，分别统计必选与可选阶段分布，便于看板聚合。
 - 脚本结束会输出一行 `[suite] counts ...`，包含分布与 `runCodexProbes/strictCodexProbes`，可直接在控制台/CI 日志快速观察本轮模式。
 
 示例：

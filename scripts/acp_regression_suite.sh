@@ -91,6 +91,14 @@ write_summary_json() {
   local count_fail=0
   local count_warn=0
   local count_skipped=0
+  local required_total=0
+  local required_pass=0
+  local required_fail=0
+  local optional_total=0
+  local optional_pass=0
+  local optional_fail=0
+  local optional_warn=0
+  local optional_skipped=0
   local required_failed=0
   finished_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -98,8 +106,20 @@ write_summary_json() {
   while IFS='|' read -r _index _stage _status _required _exit_code _started_at_utc _finished_at_utc _duration_seconds _attempts _message _log_path; do
     [ -z "$_index" ] && continue
     count_total=$((count_total + 1))
-    if [ "$_required" = "true" ] && [ "$_status" != "pass" ]; then
-      required_failed=$((required_failed + 1))
+    if [ "$_required" = "true" ]; then
+      required_total=$((required_total + 1))
+      case "$_status" in
+        pass) required_pass=$((required_pass + 1)) ;;
+        *) required_fail=$((required_fail + 1)); required_failed=$((required_failed + 1)) ;;
+      esac
+    else
+      optional_total=$((optional_total + 1))
+      case "$_status" in
+        pass) optional_pass=$((optional_pass + 1)) ;;
+        fail) optional_fail=$((optional_fail + 1)) ;;
+        warn) optional_warn=$((optional_warn + 1)) ;;
+        skipped) optional_skipped=$((optional_skipped + 1)) ;;
+      esac
     fi
     case "$_status" in
       pass) count_pass=$((count_pass + 1)) ;;
@@ -140,6 +160,18 @@ write_summary_json() {
     printf '    "fail": %s,\n' "$count_fail"
     printf '    "warn": %s,\n' "$count_warn"
     printf '    "skipped": %s\n' "$count_skipped"
+    printf '  },\n'
+    printf '  "requiredStageCounts": {\n'
+    printf '    "total": %s,\n' "$required_total"
+    printf '    "pass": %s,\n' "$required_pass"
+    printf '    "fail": %s\n' "$required_fail"
+    printf '  },\n'
+    printf '  "optionalStageCounts": {\n'
+    printf '    "total": %s,\n' "$optional_total"
+    printf '    "pass": %s,\n' "$optional_pass"
+    printf '    "fail": %s,\n' "$optional_fail"
+    printf '    "warn": %s,\n' "$optional_warn"
+    printf '    "skipped": %s\n' "$optional_skipped"
     printf '  },\n'
     if [ "$required_failed" -eq 0 ]; then
       printf '  "requiredPassed": true,\n'
@@ -190,6 +222,8 @@ write_summary_json() {
      ! rg -q '"exitCode":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"requiredPassed":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"artifacts": \{' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stages": \[' "$SUMMARY_JSON_PATH" || \
