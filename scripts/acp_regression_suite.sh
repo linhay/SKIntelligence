@@ -357,6 +357,7 @@ write_summary_json() {
   local has_optional_non_pass="false"
   local has_required_failures="false"
   local optional_outcome="clean"
+  local required_outcome="clean"
   local summary_hash="unavailable"
   local failed_stages=""
   local non_pass_stages=""
@@ -431,6 +432,7 @@ write_summary_json() {
   fi
   if [ "$required_failed" -gt 0 ]; then
     has_required_failures="true"
+    required_outcome="blocked"
   fi
   if [ "${RUN_CODEX_PROBES:-0}" = "1" ]; then
     if [ "$STRICT_CODEX_PROBES" = "1" ]; then
@@ -496,6 +498,7 @@ write_summary_json() {
     printf '  "hasOptionalNonPass": %s,\n' "$has_optional_non_pass"
     printf '  "hasRequiredFailures": %s,\n' "$has_required_failures"
     printf '  "optionalOutcome": "%s",\n' "$(json_escape "$optional_outcome")"
+    printf '  "requiredOutcome": "%s",\n' "$(json_escape "$required_outcome")"
     printf '  "stageStatusMap": %s,\n' "$(json_object_stage_status_map "$SUMMARY_LINES")"
     printf '  "stageExitCodeMap": %s,\n' "$(json_object_stage_exit_code_map "$SUMMARY_LINES")"
     printf '  "stageDurationSecondsMap": %s,\n' "$(json_object_stage_duration_map "$SUMMARY_LINES")"
@@ -600,6 +603,7 @@ write_summary_json() {
       (.hasOptionalNonPass | type == "boolean") and
       (.hasRequiredFailures | type == "boolean") and
       (.optionalOutcome | type == "string") and
+      (.requiredOutcome | type == "string") and
       (.stageStatusMap | type == "object") and
       (.stageExitCodeMap | type == "object") and
       (.stageDurationSecondsMap | type == "object") and
@@ -647,6 +651,7 @@ write_summary_json() {
        ! rg -q '"hasOptionalNonPass":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"hasRequiredFailures":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"optionalOutcome":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"requiredOutcome":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageStatusMap":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageExitCodeMap":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageDurationSecondsMap":' "$SUMMARY_JSON_PATH" || \
