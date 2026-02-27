@@ -91,12 +91,16 @@ write_summary_json() {
   local count_fail=0
   local count_warn=0
   local count_skipped=0
+  local required_failed=0
   finished_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((finished_at_epoch - SUITE_STARTED_AT_EPOCH))"
   while IFS='|' read -r _index _stage _status _required _exit_code _started_at_utc _finished_at_utc _duration_seconds _attempts _message _log_path; do
     [ -z "$_index" ] && continue
     count_total=$((count_total + 1))
+    if [ "$_required" = "true" ] && [ "$_status" != "pass" ]; then
+      required_failed=$((required_failed + 1))
+    fi
     case "$_status" in
       pass) count_pass=$((count_pass + 1)) ;;
       fail) count_fail=$((count_fail + 1)) ;;
@@ -137,6 +141,11 @@ write_summary_json() {
     printf '    "warn": %s,\n' "$count_warn"
     printf '    "skipped": %s\n' "$count_skipped"
     printf '  },\n'
+    if [ "$required_failed" -eq 0 ]; then
+      printf '  "requiredPassed": true,\n'
+    else
+      printf '  "requiredPassed": false,\n'
+    fi
     printf '  "strictCodexProbes": %s,\n' "$STRICT_CODEX_PROBES"
     printf '  "runCodexProbes": %s,\n' "${RUN_CODEX_PROBES:-0}"
     printf '  "config": {\n'
@@ -181,6 +190,7 @@ write_summary_json() {
      ! rg -q '"exitCode":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"requiredPassed":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"artifacts": \{' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stages": \[' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"logPath":' "$SUMMARY_JSON_PATH"; then
