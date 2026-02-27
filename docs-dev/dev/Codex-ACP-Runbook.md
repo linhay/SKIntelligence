@@ -254,3 +254,4 @@ cat /tmp/acp_suite_summary.json
 - summary 增加 `consumerHints`（推荐读取路径），指导消费端优先读取 `qualityGate.recommendation`、`summaryCompact.overallOutcome`、`compatV4`。
 - summary 增加 `summaryIntegrity`（`countsConsistent/hasSummaryHash/hasRunId/hasStageLogs/ok`），用于快速判断 summary 可用性。
 - summary 增加 `drilldown`（`firstNonPassStage/firstNonPassStatus/firstNonPassLogPath`），用于联调时快速跳转首个非通过点。
+- summary 增加 `decisionMatrix`（`recommendation/reason/blockingReasons/warningReasons`），用于结构化表达放行/阻塞依据。

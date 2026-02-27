@@ -432,6 +432,8 @@ write_summary_json() {
   local first_non_pass_stage=""
   local first_non_pass_status=""
   local first_non_pass_log_path=""
+  local blocking_reasons=""
+  local warning_reasons=""
   local failed_stages=""
   local pass_stages=""
   local non_pass_stages=""
@@ -522,6 +524,18 @@ write_summary_json() {
     result_reason="all stages passed"
     overall_outcome="clean"
     overall_outcome_rank=0
+  fi
+  if [ "$required_failed" -gt 0 ]; then
+    blocking_reasons+="required_failed"$'\n'
+  fi
+  if [ "$counts_consistent" != "true" ]; then
+    blocking_reasons+="summary_inconsistent"$'\n'
+  fi
+  if [ "$count_warn" -gt 0 ]; then
+    warning_reasons+="optional_warn"$'\n'
+  fi
+  if [ "$count_skipped" -gt 0 ]; then
+    warning_reasons+="optional_skipped"$'\n'
   fi
   if [ "$optional_total" -ne "$optional_pass" ]; then
     has_optional_non_pass="true"
@@ -738,6 +752,12 @@ write_summary_json() {
     printf '    "firstNonPassStatus": "%s",\n' "$(json_escape "$first_non_pass_status")"
     printf '    "firstNonPassLogPath": "%s"\n' "$(json_escape "$first_non_pass_log_path")"
     printf '  },\n'
+    printf '  "decisionMatrix": {\n'
+    printf '    "recommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
+    printf '    "reason": "%s",\n' "$(json_escape "$result_reason")"
+    printf '    "blockingReasons": %s,\n' "$(json_array_from_lines "$blocking_reasons")"
+    printf '    "warningReasons": %s\n' "$(json_array_from_lines "$warning_reasons")"
+    printf '  },\n'
     printf '  "requiredStageCounts": {\n'
     printf '    "total": %s,\n' "$required_total"
     printf '    "pass": %s,\n' "$required_pass"
@@ -846,6 +866,7 @@ write_summary_json() {
       (.consumerHints | type == "object") and
       (.summaryIntegrity | type == "object") and
       (.drilldown | type == "object") and
+      (.decisionMatrix | type == "object") and
       (.requiredStageCounts | type == "object") and
       (.optionalStageCounts | type == "object") and
       (.requiredPassed | type == "boolean") and
@@ -909,6 +930,7 @@ write_summary_json() {
        ! rg -q '"consumerHints": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"summaryIntegrity": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"drilldown": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"decisionMatrix": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredPassed":' "$SUMMARY_JSON_PATH" || \
