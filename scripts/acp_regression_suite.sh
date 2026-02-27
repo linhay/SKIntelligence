@@ -398,9 +398,14 @@ print_stage_counts_line() {
   local count_fail=0
   local count_warn=0
   local count_skipped=0
+  local required_failed=0
+  local ci_recommendation="fail"
   while IFS='|' read -r _index _stage _status _required _exit_code _started_at_utc _finished_at_utc _duration_seconds _attempts _message _log_path; do
     [ -z "$_index" ] && continue
     count_total=$((count_total + 1))
+    if [ "$_required" = "true" ] && [ "$_status" != "pass" ]; then
+      required_failed=$((required_failed + 1))
+    fi
     case "$_status" in
       pass) count_pass=$((count_pass + 1)) ;;
       fail) count_fail=$((count_fail + 1)) ;;
@@ -408,7 +413,18 @@ print_stage_counts_line() {
       skipped) count_skipped=$((count_skipped + 1)) ;;
     esac
   done <<< "$SUMMARY_LINES"
-  echo "[suite] counts total=${count_total} pass=${count_pass} fail=${count_fail} warn=${count_warn} skipped=${count_skipped} runCodexProbes=${RUN_CODEX_PROBES:-0} strictCodexProbes=${STRICT_CODEX_PROBES}"
+  if [ "$required_failed" -gt 0 ] || [ "$count_fail" -gt 0 ]; then
+    ci_recommendation="fail"
+  elif [ "$count_warn" -gt 0 ] || [ "$count_skipped" -gt 0 ]; then
+    ci_recommendation="pass_with_warnings"
+  else
+    ci_recommendation="pass"
+  fi
+  if [ "$required_failed" -eq 0 ]; then
+    echo "[suite] counts total=${count_total} pass=${count_pass} fail=${count_fail} warn=${count_warn} skipped=${count_skipped} requiredPassed=true ciRecommendation=${ci_recommendation} runCodexProbes=${RUN_CODEX_PROBES:-0} strictCodexProbes=${STRICT_CODEX_PROBES}"
+  else
+    echo "[suite] counts total=${count_total} pass=${count_pass} fail=${count_fail} warn=${count_warn} skipped=${count_skipped} requiredPassed=false ciRecommendation=${ci_recommendation} runCodexProbes=${RUN_CODEX_PROBES:-0} strictCodexProbes=${STRICT_CODEX_PROBES}"
+  fi
 }
 
 run_required_stage "1" "ws_permission_matrix" "[suite] 1/5 ws permission matrix" "./scripts/acp_ws_permission_matrix.sh \"$((PORT_BASE + 0))\""

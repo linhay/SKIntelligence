@@ -208,7 +208,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - summary 增加 `hasWarnings/hasSkipped` 布尔字段，便于 CI 直接做告警分流。
 - summary 增加 `allStagesPassed` 布尔字段（仅当所有 stage 都是 pass 为 true），用于快速识别“全绿”。
 - summary 增加 `ciRecommendation`（`pass` / `pass_with_warnings` / `fail`），可直接作为流水线分流信号。
-- 脚本结束会输出一行 `[suite] counts ...`，包含分布与 `runCodexProbes/strictCodexProbes`，可直接在控制台/CI 日志快速观察本轮模式。
+- 脚本结束会输出一行 `[suite] counts ...`，包含分布、`requiredPassed`、`ciRecommendation` 与 `runCodexProbes/strictCodexProbes`，可直接在控制台/CI 日志快速观察本轮模式。
 
 示例：
 ```bash
