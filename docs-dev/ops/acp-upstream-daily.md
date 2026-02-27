@@ -1,15 +1,44 @@
 # ACP Upstream Daily Watch
 
 - Date (UTC): 2026-02-27
-- Generated At: 2026-02-27T10:10:10Z
+- Generated At: 2026-02-27T11:10:46Z
 - Source Org: agentclientprotocol
 - Window: last 1 day(s)
 
 ## Summary
 
 - Repositories Watched: 14
-- Aggregate Risk Signal: P0=6, P1=4, P2=7
+- Aggregate Risk Signal: P0=6, P1=5, P2=9
+- Schema Drift (stable): missingLocal=0, extraLocal=0
+- Schema Drift (unstable): missingLocal=0, extraLocal=0
+- Compatibility Overlap With Upstream: 0
 - Action: trigger same-day P0 assessment and regression update.
+
+## Schema Drift
+
+- Upstream schema source:
+  - stable: https://raw.githubusercontent.com/agentclientprotocol/agent-client-protocol/main/schema/meta.json
+  - unstable: https://raw.githubusercontent.com/agentclientprotocol/agent-client-protocol/main/schema/meta.unstable.json
+- Stable methods: upstream=17, local=17, missingLocal=0, extraLocal=0
+- Unstable methods: upstream=22, local=22, missingLocal=0, extraLocal=0
+
+### Stable Missing In Local
+- none
+
+### Stable Extra In Local
+- none
+
+### Unstable Missing In Local
+- none
+
+### Unstable Extra In Local
+- none
+
+### Compatibility Extensions
+- session/stop
+
+### Compatibility Overlap With Upstream
+- none
 
 ## Repositories
 
@@ -19,7 +48,7 @@
 - Default Branch: `main`
 - Head SHA: `84b9b6257160`
 - Pushed At: 2025-11-07T16:10:35Z
-- Latest Release: {"message":"Not Found","documentation_url":"https://docs.github.com/rest/releases/releases#get-the-latest-release","status":"404"}none ({"message":"Not Found","documentation_url":"https://docs.github.com/rest/releases/releases#get-the-latest-release","status":"404"}none)
+- Latest Release: none (none)
 - Risk Signal: P0=0, P1=0, P2=0
 - Recent PRs: https://github.com/agentclientprotocol/.github/pulls?q=sort%3Aupdated-desc
 - Recent Issues: https://github.com/agentclientprotocol/.github/issues?q=sort%3Aupdated-desc
@@ -28,10 +57,10 @@
 
 - URL: https://github.com/agentclientprotocol/agent-client-protocol
 - Default Branch: `main`
-- Head SHA: `76c97327f034`
-- Pushed At: 2026-02-26T21:49:20Z
+- Head SHA: `c5113a0c32f8`
+- Pushed At: 2026-02-27T11:01:23Z
 - Latest Release: v0.10.8 (2026-02-04T12:27:02Z)
-- Risk Signal: P0=3, P1=3, P2=2
+- Risk Signal: P0=3, P1=4, P2=4
 - Recent PRs: https://github.com/agentclientprotocol/agent-client-protocol/pulls?q=sort%3Aupdated-desc
 - Recent Issues: https://github.com/agentclientprotocol/agent-client-protocol/issues?q=sort%3Aupdated-desc
 
@@ -41,7 +70,7 @@
 - Default Branch: `main`
 - Head SHA: `92d49615c2f4`
 - Pushed At: 2026-01-24T21:58:45Z
-- Latest Release: {"message":"Not Found","documentation_url":"https://docs.github.com/rest/releases/releases#get-the-latest-release","status":"404"}none ({"message":"Not Found","documentation_url":"https://docs.github.com/rest/releases/releases#get-the-latest-release","status":"404"}none)
+- Latest Release: none (none)
 - Risk Signal: P0=0, P1=0, P2=0
 - Recent PRs: https://github.com/agentclientprotocol/docs/pulls?q=sort%3Aupdated-desc
 - Recent Issues: https://github.com/agentclientprotocol/docs/issues?q=sort%3Aupdated-desc
@@ -52,7 +81,7 @@
 - Default Branch: `main`
 - Head SHA: `a3e979e1fbd8`
 - Pushed At: 2026-02-12T15:31:45Z
-- Latest Release: {"message":"Not Found","documentation_url":"https://docs.github.com/rest/releases/releases#get-the-latest-release","status":"404"}none ({"message":"Not Found","documentation_url":"https://docs.github.com/rest/releases/releases#get-the-latest-release","status":"404"}none)
+- Latest Release: none (none)
 - Risk Signal: P0=0, P1=0, P2=0
 - Recent PRs: https://github.com/agentclientprotocol/java-sdk/pulls?q=sort%3Aupdated-desc
 - Recent Issues: https://github.com/agentclientprotocol/java-sdk/issues?q=sort%3Aupdated-desc
@@ -74,7 +103,7 @@
 - Default Branch: `main`
 - Head SHA: `93c853a77f35`
 - Pushed At: 2026-02-19T16:04:53Z
-- Latest Release: {"message":"Not Found","documentation_url":"https://docs.github.com/rest/releases/releases#get-the-latest-release","status":"404"}none ({"message":"Not Found","documentation_url":"https://docs.github.com/rest/releases/releases#get-the-latest-release","status":"404"}none)
+- Latest Release: none (none)
 - Risk Signal: P0=0, P1=0, P2=0
 - Recent PRs: https://github.com/agentclientprotocol/meetings/pulls?q=sort%3Aupdated-desc
 - Recent Issues: https://github.com/agentclientprotocol/meetings/issues?q=sort%3Aupdated-desc
@@ -94,9 +123,9 @@
 
 - URL: https://github.com/agentclientprotocol/registry
 - Default Branch: `main`
-- Head SHA: `2ccadcf96316`
-- Pushed At: 2026-02-26T23:30:59Z
-- Latest Release: v2026.02.26-2ccadcf (2026-02-26T23:31:00Z)
+- Head SHA: `1f59cec4ce4b`
+- Pushed At: 2026-02-27T10:57:02Z
+- Latest Release: v2026.02.27-1f59cec (2026-02-27T10:57:02Z)
 - Risk Signal: P0=2, P1=0, P2=4
 - Recent PRs: https://github.com/agentclientprotocol/registry/pulls?q=sort%3Aupdated-desc
 - Recent Issues: https://github.com/agentclientprotocol/registry/issues?q=sort%3Aupdated-desc

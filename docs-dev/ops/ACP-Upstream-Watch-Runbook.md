@@ -26,6 +26,8 @@ ACP_UPSTREAM_DAILY_FILE=docs-dev/ops/acp-upstream-daily.md \
 - 默认输出：`docs-dev/ops/acp-upstream-daily.md`
 - 内容：
   - 每日汇总（仓库数量、P0/P1/P2 聚合）
+  - schema 漂移摘要（stable/unstable missingLocal/extraLocal）
+  - compatibility 扩展与上游重叠检查（用于提示迁移到 official baseline）
   - 每仓库快照（默认分支、HEAD、最新 Release、风险信号）
 
 ## 分级规则
