@@ -52,6 +52,8 @@ sort -u "$repos_file" -o "$repos_file"
   echo "## Summary"
   echo
 } > "$tmp_dir/report.md"
+repo_sections="$tmp_dir/repositories.md"
+> "$repo_sections"
 
 total_repos=0
 p0_hits=0
@@ -111,12 +113,11 @@ while IFS= read -r repo; do
     echo "- Recent PRs: https://github.com/${repo}/pulls?q=sort%3Aupdated-desc"
     echo "- Recent Issues: https://github.com/${repo}/issues?q=sort%3Aupdated-desc"
     echo
-  } >> "$tmp_dir/report.md"
+  } >> "$repo_sections"
 done < "$repos_file"
 
-# Insert summary block right after "## Summary"
-summary_block="$tmp_dir/summary.md"
 {
+  cat "$tmp_dir/report.md"
   echo "- Repositories Watched: ${total_repos}"
   echo "- Aggregate Risk Signal: P0=${p0_hits}, P1=${p1_hits}, P2=${p2_hits}"
   if [ "$p0_hits" -gt 0 ]; then
@@ -129,16 +130,7 @@ summary_block="$tmp_dir/summary.md"
   echo
   echo "## Repositories"
   echo
-} > "$summary_block"
-
-awk -v f="$summary_block" '
-  BEGIN {
-    while ((getline line < f) > 0) s = s line "\n"
-    close(f)
-  }
-  /## Summary/ { print; print ""; printf "%s", s; skip=1; next }
-  skip==1 && /^## Repositories$/ { skip=0; next }
-  skip==0 { print }
-' "$tmp_dir/report.md" > "$OUT_FILE"
+  cat "$repo_sections"
+} > "$OUT_FILE"
 
 echo "Wrote upstream watch report: ${OUT_FILE}"
