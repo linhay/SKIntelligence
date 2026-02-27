@@ -248,25 +248,49 @@ write_summary_json() {
   } > "$summary_tmp"
   mv "$summary_tmp" "$SUMMARY_JSON_PATH"
 
-  # Lightweight guard against accidental format drift.
-  if ! rg -q '"schemaVersion":' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"generatedBy":' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"exitCode":' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"ciRecommendation":' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"allStagesPassed":' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"hasWarnings":' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"hasSkipped":' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"countsConsistent":' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"requiredPassed":' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"artifacts": \{' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"stages": \[' "$SUMMARY_JSON_PATH" || \
-     ! rg -q '"logPath":' "$SUMMARY_JSON_PATH"; then
-    echo "summary json validation failed: missing required fields" >&2
-    return 1
+  # Prefer structural validation when jq is available; fall back to text guards.
+  if command -v jq >/dev/null 2>&1; then
+    if ! jq -e '
+      (.schemaVersion | type == "string") and
+      (.generatedBy | type == "string") and
+      (.exitCode | type == "number") and
+      (.stageCounts | type == "object") and
+      (.ciRecommendation | type == "string") and
+      (.allStagesPassed | type == "boolean") and
+      (.hasWarnings | type == "boolean") and
+      (.hasSkipped | type == "boolean") and
+      (.countsConsistent | type == "boolean") and
+      (.requiredStageCounts | type == "object") and
+      (.optionalStageCounts | type == "object") and
+      (.requiredPassed | type == "boolean") and
+      (.artifacts | type == "object") and
+      (.stages | type == "array") and
+      (.stages | length >= 1) and
+      (.stages[0].logPath != null)
+    ' "$SUMMARY_JSON_PATH" >/dev/null; then
+      echo "summary json validation failed: jq structural check failed" >&2
+      return 1
+    fi
+  else
+    if ! rg -q '"schemaVersion":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"generatedBy":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"exitCode":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"ciRecommendation":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"allStagesPassed":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"hasWarnings":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"hasSkipped":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"countsConsistent":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"requiredPassed":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"artifacts": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"stages": \[' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"logPath":' "$SUMMARY_JSON_PATH"; then
+      echo "summary json validation failed: missing required fields" >&2
+      return 1
+    fi
   fi
 }
 
