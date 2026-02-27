@@ -359,6 +359,7 @@ write_summary_json() {
   local optional_outcome="clean"
   local required_outcome="clean"
   local overall_outcome="clean"
+  local overall_outcome_rank=0
   local summary_hash="unavailable"
   local failed_stages=""
   local non_pass_stages=""
@@ -421,14 +422,17 @@ write_summary_json() {
     ci_recommendation="fail"
     result_reason="required stages failed"
     overall_outcome="blocked"
+    overall_outcome_rank=2
   elif [ "$count_warn" -gt 0 ] || [ "$count_skipped" -gt 0 ]; then
     ci_recommendation="pass_with_warnings"
     result_reason="optional stages warned or skipped"
     overall_outcome="degraded"
+    overall_outcome_rank=1
   else
     ci_recommendation="pass"
     result_reason="all stages passed"
     overall_outcome="clean"
+    overall_outcome_rank=0
   fi
   if [ "$optional_total" -ne "$optional_pass" ]; then
     has_optional_non_pass="true"
@@ -504,6 +508,7 @@ write_summary_json() {
     printf '  "optionalOutcome": "%s",\n' "$(json_escape "$optional_outcome")"
     printf '  "requiredOutcome": "%s",\n' "$(json_escape "$required_outcome")"
     printf '  "overallOutcome": "%s",\n' "$(json_escape "$overall_outcome")"
+    printf '  "overallOutcomeRank": %s,\n' "$overall_outcome_rank"
     printf '  "stageStatusMap": %s,\n' "$(json_object_stage_status_map "$SUMMARY_LINES")"
     printf '  "stageExitCodeMap": %s,\n' "$(json_object_stage_exit_code_map "$SUMMARY_LINES")"
     printf '  "stageDurationSecondsMap": %s,\n' "$(json_object_stage_duration_map "$SUMMARY_LINES")"
@@ -610,6 +615,7 @@ write_summary_json() {
       (.optionalOutcome | type == "string") and
       (.requiredOutcome | type == "string") and
       (.overallOutcome | type == "string") and
+      (.overallOutcomeRank | type == "number") and
       (.stageStatusMap | type == "object") and
       (.stageExitCodeMap | type == "object") and
       (.stageDurationSecondsMap | type == "object") and
@@ -659,6 +665,7 @@ write_summary_json() {
        ! rg -q '"optionalOutcome":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredOutcome":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"overallOutcome":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"overallOutcomeRank":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageStatusMap":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageExitCodeMap":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageDurationSecondsMap":' "$SUMMARY_JSON_PATH" || \
