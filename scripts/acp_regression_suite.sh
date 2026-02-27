@@ -52,6 +52,22 @@ json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
 
+json_array_from_lines() {
+  local lines="$1"
+  local first=1
+  local item
+  printf '['
+  while IFS= read -r item; do
+    [ -z "$item" ] && continue
+    if [ "$first" -eq 0 ]; then
+      printf ','
+    fi
+    first=0
+    printf '"%s"' "$(json_escape "$item")"
+  done <<< "$lines"
+  printf ']'
+}
+
 append_summary() {
   local index="$1"
   local stage="$2"
@@ -104,12 +120,20 @@ write_summary_json() {
   local ci_recommendation="fail"
   local result_reason="required stages failed"
   local summary_hash="unavailable"
+  local failed_stages=""
+  local non_pass_stages=""
   finished_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((finished_at_epoch - SUITE_STARTED_AT_EPOCH))"
   while IFS='|' read -r _index _stage _status _required _exit_code _started_at_utc _finished_at_utc _duration_seconds _attempts _message _log_path; do
     [ -z "$_index" ] && continue
     count_total=$((count_total + 1))
+    if [ "$_status" != "pass" ]; then
+      non_pass_stages+="${_stage}"$'\n'
+    fi
+    if [ "$_status" = "fail" ]; then
+      failed_stages+="${_stage}"$'\n'
+    fi
     if [ "$_required" = "true" ]; then
       required_total=$((required_total + 1))
       case "$_status" in
@@ -193,6 +217,8 @@ write_summary_json() {
     printf '    "warn": %s,\n' "$count_warn"
     printf '    "skipped": %s\n' "$count_skipped"
     printf '  },\n'
+    printf '  "failedStages": %s,\n' "$(json_array_from_lines "$failed_stages")"
+    printf '  "nonPassStages": %s,\n' "$(json_array_from_lines "$non_pass_stages")"
     printf '  "ciRecommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
     printf '  "resultReason": "%s",\n' "$(json_escape "$result_reason")"
     if [ "$count_total" -eq "$count_pass" ]; then
@@ -274,6 +300,8 @@ write_summary_json() {
       (.summaryHash | type == "string") and
       (.exitCode | type == "number") and
       (.stageCounts | type == "object") and
+      (.failedStages | type == "array") and
+      (.nonPassStages | type == "array") and
       (.ciRecommendation | type == "string") and
       (.resultReason | type == "string") and
       (.allStagesPassed | type == "boolean") and
@@ -298,6 +326,8 @@ write_summary_json() {
        ! rg -q '"exitCode":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"failedStages":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"nonPassStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"ciRecommendation":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"resultReason":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"allStagesPassed":' "$SUMMARY_JSON_PATH" || \

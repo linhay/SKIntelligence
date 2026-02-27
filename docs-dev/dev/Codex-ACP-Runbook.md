@@ -211,6 +211,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - summary 写回校验优先使用 `jq` 做结构校验（无 `jq` 时退回字段文本校验），降低“格式合法但结构错位”风险。
 - summary 顶层新增 `summaryHash`（SHA-256），基于关键配置与 stage 结果计算，用于快速比对两次回归是否等价。
 - summary 顶层新增 `resultReason`，提供对 `ciRecommendation` 的可读原因描述（便于人工排查）。
+- summary 增加 `failedStages` 与 `nonPassStages` 数组，直接列出失败/非通过阶段名，便于快速定位。
 - 脚本结束会输出一行 `[suite] counts ...`，包含分布、`requiredPassed`、`ciRecommendation` 与 `runCodexProbes/strictCodexProbes`，可直接在控制台/CI 日志快速观察本轮模式。
 
 示例：
