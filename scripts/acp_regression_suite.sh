@@ -405,6 +405,8 @@ write_summary_json() {
   local ci_recommendation="fail"
   local result_reason="required stages failed"
   local probe_mode="disabled"
+  local execution_mode="required_only"
+  local execution_mode_description="required stages with codex probes skipped"
   local has_optional_non_pass="false"
   local has_required_failures="false"
   local optional_outcome="clean"
@@ -548,8 +550,12 @@ write_summary_json() {
   if [ "${RUN_CODEX_PROBES:-0}" = "1" ]; then
     if [ "$STRICT_CODEX_PROBES" = "1" ]; then
       probe_mode="strict"
+      execution_mode="full_strict"
+      execution_mode_description="required stages plus codex probes in strict mode"
     else
       probe_mode="non_strict"
+      execution_mode="full_non_strict"
+      execution_mode_description="required stages plus codex probes in non-strict mode"
     fi
   fi
   failed_stages_count="$count_fail"
@@ -758,6 +764,11 @@ write_summary_json() {
     printf '    "blockingReasons": %s,\n' "$(json_array_from_lines "$blocking_reasons")"
     printf '    "warningReasons": %s\n' "$(json_array_from_lines "$warning_reasons")"
     printf '  },\n'
+    printf '  "executionMode": {\n'
+    printf '    "mode": "%s",\n' "$(json_escape "$execution_mode")"
+    printf '    "description": "%s",\n' "$(json_escape "$execution_mode_description")"
+    printf '    "probeMode": "%s"\n' "$(json_escape "$probe_mode")"
+    printf '  },\n'
     printf '  "requiredStageCounts": {\n'
     printf '    "total": %s,\n' "$required_total"
     printf '    "pass": %s,\n' "$required_pass"
@@ -867,6 +878,7 @@ write_summary_json() {
       (.summaryIntegrity | type == "object") and
       (.drilldown | type == "object") and
       (.decisionMatrix | type == "object") and
+      (.executionMode | type == "object") and
       (.requiredStageCounts | type == "object") and
       (.optionalStageCounts | type == "object") and
       (.requiredPassed | type == "boolean") and
@@ -931,6 +943,7 @@ write_summary_json() {
        ! rg -q '"summaryIntegrity": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"drilldown": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"decisionMatrix": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"executionMode": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredPassed":' "$SUMMARY_JSON_PATH" || \
