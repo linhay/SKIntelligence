@@ -239,3 +239,4 @@ cat /tmp/acp_suite_summary.json
 - summary 增加 `hasRequiredFailures`（boolean），用于快速判断必跑阶段是否存在失败。
 - summary 增加 `optionalOutcome`（`clean | degraded`），用于直接表达可选阶段整体状态。
 - summary 增加 `requiredOutcome`（`clean | blocked`），用于直接表达必跑阶段整体状态。
+- summary 增加 `overallOutcome`（`clean | degraded | blocked`），统一表达整套回归结果态。
