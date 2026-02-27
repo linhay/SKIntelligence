@@ -250,3 +250,4 @@ cat /tmp/acp_suite_summary.json
 - summary 增加 `qualityGate`（`blocked/degraded/clean/recommendation/reason`），提供和 `ciRecommendation` 对齐的质量门禁视图。
 - summary 增加 `timingStats`（`suiteDurationSeconds/sumStageDurations/max/min`），支持联调看板直接显示阶段耗时极值与总耗时。
 - `schemaVersion` 升级到 `5`：包含 `alerts/summaryCompact/alertCounts/hasBlockingAlerts/codexProbes/stageStatusBuckets/qualityGate/timingStats`。
+- summary 增加 `compatV4` 兼容视图，回填 `requiredPassed/ciRecommendation/overallOutcome/*Stages/probeMode`，便于旧消费端渐进迁移。

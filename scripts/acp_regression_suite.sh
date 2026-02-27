@@ -698,6 +698,18 @@ write_summary_json() {
     printf '    "requiredFailedStagesCount": %s,\n' "$required_failed"
     printf '    "optionalNonPassStagesCount": %s\n' "$((optional_total - optional_pass))"
     printf '  },\n'
+    printf '  "compatV4": {\n'
+    printf '    "requiredPassed": %s,\n' "$([ "$required_failed" -eq 0 ] && echo true || echo false)"
+    printf '    "ciRecommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
+    printf '    "overallOutcome": "%s",\n' "$(json_escape "$overall_outcome")"
+    printf '    "overallOutcomeRank": %s,\n' "$overall_outcome_rank"
+    printf '    "failedStages": %s,\n' "$(json_array_from_lines "$failed_stages")"
+    printf '    "nonPassStages": %s,\n' "$(json_array_from_lines "$non_pass_stages")"
+    printf '    "warnStages": %s,\n' "$(json_array_from_lines "$warn_stages")"
+    printf '    "skippedStages": %s,\n' "$(json_array_from_lines "$skipped_stages")"
+    printf '    "requiredFailedStages": %s,\n' "$required_failed_stages_json"
+    printf '    "probeMode": "%s"\n' "$(json_escape "$probe_mode")"
+    printf '  },\n'
     printf '  "requiredStageCounts": {\n'
     printf '    "total": %s,\n' "$required_total"
     printf '    "pass": %s,\n' "$required_pass"
@@ -802,6 +814,7 @@ write_summary_json() {
       (.qualityGate | type == "object") and
       (.timingStats | type == "object") and
       (.summaryCompact | type == "object") and
+      (.compatV4 | type == "object") and
       (.requiredStageCounts | type == "object") and
       (.optionalStageCounts | type == "object") and
       (.requiredPassed | type == "boolean") and
@@ -861,6 +874,7 @@ write_summary_json() {
        ! rg -q '"qualityGate": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"timingStats": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"summaryCompact": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"compatV4": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredPassed":' "$SUMMARY_JSON_PATH" || \
