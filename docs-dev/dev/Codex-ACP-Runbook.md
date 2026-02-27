@@ -232,3 +232,4 @@ cat /tmp/acp_suite_summary.json
 - summary 增加 `stageIndexMap`（`stage -> index`），便于外部系统快速恢复阶段执行顺序。
 - summary 增加 `probeMode`（`disabled | non_strict | strict`），用于直接表达探针运行策略。
 - summary 增加 `warnStages` 与 `skippedStages` 数组，便于告警系统直接消费异常阶段集合。
+- summary 增加 `requiredStages` 与 `optionalStages` 数组，便于下游直接按必跑/可选阶段分组展示。
