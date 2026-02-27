@@ -62,6 +62,29 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--endpoint is required for ws transport"))
     }
 
+    func testClientStopRejectsMissingSessionID() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "stop",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--args", "cat"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--session-id is required"))
+    }
+
+    func testClientStopRejectsEmptySessionID() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "stop",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--args", "cat",
+            "--session-id", "   "
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--session-id must not be empty"))
+    }
+
     func testClientConnectStdioRejectsNegativeRequestTimeout() throws {
         let result = try runSKI(arguments: [
             "acp", "client", "connect-stdio",
@@ -135,6 +158,12 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Examples:"))
         XCTAssertTrue(result.stdout.contains("ski acp client connect --transport stdio"))
         XCTAssertTrue(result.stdout.contains("ski acp client connect --transport ws --endpoint"))
+    }
+
+    func testClientHelpContainsStopSubcommand() throws {
+        let result = try runSKI(arguments: ["acp", "client", "--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("stop"))
     }
 
     func testClientConnectStdioHelpHidesWSOnlyOptions() throws {
@@ -1069,7 +1098,7 @@ final class SKICLIProcessTests: XCTestCase {
             throw XCTSkip("ski binary not found under .build")
         }
 
-        let port = 18917
+        let port = 18918
         let server = Process()
         server.executableURL = skiURL
         server.arguments = [
@@ -1313,6 +1342,75 @@ final class SKICLIProcessTests: XCTestCase {
             result.stderr.contains("Could not route request to client owner by sessionId") || result.stderr.contains("Error:"),
             "stderr: \(result.stderr)"
         )
+    }
+
+    func testClientStopViaWSReturnsSessionStopJSON() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18917
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--permission-mode", "permissive",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let createResult = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--prompt", "hello",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+        XCTAssertEqual(createResult.exitCode, 0, "stderr: \(createResult.stderr)\nstdout: \(createResult.stdout)")
+        let promptLine = try XCTUnwrap(
+            createResult.stdout
+                .split(separator: "\n")
+                .map(String.init)
+                .last(where: { $0.contains("\"type\":\"prompt_result\"") }),
+            "stdout: \(createResult.stdout)"
+        )
+        let promptObject = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(promptLine.utf8)) as? [String: String])
+        let sessionID = try XCTUnwrap(promptObject["sessionId"])
+
+        let stopResult = try runSKI(
+            arguments: [
+                "acp", "client", "stop",
+                "--transport", "ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--session-id", sessionID,
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+        XCTAssertEqual(stopResult.exitCode, 0, "stderr: \(stopResult.stderr)\nstdout: \(stopResult.stdout)")
+        let stopLine = try XCTUnwrap(
+            stopResult.stdout
+                .split(separator: "\n")
+                .map(String.init)
+                .last(where: { $0.contains("\"type\":\"session_stop\"") }),
+            "stdout: \(stopResult.stdout)"
+        )
+        let stopObject = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(stopLine.utf8)) as? [String: String])
+        XCTAssertEqual(stopObject["sessionId"], sessionID)
+        XCTAssertEqual(stopObject["type"], "session_stop")
     }
 }
 

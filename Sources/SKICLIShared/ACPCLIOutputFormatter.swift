@@ -22,6 +22,11 @@ public enum ACPCLIOutputFormatter {
         let payload = PromptResultPayload(type: "prompt_result", sessionId: sessionId, stopReason: stopReason)
         return try encode(payload)
     }
+
+    public static func sessionStopJSON(sessionId: String) throws -> String {
+        let payload = SessionStopPayload(type: "session_stop", sessionId: sessionId)
+        return try encode(payload)
+    }
 }
 
 private extension ACPCLIOutputFormatter {
@@ -36,6 +41,11 @@ private extension ACPCLIOutputFormatter {
         let type: String
         let sessionId: String
         let stopReason: String
+    }
+
+    struct SessionStopPayload: Encodable {
+        let type: String
+        let sessionId: String
     }
 
     static func encode<T: Encodable>(_ payload: T) throws -> String {

@@ -49,6 +49,18 @@ swift run ski acp client connect \
 
 预期：输出两条 `prompt_result`，且 `sessionId` 相同。
 
+### 4.2 对已有会话发送 `session/stop`
+
+```bash
+swift run ski acp client stop \
+  --transport ws \
+  --endpoint ws://127.0.0.1:8900 \
+  --session-id sess_123 \
+  --json
+```
+
+预期：输出 `{"type":"session_stop","sessionId":"sess_123"}`。
+
 ## 5. 稳定性烟测
 
 ```bash
