@@ -248,3 +248,4 @@ cat /tmp/acp_suite_summary.json
 - summary 增加 `codexProbes` 聚合对象（`enabled/strict/*ProbeStatus/nonPassCount`），用于跨客户端联调时快速判断 Codex 探针状态。
 - summary 增加 `passStages` 与 `stageStatusBuckets`（按状态分桶），支持消费端直接按状态渲染，不再自行过滤 `stages`。
 - summary 增加 `qualityGate`（`blocked/degraded/clean/recommendation/reason`），提供和 `ciRecommendation` 对齐的质量门禁视图。
+- summary 增加 `timingStats`（`suiteDurationSeconds/sumStageDurations/max/min`），支持联调看板直接显示阶段耗时极值与总耗时。

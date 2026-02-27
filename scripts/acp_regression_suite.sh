@@ -424,6 +424,11 @@ write_summary_json() {
   local codex_permission_probe_status="unknown"
   local codex_multiturn_probe_status="unknown"
   local codex_probe_non_pass_count=0
+  local max_duration_seconds=-1
+  local min_duration_seconds=-1
+  local max_duration_stage=""
+  local min_duration_stage=""
+  local sum_stage_durations=0
   local failed_stages=""
   local pass_stages=""
   local non_pass_stages=""
@@ -437,6 +442,15 @@ write_summary_json() {
   while IFS='|' read -r _index _stage _status _required _exit_code _started_at_utc _finished_at_utc _duration_seconds _attempts _message _log_path; do
     [ -z "$_index" ] && continue
     count_total=$((count_total + 1))
+    sum_stage_durations=$((sum_stage_durations + _duration_seconds))
+    if [ "$max_duration_seconds" -lt 0 ] || [ "$_duration_seconds" -gt "$max_duration_seconds" ]; then
+      max_duration_seconds="$_duration_seconds"
+      max_duration_stage="$_stage"
+    fi
+    if [ "$min_duration_seconds" -lt 0 ] || [ "$_duration_seconds" -lt "$min_duration_seconds" ]; then
+      min_duration_seconds="$_duration_seconds"
+      min_duration_stage="$_stage"
+    fi
     if [ "$_status" != "pass" ]; then
       non_pass_stages+="${_stage}"$'\n'
     fi
@@ -664,6 +678,14 @@ write_summary_json() {
     printf '    "recommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
     printf '    "reason": "%s"\n' "$(json_escape "$result_reason")"
     printf '  },\n'
+    printf '  "timingStats": {\n'
+    printf '    "suiteDurationSeconds": %s,\n' "$duration_seconds"
+    printf '    "sumStageDurations": %s,\n' "$sum_stage_durations"
+    printf '    "maxDurationStage": "%s",\n' "$(json_escape "$max_duration_stage")"
+    printf '    "maxDurationSeconds": %s,\n' "$max_duration_seconds"
+    printf '    "minDurationStage": "%s",\n' "$(json_escape "$min_duration_stage")"
+    printf '    "minDurationSeconds": %s\n' "$min_duration_seconds"
+    printf '  },\n'
     printf '  "summaryCompact": {\n'
     printf '    "overallOutcome": "%s",\n' "$(json_escape "$overall_outcome")"
     printf '    "overallOutcomeRank": %s,\n' "$overall_outcome_rank"
@@ -778,6 +800,7 @@ write_summary_json() {
       (.codexProbes | type == "object") and
       (.stageStatusBuckets | type == "object") and
       (.qualityGate | type == "object") and
+      (.timingStats | type == "object") and
       (.summaryCompact | type == "object") and
       (.requiredStageCounts | type == "object") and
       (.optionalStageCounts | type == "object") and
@@ -836,6 +859,7 @@ write_summary_json() {
        ! rg -q '"codexProbes": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageStatusBuckets": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"qualityGate": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"timingStats": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"summaryCompact": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
