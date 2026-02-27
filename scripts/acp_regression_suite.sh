@@ -102,6 +102,7 @@ write_summary_json() {
   local required_failed=0
   local counts_consistent="true"
   local ci_recommendation="fail"
+  local result_reason="required stages failed"
   local summary_hash="unavailable"
   finished_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
@@ -139,10 +140,13 @@ write_summary_json() {
   fi
   if [ "$required_failed" -gt 0 ] || [ "$count_fail" -gt 0 ]; then
     ci_recommendation="fail"
+    result_reason="required stages failed"
   elif [ "$count_warn" -gt 0 ] || [ "$count_skipped" -gt 0 ]; then
     ci_recommendation="pass_with_warnings"
+    result_reason="optional stages warned or skipped"
   else
     ci_recommendation="pass"
+    result_reason="all stages passed"
   fi
   if command -v shasum >/dev/null 2>&1; then
     summary_hash="$(printf '%s|%s|%s|%s|%s|%s|%s\n%s\n' \
@@ -190,6 +194,7 @@ write_summary_json() {
     printf '    "skipped": %s\n' "$count_skipped"
     printf '  },\n'
     printf '  "ciRecommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
+    printf '  "resultReason": "%s",\n' "$(json_escape "$result_reason")"
     if [ "$count_total" -eq "$count_pass" ]; then
       printf '  "allStagesPassed": true,\n'
     else
@@ -270,6 +275,7 @@ write_summary_json() {
       (.exitCode | type == "number") and
       (.stageCounts | type == "object") and
       (.ciRecommendation | type == "string") and
+      (.resultReason | type == "string") and
       (.allStagesPassed | type == "boolean") and
       (.hasWarnings | type == "boolean") and
       (.hasSkipped | type == "boolean") and
@@ -293,6 +299,7 @@ write_summary_json() {
        ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"ciRecommendation":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"resultReason":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"allStagesPassed":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"hasWarnings":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"hasSkipped":' "$SUMMARY_JSON_PATH" || \
