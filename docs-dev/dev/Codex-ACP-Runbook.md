@@ -229,3 +229,4 @@ ACP_SUITE_SUMMARY_JSON=/tmp/acp_suite_summary.json ./scripts/acp_regression_suit
 cat /tmp/acp_suite_summary.json
 ```
 - summary 增加 `stageFinishedAtMap`（`stage -> finishedAtUtc`），可与 `stageStartedAtMap` 组合做阶段窗口分析。
+- summary 增加 `stageIndexMap`（`stage -> index`），便于外部系统快速恢复阶段执行顺序。
