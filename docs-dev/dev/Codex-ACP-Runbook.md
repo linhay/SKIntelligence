@@ -253,3 +253,4 @@ cat /tmp/acp_suite_summary.json
 - summary 增加 `compatV4` 兼容视图，回填 `requiredPassed/ciRecommendation/overallOutcome/*Stages/probeMode`，便于旧消费端渐进迁移。
 - summary 增加 `consumerHints`（推荐读取路径），指导消费端优先读取 `qualityGate.recommendation`、`summaryCompact.overallOutcome`、`compatV4`。
 - summary 增加 `summaryIntegrity`（`countsConsistent/hasSummaryHash/hasRunId/hasStageLogs/ok`），用于快速判断 summary 可用性。
+- summary 增加 `drilldown`（`firstNonPassStage/firstNonPassStatus/firstNonPassLogPath`），用于联调时快速跳转首个非通过点。
