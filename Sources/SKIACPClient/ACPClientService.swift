@@ -188,6 +188,13 @@ public actor ACPClientService {
         try await transport.send(.notification(message))
     }
 
+    /// Compatibility helper for ACP proposal `session/stop`.
+    /// Not part of current ACP stable/unstable method baselines.
+    public func stopSession(_ params: ACPSessionCancelParams) async throws -> ACPSessionStopResult {
+        let response = try await call(method: ACPMethods.sessionStop, params: params)
+        return try ACPCodec.decodeResult(response.result, as: ACPSessionStopResult.self)
+    }
+
     public func cancelRequest(_ params: ACPCancelRequestParams) async throws {
         let payload = try ACPCodec.encodeParams(params)
         let message = JSONRPCNotification(method: ACPMethods.cancelRequest, params: payload)
