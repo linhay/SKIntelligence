@@ -205,6 +205,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - summary 顶层 `requiredPassed` 标识必选阶段是否全部通过，便于区分“主链失败”与“可选探针告警”。
 - summary 增加 `requiredStageCounts/optionalStageCounts`，分别统计必选与可选阶段分布，便于看板聚合。
 - summary 增加 `countsConsistent`，用于标记总数与分项统计是否一致，防止字段演进时计数漂移。
+- summary 增加 `hasWarnings/hasSkipped` 布尔字段，便于 CI 直接做告警分流。
 - 脚本结束会输出一行 `[suite] counts ...`，包含分布与 `runCodexProbes/strictCodexProbes`，可直接在控制台/CI 日志快速观察本轮模式。
 
 示例：
