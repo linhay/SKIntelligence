@@ -218,6 +218,7 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - summary 增加 `stageDurationSecondsMap`（`stage -> durationSeconds`），方便趋势监控直接比较阶段耗时。
 - summary 增加 `stageAttemptsMap`（`stage -> attempts`），便于识别可选探针重试抖动。
 - summary 增加 `stageMessageMap`（`stage -> message`），便于告警系统直接拼接失败原因文案。
+- summary 增加 `stageLogPathMap`（`stage -> logPath`），便于日志平台直接跳转到阶段日志文件。
 - 脚本结束会输出一行 `[suite] counts ...`，包含分布、`requiredPassed`、`ciRecommendation` 与 `runCodexProbes/strictCodexProbes`，可直接在控制台/CI 日志快速观察本轮模式。
 
 示例：
