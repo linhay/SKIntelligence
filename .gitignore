@@ -9,3 +9,4 @@ DerivedData/
 Tests/SKIntelligenceTests/Shared.swift
 External/
 references/
+.local/
