@@ -241,3 +241,6 @@ cat /tmp/acp_suite_summary.json
 - summary 增加 `requiredOutcome`（`clean | blocked`），用于直接表达必跑阶段整体状态。
 - summary 增加 `overallOutcome`（`clean | degraded | blocked`），统一表达整套回归结果态。
 - summary 增加 `overallOutcomeRank`（`clean=0,degraded=1,blocked=2`），便于监控系统做排序和阈值判断。
+- summary 增加 `alerts`（标准化告警列表），按 `severity/category/stages` 提供直接可消费告警对象。
+- summary 增加 `summaryCompact`（轻量聚合视图），提供 `overallOutcome/ciRecommendation/*Count` 等最小消费字段，降低下游二次拼装成本。
+- `schemaVersion` 升级到 `4`，消费端应先做版本判断，再按字段能力渐进解析。
