@@ -14,6 +14,121 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--prompt must not be empty"))
     }
 
+    func testClientConnectRejectsMissingPrompt() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--args", "cat"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--prompt must be provided at least once"))
+    }
+
+    func testClientConnectStdioRejectsMissingPrompt() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-stdio",
+            "--cmd", "/usr/bin/env",
+            "--args", "cat"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--prompt must be provided at least once"))
+    }
+
+    func testClientConnectWSRejectsMissingPrompt() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--prompt must be provided at least once"))
+    }
+
+    func testClientConnectStdioRejectsMissingCmd() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-stdio",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--cmd is required for stdio transport"))
+    }
+
+    func testClientConnectWSRejectsMissingEndpoint() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--endpoint is required for ws transport"))
+    }
+
+    func testClientConnectStdioRejectsNegativeRequestTimeout() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-stdio",
+            "--cmd", "/usr/bin/env",
+            "--args", "cat",
+            "--request-timeout-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--request-timeout-ms must be >= 0"))
+    }
+
+    func testClientConnectWSRejectsNegativeRequestTimeout() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--request-timeout-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--request-timeout-ms must be >= 0"))
+    }
+
+    func testClientConnectWSRejectsNegativeHeartbeat() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-heartbeat-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-heartbeat-ms must be >= 0"))
+    }
+
+    func testClientConnectWSRejectsNegativeReconnectAttempts() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-reconnect-attempts=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-attempts must be >= 0"))
+    }
+
+    func testClientConnectWSRejectsNegativeReconnectBaseDelay() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-reconnect-base-delay-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-base-delay-ms must be >= 0"))
+    }
+
+    func testClientConnectWSRejectsNonPositiveMaxInFlightSends() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--max-in-flight-sends=0",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--max-in-flight-sends must be > 0"))
+    }
+
     func testClientConnectHelpContainsExamples() throws {
         let result = try runSKI(arguments: ["acp", "client", "connect", "--help"])
         XCTAssertEqual(result.exitCode, 0)
@@ -79,6 +194,27 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("Informational only."))
     }
 
+    func testServeHelpContainsTimeoutAndTTLParameters() throws {
+        let result = try runSKI(arguments: ["acp", "serve", "--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("--prompt-timeout-ms"))
+        XCTAssertTrue(result.stdout.contains("--session-ttl-ms"))
+        XCTAssertTrue(result.stdout.contains("--permission-timeout-ms"))
+    }
+
+    func testServeHelpMentionsPermissionModeValues() throws {
+        let result = try runSKI(arguments: ["acp", "serve", "--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("disabled | permissive | required"))
+    }
+
+    func testServeHelpContainsWSListenAndBackpressureOptions() throws {
+        let result = try runSKI(arguments: ["acp", "serve", "--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("--listen"))
+        XCTAssertTrue(result.stdout.contains("--max-in-flight-sends"))
+    }
+
     func testClientConnectHelpMentionsCWDIsSentToServer() throws {
         let result = try runSKI(arguments: ["acp", "client", "connect", "--help"])
         XCTAssertEqual(result.exitCode, 0)
@@ -113,6 +249,26 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--endpoint must use ws:// or wss:// and include host"))
     }
 
+    func testClientConnectWSRejectsEndpointWithoutWSScheme() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "http://127.0.0.1:8900",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--endpoint must use ws:// or wss:// and include host"))
+    }
+
+    func testClientConnectWSRejectsEndpointWithoutHost() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws:///path-only",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--endpoint must use ws:// or wss:// and include host"))
+    }
+
     func testClientWSRejectsCmdOption() throws {
         let result = try runSKI(arguments: [
             "acp", "client", "connect",
@@ -123,6 +279,32 @@ final class SKICLIProcessTests: XCTestCase {
         ])
         XCTAssertEqual(result.exitCode, 2)
         XCTAssertTrue(result.stderr.contains("--cmd is only valid for stdio transport"))
+    }
+
+    func testClientWSRejectsArgsOption() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:8900",
+            "--args", "serve",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--args is only valid for stdio transport"))
+    }
+
+    func testClientWSCmdWithArgsShowsArgsEqualsHint() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:8900",
+            "--cmd", "/usr/bin/env",
+            "--args=--transport",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--cmd is only valid for stdio transport (if child args start with '-', pass as --args=--flag)"))
+        XCTAssertTrue(result.stderr.contains("--args=--flag"))
     }
 
     func testClientArgsOptionLikeTokenShowsHint() throws {
@@ -203,11 +385,82 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--request-timeout-ms must be >= 0"))
     }
 
+    func testClientConnectGenericWSRejectsNegativeHeartbeat() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-heartbeat-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-heartbeat-ms must be >= 0"))
+    }
+
+    func testClientConnectGenericWSRejectsNegativeReconnectAttempts() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-reconnect-attempts=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-attempts must be >= 0"))
+    }
+
+    func testClientConnectGenericWSRejectsNegativeReconnectBaseDelay() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--ws-reconnect-base-delay-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-base-delay-ms must be >= 0"))
+    }
+
+    func testClientConnectGenericWSRejectsNonPositiveMaxInFlightSends() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--max-in-flight-sends=0",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--max-in-flight-sends must be > 0"))
+    }
+
     func testClientConnectRejectsEmptySessionID() throws {
         let result = try runSKI(arguments: [
             "acp", "client", "connect-stdio",
             "--cmd", "/usr/bin/env",
             "--args", "cat",
+            "--session-id", "   ",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--session-id must not be empty when provided"))
+    }
+
+    func testClientConnectWSRejectsEmptySessionID() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect-ws",
+            "--endpoint", "ws://127.0.0.1:1",
+            "--session-id", "   ",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--session-id must not be empty when provided"))
+    }
+
+    func testClientConnectGenericWSRejectsEmptySessionID() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "ws",
+            "--endpoint", "ws://127.0.0.1:1",
             "--session-id", "   ",
             "--prompt", "hi"
         ])
@@ -232,6 +485,37 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--listen must be in host:port format with port in 1...65535"))
     }
 
+    func testServeRejectsNegativePromptTimeout() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--prompt-timeout-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--prompt-timeout-ms must be >= 0"))
+    }
+
+    func testServeRejectsNegativeSessionTTL() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--session-ttl-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--session-ttl-ms must be >= 0"))
+    }
+
+    func testServeRejectsNegativePermissionTimeoutWhenModeEnabled() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--permission-mode", "permissive",
+            "--permission-timeout-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--permission-timeout-ms must be >= 0"))
+    }
+
     func testServePermissionTimeoutOptionRejectedWhenPermissionModeDisabled() throws {
         let result = try runSKI(arguments: [
             "acp", "serve",
@@ -241,6 +525,43 @@ final class SKICLIProcessTests: XCTestCase {
         ])
         XCTAssertEqual(result.exitCode, 2)
         XCTAssertTrue(result.stderr.contains("--permission-timeout-ms is only valid when --permission-mode is permissive or required"))
+    }
+
+    func testServeWSPermissionTimeoutOptionRejectedWhenPermissionModeDisabled() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:8900",
+            "--permission-mode", "disabled",
+            "--permission-timeout-ms", "1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--permission-timeout-ms is only valid when --permission-mode is permissive or required"))
+    }
+
+    func testServeWSPermissionTimeoutScopeErrorOverridesRangeErrorWhenDisabled() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:8900",
+            "--permission-mode", "disabled",
+            "--permission-timeout-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--permission-timeout-ms is only valid when --permission-mode is permissive or required"))
+        XCTAssertFalse(result.stderr.contains("--permission-timeout-ms must be >= 0"))
+    }
+
+    func testServePermissionTimeoutScopeErrorOverridesRangeErrorWhenDisabled() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--permission-mode", "disabled",
+            "--permission-timeout-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--permission-timeout-ms is only valid when --permission-mode is permissive or required"))
+        XCTAssertFalse(result.stderr.contains("--permission-timeout-ms must be >= 0"))
     }
 
     func testClientStdioRejectsEndpointOption() throws {
@@ -253,6 +574,19 @@ final class SKICLIProcessTests: XCTestCase {
         ])
         XCTAssertEqual(result.exitCode, 2)
         XCTAssertTrue(result.stderr.contains("--endpoint is only valid for ws transport"))
+    }
+
+    func testClientStdioEndpointScopeErrorOverridesEndpointFormatError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--endpoint", "invalid",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--endpoint is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--endpoint must use ws:// or wss://"))
     }
 
     func testClientStdioRejectsWSHeartbeatOption() throws {
@@ -290,6 +624,45 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 2)
         XCTAssertTrue(result.stderr.contains("--ws-heartbeat-ms is only valid for ws transport"))
         XCTAssertFalse(result.stderr.contains("--ws-heartbeat-ms must be >= 0"))
+    }
+
+    func testClientStdioWSReconnectAttemptsScopeErrorOverridesRangeError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--ws-reconnect-attempts=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-attempts is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--ws-reconnect-attempts must be >= 0"))
+    }
+
+    func testClientStdioWSReconnectBaseDelayScopeErrorOverridesRangeError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--ws-reconnect-base-delay-ms=-1",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--ws-reconnect-base-delay-ms is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--ws-reconnect-base-delay-ms must be >= 0"))
+    }
+
+    func testClientStdioMaxInFlightScopeErrorOverridesRangeError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "client", "connect",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--max-in-flight-sends=0",
+            "--prompt", "hi"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--max-in-flight-sends is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--max-in-flight-sends must be > 0"))
     }
 
     func testClientStdioRejectsWSReconnectAttemptsOption() throws {
@@ -336,6 +709,17 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stderr.contains("--listen is only valid for ws transport"))
     }
 
+    func testServeStdioListenScopeErrorOverridesListenFormatError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--listen", "invalid"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--listen is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--listen must be in host:port format"))
+    }
+
     func testClientStdioRejectsMaxInFlightSendsOption() throws {
         let result = try runSKI(arguments: [
             "acp", "client", "connect",
@@ -377,6 +761,17 @@ final class SKICLIProcessTests: XCTestCase {
         ])
         XCTAssertEqual(result.exitCode, 2)
         XCTAssertTrue(result.stderr.contains("--max-in-flight-sends must be > 0"))
+    }
+
+    func testServeStdioMaxInFlightScopeErrorOverridesRangeError() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--transport", "stdio",
+            "--max-in-flight-sends=0"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--max-in-flight-sends is only valid for ws transport"))
+        XCTAssertFalse(result.stderr.contains("--max-in-flight-sends must be > 0"))
     }
 
     func testClientConnectViaStdioServeProcessSucceeds() throws {
@@ -435,6 +830,7 @@ final class SKICLIProcessTests: XCTestCase {
         )
 
         XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        XCTAssertTrue(result.stderr.contains("permission requests=1"), "stderr: \(result.stderr)")
         let lines = result.stdout
             .split(separator: "\n")
             .map(String.init)
@@ -482,6 +878,7 @@ final class SKICLIProcessTests: XCTestCase {
         )
 
         XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        XCTAssertTrue(result.stderr.contains("permission requests=1"), "stderr: \(result.stderr)")
         let lines = result.stdout
             .split(separator: "\n")
             .map(String.init)
@@ -550,6 +947,103 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertEqual(object["stopReason"], "cancelled")
     }
 
+    func testClientConnectViaWSRequiredPermissionAllowReturnsEndTurn() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18913
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--permission-mode", "required",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let result = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--prompt", "permission-check",
+                "--permission-decision", "allow",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        let lines = result.stdout
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let last = try XCTUnwrap(lines.last, "stdout: \(result.stdout)")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(last.utf8)) as? [String: String])
+        XCTAssertEqual(object["type"], "prompt_result")
+        XCTAssertEqual(object["stopReason"], "end_turn")
+    }
+
+    func testClientConnectViaWSDisabledPermissionReportsZeroRequests() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18914
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--permission-mode", "disabled",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let result = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--prompt", "permission-disabled-check",
+                "--permission-decision", "deny",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        XCTAssertTrue(result.stderr.contains("permission requests=0"), "stderr: \(result.stderr)")
+        let lines = result.stdout
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let last = try XCTUnwrap(lines.last, "stdout: \(result.stdout)")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(last.utf8)) as? [String: String])
+        XCTAssertEqual(object["type"], "prompt_result")
+        XCTAssertEqual(object["stopReason"], "end_turn")
+    }
+
     func testClientConnectViaStdioServeProcessTimeoutZeroDisablesTimeout() throws {
         guard let skiURL = findSKIBinary() else {
             throw XCTSkip("ski binary not found under .build")
@@ -570,6 +1064,84 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("stopReason: end_turn"), "stdout: \(result.stdout)")
     }
 
+    func testClientConnectViaWSServeProcessTimeoutZeroDisablesTimeout() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18917
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let result = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--request-timeout-ms", "0",
+                "--prompt", "ws process timeout zero check"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        XCTAssertTrue(result.stdout.contains("stopReason: end_turn"), "stdout: \(result.stdout)")
+    }
+
+    func testServeSessionTTLZeroExpiresSessionImmediatelyOverWS() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18918
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--session-ttl-ms=0",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let result = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--prompt", "ws session ttl zero check"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(result.exitCode, 4, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        XCTAssertTrue(result.stderr.contains("Session not found"), "stderr: \(result.stderr)")
+    }
+
     func testClientConnectViaStdioWithNonexistentSessionIDFails() throws {
         guard let skiURL = findSKIBinary() else {
             throw XCTSkip("ski binary not found under .build")
@@ -588,6 +1160,159 @@ final class SKICLIProcessTests: XCTestCase {
 
         XCTAssertEqual(result.exitCode, 4, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
         XCTAssertTrue(result.stderr.contains("Error:"), "stderr: \(result.stderr)")
+    }
+
+    func testClientConnectViaStdioReusingSessionIDAcrossConnectionsFails() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let first = try runSKI(
+            arguments: [
+                "acp", "client", "connect-stdio",
+                "--cmd", skiURL.path,
+                "--args", "acp", "--args", "serve", "--args=--transport", "--args=stdio",
+                "--prompt", "first",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+        XCTAssertEqual(first.exitCode, 0, "stderr: \(first.stderr)\nstdout: \(first.stdout)")
+        let firstLines = first.stdout
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { $0.contains("\"type\":\"prompt_result\"") }
+        let firstPromptResult = try XCTUnwrap(firstLines.last, "stdout: \(first.stdout)")
+        let firstObject = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(firstPromptResult.utf8)) as? [String: String])
+        let reusedSessionID = try XCTUnwrap(firstObject["sessionId"], "stdout: \(first.stdout)")
+
+        let second = try runSKI(
+            arguments: [
+                "acp", "client", "connect-stdio",
+                "--cmd", skiURL.path,
+                "--args", "acp", "--args", "serve", "--args=--transport", "--args=stdio",
+                "--session-id", reusedSessionID,
+                "--prompt", "second",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(second.exitCode, 4, "stderr: \(second.stderr)\nstdout: \(second.stdout)")
+        XCTAssertTrue(
+            second.stderr.contains("Resource not found") || second.stderr.contains("Error:"),
+            "stderr: \(second.stderr)"
+        )
+    }
+
+    func testClientConnectViaWSReusingSessionIDAcrossConnectionsSucceeds() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18915
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--permission-mode", "permissive",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let first = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--prompt", "first",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+        XCTAssertEqual(first.exitCode, 0, "stderr: \(first.stderr)\nstdout: \(first.stdout)")
+        let lines = first.stdout
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { $0.contains("\"type\":\"prompt_result\"") }
+        let firstPromptResult = try XCTUnwrap(lines.last, "stdout: \(first.stdout)")
+        let firstObject = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(firstPromptResult.utf8)) as? [String: String])
+        let reusedSessionID = try XCTUnwrap(firstObject["sessionId"], "stdout: \(first.stdout)")
+
+        let second = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--session-id", reusedSessionID,
+                "--prompt", "second",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(second.exitCode, 0, "stderr: \(second.stderr)\nstdout: \(second.stdout)")
+        let secondLines = second.stdout
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { $0.contains("\"type\":\"prompt_result\"") }
+        let secondPromptResult = try XCTUnwrap(secondLines.last, "stdout: \(second.stdout)")
+        let secondObject = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(secondPromptResult.utf8)) as? [String: String])
+        XCTAssertEqual(secondObject["sessionId"], reusedSessionID, "stdout: \(second.stdout)")
+        XCTAssertEqual(secondObject["stopReason"], "end_turn")
+    }
+
+    func testClientConnectViaWSWithNonexistentSessionIDFails() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18916
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--permission-mode", "permissive",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let result = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--session-id", "sess_nonexistent",
+                "--prompt", "hello",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(result.exitCode, 4, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        XCTAssertTrue(
+            result.stderr.contains("Could not route request to client owner by sessionId") || result.stderr.contains("Error:"),
+            "stderr: \(result.stderr)"
+        )
     }
 }
 

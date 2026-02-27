@@ -10,6 +10,18 @@ import SKIntelligence
 
 typealias CLIError = SKICLIValidationError
 
+private actor ACPPermissionRequestCounter {
+    private var count: Int = 0
+
+    func increment() {
+        count += 1
+    }
+
+    func value() -> Int {
+        count
+    }
+}
+
 enum CLITransport: String, ExpressibleByArgument {
     case stdio
     case ws
@@ -110,14 +122,6 @@ struct ACPServeCommand: AsyncParsableCommand {
             fputs("Error: --session-ttl-ms must be >= 0\n", stderr)
             throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
         }
-        if permissionTimeoutMS < 0 {
-            fputs("Error: --permission-timeout-ms must be >= 0\n", stderr)
-            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
-        }
-        if maxInFlightSends <= 0 {
-            fputs("Error: --max-in-flight-sends must be > 0\n", stderr)
-            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
-        }
         if transport == .stdio, hasExplicitOption("--listen") {
             fputs("Error: --listen is only valid for ws transport\n", stderr)
             throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
@@ -128,6 +132,14 @@ struct ACPServeCommand: AsyncParsableCommand {
         }
         if permissionMode == .disabled, hasExplicitOption("--permission-timeout-ms") {
             fputs("Error: --permission-timeout-ms is only valid when --permission-mode is permissive or required\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if permissionTimeoutMS < 0 {
+            fputs("Error: --permission-timeout-ms must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if maxInFlightSends <= 0 {
+            fputs("Error: --max-in-flight-sends must be > 0\n", stderr)
             throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
         }
 
@@ -626,6 +638,7 @@ private func runACPClientConnect(
         let terminalRuntime = ACPProcessTerminalRuntime()
         let filesystemRuntime = ACPLocalFilesystemRuntime(policy: .unrestricted)
         let permissionAllow = permissionDecision.shared.allowValue
+        let permissionCounter = ACPPermissionRequestCounter()
         if permissionMessage != nil {
             fputs("Warning: --permission-message is informational only and is not sent to the ACP server\n", stderr)
         }
@@ -649,7 +662,8 @@ private func runACPClientConnect(
             }
         }
         await client.setPermissionRequestHandler { _ in
-            ACPSessionPermissionRequestResult(outcome: permissionAllow ? .selected(.init(optionId: "allow_once")) : .cancelled)
+            await permissionCounter.increment()
+            return ACPSessionPermissionRequestResult(outcome: permissionAllow ? .selected(.init(optionId: "allow_once")) : .cancelled)
         }
         await client.installRuntimes(filesystem: filesystemRuntime, terminal: terminalRuntime)
 
@@ -682,6 +696,10 @@ private func runACPClientConnect(
             } else {
                 print("stopReason: \(result.stopReason.rawValue)")
             }
+        }
+        if logLevel == .debug || logLevel == .info {
+            let permissionCount = await permissionCounter.value()
+            fputs("[SKI] ACP client permission requests=\(permissionCount)\n", stderr)
         }
     } catch {
         let code = SKICLIExitCodeMapper.exitCode(for: error)

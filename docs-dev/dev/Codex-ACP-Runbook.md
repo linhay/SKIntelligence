@@ -98,16 +98,24 @@ swift run ski acp client connect \
 处理：
 1. 使用 `session/new` 新建会话（默认行为）。
 2. 若需要会话连续性，优先在一次 `connect` 中重复使用多个 `--prompt`（单连接多轮）。
+3. 可用 `./scripts/acp_stdio_session_reuse_probe.sh` 验证该失败边界（预期 exit=4）。
+
+补充（本地 ws）：
+- 在同一个 `acp serve --transport ws` 进程生命周期内，`--session-id` 可跨连接复用。
+- 可用 `./scripts/acp_ws_session_reuse_probe.sh` 验证。
+- 若传入不存在的 `--session-id`，预期 upstream failure（exit=4）。
 
 ### 5.5 `--permission-decision deny` 与 allow 行为无明显差异
 
 症状：某些 prompt 下 deny 仍可得到正常执行结果。
 
-说明：`codex-acp` 侧并非所有执行路径都通过 ACP `request_permission` 回调；该参数只影响收到权限请求时客户端返回策略。
+说明：`codex-acp` 侧并非所有执行路径都通过 ACP `request_permission` 回调；该参数只影响收到权限请求时客户端返回策略。  
+客户端 stderr 现会输出：`[SKI] ACP client permission requests=<N>`，可直接判断该轮是否触发 ACP 权限请求。
 
 处理：
 1. 先以 `prompt_result` 成功作为主验收标准。
-2. 如需严格权限联调，需要构造 `codex-acp` 必经 `request_permission` 的场景再验证。
+2. 若 `N=0`，说明 deny/allow 差异不会生效。
+3. 如需严格权限联调，需要构造 `codex-acp` 必经 `request_permission` 的场景再验证。
 
 ### 5.6 本地 `ski acp serve --transport stdio` 的多轮差异
 
@@ -125,3 +133,54 @@ swift run ski acp client connect \
 swift test --filter JSONRPCCodecTests
 swift test --filter SKIToolShellTests --filter SKICLIProcessTests.testClientConnectViaStdioServeProcessSucceeds
 ```
+
+## 8. 权限矩阵联调（本地 ws）
+
+```bash
+./scripts/acp_ws_permission_matrix.sh
+```
+
+预期：
+- `allow` 分支得到 `stopReason=end_turn`
+- `deny` 分支得到 `stopReason=cancelled`
+
+## 9. `codex-acp` 权限探针
+
+```bash
+./scripts/codex_acp_permission_probe.sh
+```
+
+输出示例：
+- `probe-allow permission_requests=0 stop_reason=end_turn`
+- `probe-deny permission_requests=0 stop_reason=end_turn`
+
+含义：
+- `permission_requests=0` 表示该 prompt 路径未触发 ACP `session/request_permission`。
+
+## 10. 一键回归套件
+
+```bash
+./scripts/acp_regression_suite.sh
+```
+
+默认覆盖：
+1. `ws` 权限矩阵（allow/deny）
+2. `ws` 跨连接 session 复用
+3. `stdio` 跨连接 session 复用失败边界
+4. `ws` `--session-ttl-ms=0` 立即过期边界（预期 `Session not found`, exit=4）
+5. `ws` `--request-timeout-ms=0` 禁用超时边界（预期 `stopReason=end_turn`）
+
+可选附加（需要 codex 环境）：
+```bash
+RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
+```
+
+说明：
+- `RUN_CODEX_PROBES=1` 会附加执行 `codex_acp_permission_probe.sh` 与 `codex_acp_multiturn_smoke.sh`。
+- 两个 codex 可选阶段都带 1 次自动重试，降低瞬时波动导致的假失败。
+- codex 阶段失败时会输出 `WARN` 但不阻断主套件 PASS/FAIL（主套件仅由前 5 个本地 ACP 阶段决定）。
+- 可通过 `CODEX_ACP_TIMEOUT_MS` 调整 codex multi-turn 探针超时（默认 `60000`ms）。
+- 可通过 `CODEX_PROBE_RETRIES` 调整 codex 可选探针重试次数（默认 `2`，即失败后再重试 1 次）。
+- 可通过 `CODEX_PROBE_RETRY_DELAY_SECONDS` 设置 codex 可选探针重试间隔（默认 `2` 秒）。
+- 可通过 `STRICT_CODEX_PROBES=1` 启用严格模式：codex 可选探针失败会让套件直接失败（默认 `0` 为仅告警继续）。
+- 可通过 `ACP_PORT_BASE` 覆盖本地 ws 探针端口基线（默认 `18920`），用于并行执行多套回归避免端口冲突。
