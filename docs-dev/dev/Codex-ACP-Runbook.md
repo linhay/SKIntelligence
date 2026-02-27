@@ -184,3 +184,60 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 - 可通过 `CODEX_PROBE_RETRY_DELAY_SECONDS` 设置 codex 可选探针重试间隔（默认 `2` 秒）。
 - 可通过 `STRICT_CODEX_PROBES=1` 启用严格模式：codex 可选探针失败会让套件直接失败（默认 `0` 为仅告警继续）。
 - 可通过 `ACP_PORT_BASE` 覆盖本地 ws 探针端口基线（默认 `18920`），用于并行执行多套回归避免端口冲突。
+- 可通过 `ACP_SUITE_SUMMARY_JSON=/path/to/summary.json` 输出机器可读的回归汇总（包含每阶段 `status/exitCode`）。
+- 汇总中包含 `startedAtUtc/finishedAtUtc/durationSeconds` 与 `config`（端口基线、重试参数、strict 开关）便于排障追踪。
+- 每个 `stages[]` 项含 `durationSeconds` 与 `attempts`，可快速识别慢阶段和重试抖动阶段。
+- 当 `RUN_CODEX_PROBES=0` 时，`codex_permission_probe`/`codex_multiturn_smoke` 会在 summary 中标记为 `status=skipped`（结构保持固定 7 段）。
+- summary 文件采用原子写入（临时文件后 `mv`），避免 CI 读取到半写入内容。
+- summary 顶层包含 `schemaVersion`（当前为 `1`），下游解析建议先校验版本再消费字段。
+- `stages[]` 包含固定 `index`（1..7），便于前端/报表按稳定顺序展示。
+- 顶层 `runId` 为单次套件执行唯一标识，可用于关联同轮的日志与 summary。
+- 可通过 `ACP_SUITE_RUN_ID` 覆盖 `runId`（例如注入 CI job/build id）。
+- 每个 stage 记录 `startedAtUtc/finishedAtUtc`，可与外部日志按时间戳精确对齐。
+- 顶层包含 `gitHead` 与 `gitDirty`，用于把回归结果绑定到具体代码快照及工作区状态。
+- 顶层 `host`（`name/os/arch`）用于跨机器对比联调结果。
+- 可通过 `ACP_SUITE_LOG_DIR` 指定 stage 日志目录；默认 `.local/acp-suite-logs/<runId>`。
+- summary 顶层 `artifacts.suiteLogDir` 给出本轮日志目录，每个 stage 追加 `logPath`，失败排查可直接跳转。
+- summary 顶层 `stageCounts` 提供 `total/pass/fail/warn/skipped` 聚合，适合 CI 直接做阈值判定。
+- summary 顶层 `failure` 提供首个失败 stage 与 exit code（成功时为 `null`），便于失败用例快速归因。
+- summary 顶层 `exitCode` 记录本次回归脚本退出码，便于 CI 统一消费 JSON 判定结果。
+- summary 顶层 `generatedBy` 标识产物来源（当前为 `scripts/acp_regression_suite.sh@1`），便于多工具并行产物治理。
+- summary 顶层 `requiredPassed` 标识必选阶段是否全部通过，便于区分“主链失败”与“可选探针告警”。
+- summary 增加 `requiredStageCounts/optionalStageCounts`，分别统计必选与可选阶段分布，便于看板聚合。
+- summary 增加 `countsConsistent`，用于标记总数与分项统计是否一致，防止字段演进时计数漂移。
+- summary 增加 `hasWarnings/hasSkipped` 布尔字段，便于 CI 直接做告警分流。
+- summary 增加 `allStagesPassed` 布尔字段（仅当所有 stage 都是 pass 为 true），用于快速识别“全绿”。
+- summary 增加 `ciRecommendation`（`pass` / `pass_with_warnings` / `fail`），可直接作为流水线分流信号。
+- summary 写回校验优先使用 `jq` 做结构校验（无 `jq` 时退回字段文本校验），降低“格式合法但结构错位”风险。
+- summary 顶层新增 `summaryHash`（SHA-256），基于关键配置与 stage 结果计算，用于快速比对两次回归是否等价。
+- summary 顶层新增 `resultReason`，提供对 `ciRecommendation` 的可读原因描述（便于人工排查）。
+- summary 增加 `failedStages` 与 `nonPassStages` 数组，直接列出失败/非通过阶段名，便于快速定位。
+- summary 增加 `stageStatusMap`（`stage -> status`），方便规则引擎直接按阶段键查询状态。
+- summary 增加 `requiredFailedStages`，只列出必跑且未通过的阶段，便于 CI 直接构建阻塞原因。
+- summary 增加 `stageExitCodeMap`（`stage -> exitCode`），便于失败归因规则直接读取阶段退出码。
+- summary 增加 `stageDurationSecondsMap`（`stage -> durationSeconds`），方便趋势监控直接比较阶段耗时。
+- summary 增加 `stageAttemptsMap`（`stage -> attempts`），便于识别可选探针重试抖动。
+- summary 增加 `stageMessageMap`（`stage -> message`），便于告警系统直接拼接失败原因文案。
+- summary 增加 `stageLogPathMap`（`stage -> logPath`），便于日志平台直接跳转到阶段日志文件。
+- summary 增加 `stageRequiredMap`（`stage -> required`），便于规则引擎快速区分必跑/可选阶段。
+- summary 增加 `stageStartedAtMap`（`stage -> startedAtUtc`），便于外部系统直接做阶段时序分析。
+- 脚本结束会输出一行 `[suite] counts ...`，包含分布、`requiredPassed`、`ciRecommendation` 与 `runCodexProbes/strictCodexProbes`，可直接在控制台/CI 日志快速观察本轮模式。
+
+示例：
+```bash
+ACP_SUITE_SUMMARY_JSON=/tmp/acp_suite_summary.json ./scripts/acp_regression_suite.sh
+cat /tmp/acp_suite_summary.json
+```
+- summary 增加 `stageFinishedAtMap`（`stage -> finishedAtUtc`），可与 `stageStartedAtMap` 组合做阶段窗口分析。
+- summary 增加 `stageIndexMap`（`stage -> index`），便于外部系统快速恢复阶段执行顺序。
+- summary 增加 `probeMode`（`disabled | non_strict | strict`），用于直接表达探针运行策略。
+- summary 增加 `warnStages` 与 `skippedStages` 数组，便于告警系统直接消费异常阶段集合。
+- summary 增加 `requiredStages` 与 `optionalStages` 数组，便于下游直接按必跑/可选阶段分组展示。
+- summary 增加 `nonPassOptionalStages`，用于直接获取“可选阶段非通过”集合（降级放行视角）。
+- summary 增加 `optionalPassStages`，与 `nonPassOptionalStages` 形成可选阶段通过/非通过对偶视图。
+- summary 增加 `hasOptionalNonPass`（boolean），用于快速判断可选阶段是否存在非通过。
+- summary 增加 `hasRequiredFailures`（boolean），用于快速判断必跑阶段是否存在失败。
+- summary 增加 `optionalOutcome`（`clean | degraded`），用于直接表达可选阶段整体状态。
+- summary 增加 `requiredOutcome`（`clean | blocked`），用于直接表达必跑阶段整体状态。
+- summary 增加 `overallOutcome`（`clean | degraded | blocked`），统一表达整套回归结果态。
+- summary 增加 `overallOutcomeRank`（`clean=0,degraded=1,blocked=2`），便于监控系统做排序和阈值判断。
