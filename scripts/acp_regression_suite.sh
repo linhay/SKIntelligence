@@ -400,6 +400,10 @@ write_summary_json() {
   local summary_hash="unavailable"
   local failed_stages_count=0
   local non_pass_stages_count=0
+  local alert_required_failure_count=0
+  local alert_optional_warn_count=0
+  local alert_optional_skipped_count=0
+  local alert_summary_inconsistent_count=0
   local required_failed_stages_json='[]'
   local non_pass_optional_stages_json='[]'
   local alerts_json='[]'
@@ -493,6 +497,18 @@ write_summary_json() {
   fi
   failed_stages_count="$count_fail"
   non_pass_stages_count="$((count_total - count_pass))"
+  if [ "$required_failed" -gt 0 ]; then
+    alert_required_failure_count=1
+  fi
+  if [ "$count_warn" -gt 0 ]; then
+    alert_optional_warn_count=1
+  fi
+  if [ "$count_skipped" -gt 0 ]; then
+    alert_optional_skipped_count=1
+  fi
+  if [ "$counts_consistent" != "true" ]; then
+    alert_summary_inconsistent_count=1
+  fi
   required_failed_stages_json="$(json_array_required_failed_stages "$SUMMARY_LINES")"
   non_pass_optional_stages_json="$(json_array_non_pass_optional_stages "$SUMMARY_LINES")"
   alerts_json="$(json_array_alerts "$required_failed_stages_json" "$(json_array_from_lines "$warn_stages")" "$(json_array_from_lines "$skipped_stages")" "$required_failed" "$count_warn" "$count_skipped" "$counts_consistent")"
@@ -586,6 +602,17 @@ write_summary_json() {
     fi
     printf '  "countsConsistent": %s,\n' "$counts_consistent"
     printf '  "alerts": %s,\n' "$alerts_json"
+    printf '  "alertCounts": {\n'
+    printf '    "required_failure": %s,\n' "$alert_required_failure_count"
+    printf '    "optional_warn": %s,\n' "$alert_optional_warn_count"
+    printf '    "optional_skipped": %s,\n' "$alert_optional_skipped_count"
+    printf '    "summary_inconsistent": %s\n' "$alert_summary_inconsistent_count"
+    printf '  },\n'
+    if [ "$required_failed" -gt 0 ] || [ "$counts_consistent" != "true" ]; then
+      printf '  "hasBlockingAlerts": true,\n'
+    else
+      printf '  "hasBlockingAlerts": false,\n'
+    fi
     printf '  "summaryCompact": {\n'
     printf '    "overallOutcome": "%s",\n' "$(json_escape "$overall_outcome")"
     printf '    "overallOutcomeRank": %s,\n' "$overall_outcome_rank"
@@ -694,6 +721,8 @@ write_summary_json() {
       (.hasSkipped | type == "boolean") and
       (.countsConsistent | type == "boolean") and
       (.alerts | type == "array") and
+      (.alertCounts | type == "object") and
+      (.hasBlockingAlerts | type == "boolean") and
       (.summaryCompact | type == "object") and
       (.requiredStageCounts | type == "object") and
       (.optionalStageCounts | type == "object") and
@@ -746,6 +775,8 @@ write_summary_json() {
        ! rg -q '"hasSkipped":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"countsConsistent":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"alerts":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"alertCounts": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"hasBlockingAlerts":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"summaryCompact": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
