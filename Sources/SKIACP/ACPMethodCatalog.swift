@@ -58,5 +58,8 @@ public enum ACPMethodCatalog {
         ACPMethods.sessionStop,
     ]
 
+    /// Official ACP methods tracked from schema baselines only.
+    public static let officialBaselines: Set<String> = stableBaseline.union(unstableBaseline)
+
     public static let allSupported: Set<String> = unstableBaseline.union(projectExtensions)
 }

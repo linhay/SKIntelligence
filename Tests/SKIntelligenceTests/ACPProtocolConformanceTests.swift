@@ -44,6 +44,23 @@ final class ACPProtocolConformanceTests: XCTestCase {
         XCTAssertFalse(ACPMethodCatalog.projectExtensions.contains(ACPMethods.sessionStop))
     }
 
+    func testCompatibilityExtensionsAreOutsideOfficialBaselinesAndDocumented() throws {
+        XCTAssertTrue(ACPMethodCatalog.officialBaselines.isSuperset(of: ACPMethodCatalog.stableBaseline))
+        XCTAssertTrue(ACPMethodCatalog.officialBaselines.isSuperset(of: ACPMethodCatalog.unstableBaseline))
+        XCTAssertTrue(ACPMethodCatalog.officialBaselines.isDisjoint(with: ACPMethodCatalog.compatibilityExtensions))
+        XCTAssertTrue(ACPMethodCatalog.projectExtensions.isDisjoint(with: ACPMethodCatalog.compatibilityExtensions))
+
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let boundaryURL = root.appendingPathComponent("docs-dev/features/ACP-Protocol-Extension-Boundaries.md")
+        let boundaryContent = try String(contentsOf: boundaryURL, encoding: .utf8)
+        for method in ACPMethodCatalog.compatibilityExtensions {
+            XCTAssertTrue(
+                boundaryContent.contains("`\(method)`"),
+                "Compatibility method \(method) must be documented in ACP-Protocol-Extension-Boundaries.md"
+            )
+        }
+    }
+
     private func loadMeta(named baseName: String) throws -> ACPMetaFile {
         guard let url = Bundle.module.url(forResource: baseName, withExtension: "json") else {
             throw XCTSkip("Missing fixture: \(baseName).json")
