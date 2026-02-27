@@ -260,6 +260,27 @@ json_array_required_failed_stages() {
   printf ']'
 }
 
+json_array_non_pass_optional_stages() {
+  local lines="$1"
+  local first=1
+  local stage
+  local status
+  local required
+  printf '['
+  while IFS='|' read -r _index stage status required _exit_code _started_at_utc _finished_at_utc _duration_seconds _attempts _message _log_path; do
+    [ -z "$stage" ] && continue
+    if [ "$required" = "true" ] || [ "$status" = "pass" ]; then
+      continue
+    fi
+    if [ "$first" -eq 0 ]; then
+      printf ','
+    fi
+    first=0
+    printf '"%s"' "$(json_escape "$stage")"
+  done <<< "$lines"
+  printf ']'
+}
+
 append_summary() {
   local index="$1"
   local stage="$2"
@@ -439,6 +460,7 @@ write_summary_json() {
     printf '  "requiredStages": %s,\n' "$(json_array_from_lines "$required_stages")"
     printf '  "optionalStages": %s,\n' "$(json_array_from_lines "$optional_stages")"
     printf '  "requiredFailedStages": %s,\n' "$(json_array_required_failed_stages "$SUMMARY_LINES")"
+    printf '  "nonPassOptionalStages": %s,\n' "$(json_array_non_pass_optional_stages "$SUMMARY_LINES")"
     printf '  "stageStatusMap": %s,\n' "$(json_object_stage_status_map "$SUMMARY_LINES")"
     printf '  "stageExitCodeMap": %s,\n' "$(json_object_stage_exit_code_map "$SUMMARY_LINES")"
     printf '  "stageDurationSecondsMap": %s,\n' "$(json_object_stage_duration_map "$SUMMARY_LINES")"
@@ -538,6 +560,7 @@ write_summary_json() {
       (.requiredStages | type == "array") and
       (.optionalStages | type == "array") and
       (.requiredFailedStages | type == "array") and
+      (.nonPassOptionalStages | type == "array") and
       (.stageStatusMap | type == "object") and
       (.stageExitCodeMap | type == "object") and
       (.stageDurationSecondsMap | type == "object") and
@@ -580,6 +603,7 @@ write_summary_json() {
        ! rg -q '"requiredStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"optionalStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredFailedStages":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"nonPassOptionalStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageStatusMap":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageExitCodeMap":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageDurationSecondsMap":' "$SUMMARY_JSON_PATH" || \
