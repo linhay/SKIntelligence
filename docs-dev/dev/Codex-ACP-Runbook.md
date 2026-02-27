@@ -246,3 +246,5 @@ cat /tmp/acp_suite_summary.json
 - `schemaVersion` 升级到 `4`，消费端应先做版本判断，再按字段能力渐进解析。
 - summary 增加 `alertCounts`（按告警类别计数）与 `hasBlockingAlerts`（阻塞告警布尔），支持告警看板直接做阈值判定。
 - summary 增加 `codexProbes` 聚合对象（`enabled/strict/*ProbeStatus/nonPassCount`），用于跨客户端联调时快速判断 Codex 探针状态。
+- summary 增加 `passStages` 与 `stageStatusBuckets`（按状态分桶），支持消费端直接按状态渲染，不再自行过滤 `stages`。
+- summary 增加 `qualityGate`（`blocked/degraded/clean/recommendation/reason`），提供和 `ciRecommendation` 对齐的质量门禁视图。

@@ -425,6 +425,7 @@ write_summary_json() {
   local codex_multiturn_probe_status="unknown"
   local codex_probe_non_pass_count=0
   local failed_stages=""
+  local pass_stages=""
   local non_pass_stages=""
   local warn_stages=""
   local skipped_stages=""
@@ -438,6 +439,9 @@ write_summary_json() {
     count_total=$((count_total + 1))
     if [ "$_status" != "pass" ]; then
       non_pass_stages+="${_stage}"$'\n'
+    fi
+    if [ "$_status" = "pass" ]; then
+      pass_stages+="${_stage}"$'\n'
     fi
     if [ "$_status" = "fail" ]; then
       failed_stages+="${_stage}"$'\n'
@@ -583,6 +587,7 @@ write_summary_json() {
     printf '    "skipped": %s\n' "$count_skipped"
     printf '  },\n'
     printf '  "failedStages": %s,\n' "$(json_array_from_lines "$failed_stages")"
+    printf '  "passStages": %s,\n' "$(json_array_from_lines "$pass_stages")"
     printf '  "nonPassStages": %s,\n' "$(json_array_from_lines "$non_pass_stages")"
     printf '  "warnStages": %s,\n' "$(json_array_from_lines "$warn_stages")"
     printf '  "skippedStages": %s,\n' "$(json_array_from_lines "$skipped_stages")"
@@ -644,6 +649,20 @@ write_summary_json() {
     printf '    "permissionProbeStatus": "%s",\n' "$(json_escape "$codex_permission_probe_status")"
     printf '    "multiturnProbeStatus": "%s",\n' "$(json_escape "$codex_multiturn_probe_status")"
     printf '    "nonPassCount": %s\n' "$codex_probe_non_pass_count"
+    printf '  },\n'
+    printf '  "stageStatusBuckets": {\n'
+    printf '    "pass": %s,\n' "$(json_array_from_lines "$pass_stages")"
+    printf '    "fail": %s,\n' "$(json_array_from_lines "$failed_stages")"
+    printf '    "warn": %s,\n' "$(json_array_from_lines "$warn_stages")"
+    printf '    "skipped": %s,\n' "$(json_array_from_lines "$skipped_stages")"
+    printf '    "nonPass": %s\n' "$(json_array_from_lines "$non_pass_stages")"
+    printf '  },\n'
+    printf '  "qualityGate": {\n'
+    printf '    "blocked": %s,\n' "$([ "$overall_outcome" = "blocked" ] && echo true || echo false)"
+    printf '    "degraded": %s,\n' "$([ "$overall_outcome" = "degraded" ] && echo true || echo false)"
+    printf '    "clean": %s,\n' "$([ "$overall_outcome" = "clean" ] && echo true || echo false)"
+    printf '    "recommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
+    printf '    "reason": "%s"\n' "$(json_escape "$result_reason")"
     printf '  },\n'
     printf '  "summaryCompact": {\n'
     printf '    "overallOutcome": "%s",\n' "$(json_escape "$overall_outcome")"
@@ -721,6 +740,7 @@ write_summary_json() {
       (.exitCode | type == "number") and
       (.stageCounts | type == "object") and
       (.failedStages | type == "array") and
+      (.passStages | type == "array") and
       (.nonPassStages | type == "array") and
       (.warnStages | type == "array") and
       (.skippedStages | type == "array") and
@@ -756,6 +776,8 @@ write_summary_json() {
       (.alertCounts | type == "object") and
       (.hasBlockingAlerts | type == "boolean") and
       (.codexProbes | type == "object") and
+      (.stageStatusBuckets | type == "object") and
+      (.qualityGate | type == "object") and
       (.summaryCompact | type == "object") and
       (.requiredStageCounts | type == "object") and
       (.optionalStageCounts | type == "object") and
@@ -776,6 +798,7 @@ write_summary_json() {
        ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"failedStages":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"passStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"nonPassStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"warnStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"skippedStages":' "$SUMMARY_JSON_PATH" || \
@@ -811,6 +834,8 @@ write_summary_json() {
        ! rg -q '"alertCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"hasBlockingAlerts":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"codexProbes": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"stageStatusBuckets": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"qualityGate": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"summaryCompact": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
