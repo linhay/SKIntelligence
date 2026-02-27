@@ -241,3 +241,18 @@ cat /tmp/acp_suite_summary.json
 - summary 增加 `requiredOutcome`（`clean | blocked`），用于直接表达必跑阶段整体状态。
 - summary 增加 `overallOutcome`（`clean | degraded | blocked`），统一表达整套回归结果态。
 - summary 增加 `overallOutcomeRank`（`clean=0,degraded=1,blocked=2`），便于监控系统做排序和阈值判断。
+- summary 增加 `alerts`（标准化告警列表），按 `severity/category/stages` 提供直接可消费告警对象。
+- summary 增加 `summaryCompact`（轻量聚合视图），提供 `overallOutcome/ciRecommendation/*Count` 等最小消费字段，降低下游二次拼装成本。
+- `schemaVersion` 升级到 `4`，消费端应先做版本判断，再按字段能力渐进解析。
+- summary 增加 `alertCounts`（按告警类别计数）与 `hasBlockingAlerts`（阻塞告警布尔），支持告警看板直接做阈值判定。
+- summary 增加 `codexProbes` 聚合对象（`enabled/strict/*ProbeStatus/nonPassCount`），用于跨客户端联调时快速判断 Codex 探针状态。
+- summary 增加 `passStages` 与 `stageStatusBuckets`（按状态分桶），支持消费端直接按状态渲染，不再自行过滤 `stages`。
+- summary 增加 `qualityGate`（`blocked/degraded/clean/recommendation/reason`），提供和 `ciRecommendation` 对齐的质量门禁视图。
+- summary 增加 `timingStats`（`suiteDurationSeconds/sumStageDurations/max/min`），支持联调看板直接显示阶段耗时极值与总耗时。
+- `schemaVersion` 升级到 `5`：包含 `alerts/summaryCompact/alertCounts/hasBlockingAlerts/codexProbes/stageStatusBuckets/qualityGate/timingStats`。
+- summary 增加 `compatV4` 兼容视图，回填 `requiredPassed/ciRecommendation/overallOutcome/*Stages/probeMode`，便于旧消费端渐进迁移。
+- summary 增加 `consumerHints`（推荐读取路径），指导消费端优先读取 `qualityGate.recommendation`、`summaryCompact.overallOutcome`、`compatV4`。
+- summary 增加 `summaryIntegrity`（`countsConsistent/hasSummaryHash/hasRunId/hasStageLogs/ok`），用于快速判断 summary 可用性。
+- summary 增加 `drilldown`（`firstNonPassStage/firstNonPassStatus/firstNonPassLogPath`），用于联调时快速跳转首个非通过点。
+- summary 增加 `decisionMatrix`（`recommendation/reason/blockingReasons/warningReasons`），用于结构化表达放行/阻塞依据。
+- summary 增加 `executionMode`（`mode/description/probeMode`），用于直接表达当前回归运行模式语义。

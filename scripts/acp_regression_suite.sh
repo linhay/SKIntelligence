@@ -8,7 +8,7 @@ CODEX_PROBE_RETRIES="${CODEX_PROBE_RETRIES:-2}"
 CODEX_PROBE_RETRY_DELAY_SECONDS="${CODEX_PROBE_RETRY_DELAY_SECONDS:-2}"
 STRICT_CODEX_PROBES="${STRICT_CODEX_PROBES:-0}"
 SUMMARY_JSON_PATH="${ACP_SUITE_SUMMARY_JSON:-}"
-SUMMARY_SCHEMA_VERSION="3"
+SUMMARY_SCHEMA_VERSION="5"
 SUMMARY_GENERATED_BY="scripts/acp_regression_suite.sh@1"
 SUMMARY_LINES=""
 SUITE_RESULT="fail"
@@ -302,6 +302,57 @@ json_array_optional_pass_stages() {
   printf ']'
 }
 
+json_array_alerts() {
+  local required_failed_stages_json="$1"
+  local warn_stages_json="$2"
+  local skipped_stages_json="$3"
+  local required_failed="$4"
+  local count_warn="$5"
+  local count_skipped="$6"
+  local counts_consistent="$7"
+  local first=1
+  printf '['
+  if [ "$required_failed" -gt 0 ]; then
+    printf '{"severity":"error","category":"required_failure","message":"required stages failed","stages":%s}' "$required_failed_stages_json"
+    first=0
+  fi
+  if [ "$count_warn" -gt 0 ]; then
+    if [ "$first" -eq 0 ]; then
+      printf ','
+    fi
+    printf '{"severity":"warn","category":"optional_warn","message":"optional stages warned","stages":%s}' "$warn_stages_json"
+    first=0
+  fi
+  if [ "$count_skipped" -gt 0 ]; then
+    if [ "$first" -eq 0 ]; then
+      printf ','
+    fi
+    printf '{"severity":"warn","category":"optional_skipped","message":"optional stages skipped","stages":%s}' "$skipped_stages_json"
+    first=0
+  fi
+  if [ "$counts_consistent" != "true" ]; then
+    if [ "$first" -eq 0 ]; then
+      printf ','
+    fi
+    printf '{"severity":"error","category":"summary_inconsistent","message":"summary counts are inconsistent","stages":[]}'
+  fi
+  printf ']'
+}
+
+stage_status_from_lines() {
+  local lines="$1"
+  local target_stage="$2"
+  local stage
+  local status
+  while IFS='|' read -r _index stage status _required _exit_code _started_at_utc _finished_at_utc _duration_seconds _attempts _message _log_path; do
+    if [ "$stage" = "$target_stage" ]; then
+      printf '%s' "$status"
+      return 0
+    fi
+  done <<< "$lines"
+  printf 'unknown'
+}
+
 append_summary() {
   local index="$1"
   local stage="$2"
@@ -354,6 +405,8 @@ write_summary_json() {
   local ci_recommendation="fail"
   local result_reason="required stages failed"
   local probe_mode="disabled"
+  local execution_mode="required_only"
+  local execution_mode_description="required stages with codex probes skipped"
   local has_optional_non_pass="false"
   local has_required_failures="false"
   local optional_outcome="clean"
@@ -361,7 +414,30 @@ write_summary_json() {
   local overall_outcome="clean"
   local overall_outcome_rank=0
   local summary_hash="unavailable"
+  local failed_stages_count=0
+  local non_pass_stages_count=0
+  local alert_required_failure_count=0
+  local alert_optional_warn_count=0
+  local alert_optional_skipped_count=0
+  local alert_summary_inconsistent_count=0
+  local required_failed_stages_json='[]'
+  local non_pass_optional_stages_json='[]'
+  local alerts_json='[]'
+  local codex_permission_probe_status="unknown"
+  local codex_multiturn_probe_status="unknown"
+  local codex_probe_non_pass_count=0
+  local max_duration_seconds=-1
+  local min_duration_seconds=-1
+  local max_duration_stage=""
+  local min_duration_stage=""
+  local sum_stage_durations=0
+  local first_non_pass_stage=""
+  local first_non_pass_status=""
+  local first_non_pass_log_path=""
+  local blocking_reasons=""
+  local warning_reasons=""
   local failed_stages=""
+  local pass_stages=""
   local non_pass_stages=""
   local warn_stages=""
   local skipped_stages=""
@@ -373,8 +449,25 @@ write_summary_json() {
   while IFS='|' read -r _index _stage _status _required _exit_code _started_at_utc _finished_at_utc _duration_seconds _attempts _message _log_path; do
     [ -z "$_index" ] && continue
     count_total=$((count_total + 1))
+    sum_stage_durations=$((sum_stage_durations + _duration_seconds))
+    if [ "$max_duration_seconds" -lt 0 ] || [ "$_duration_seconds" -gt "$max_duration_seconds" ]; then
+      max_duration_seconds="$_duration_seconds"
+      max_duration_stage="$_stage"
+    fi
+    if [ "$min_duration_seconds" -lt 0 ] || [ "$_duration_seconds" -lt "$min_duration_seconds" ]; then
+      min_duration_seconds="$_duration_seconds"
+      min_duration_stage="$_stage"
+    fi
     if [ "$_status" != "pass" ]; then
       non_pass_stages+="${_stage}"$'\n'
+      if [ -z "$first_non_pass_stage" ]; then
+        first_non_pass_stage="$_stage"
+        first_non_pass_status="$_status"
+        first_non_pass_log_path="$_log_path"
+      fi
+    fi
+    if [ "$_status" = "pass" ]; then
+      pass_stages+="${_stage}"$'\n'
     fi
     if [ "$_status" = "fail" ]; then
       failed_stages+="${_stage}"$'\n'
@@ -434,6 +527,18 @@ write_summary_json() {
     overall_outcome="clean"
     overall_outcome_rank=0
   fi
+  if [ "$required_failed" -gt 0 ]; then
+    blocking_reasons+="required_failed"$'\n'
+  fi
+  if [ "$counts_consistent" != "true" ]; then
+    blocking_reasons+="summary_inconsistent"$'\n'
+  fi
+  if [ "$count_warn" -gt 0 ]; then
+    warning_reasons+="optional_warn"$'\n'
+  fi
+  if [ "$count_skipped" -gt 0 ]; then
+    warning_reasons+="optional_skipped"$'\n'
+  fi
   if [ "$optional_total" -ne "$optional_pass" ]; then
     has_optional_non_pass="true"
     optional_outcome="degraded"
@@ -445,10 +550,39 @@ write_summary_json() {
   if [ "${RUN_CODEX_PROBES:-0}" = "1" ]; then
     if [ "$STRICT_CODEX_PROBES" = "1" ]; then
       probe_mode="strict"
+      execution_mode="full_strict"
+      execution_mode_description="required stages plus codex probes in strict mode"
     else
       probe_mode="non_strict"
+      execution_mode="full_non_strict"
+      execution_mode_description="required stages plus codex probes in non-strict mode"
     fi
   fi
+  failed_stages_count="$count_fail"
+  non_pass_stages_count="$((count_total - count_pass))"
+  codex_permission_probe_status="$(stage_status_from_lines "$SUMMARY_LINES" "codex_permission_probe")"
+  codex_multiturn_probe_status="$(stage_status_from_lines "$SUMMARY_LINES" "codex_multiturn_smoke")"
+  if [ "$codex_permission_probe_status" != "pass" ]; then
+    codex_probe_non_pass_count=$((codex_probe_non_pass_count + 1))
+  fi
+  if [ "$codex_multiturn_probe_status" != "pass" ]; then
+    codex_probe_non_pass_count=$((codex_probe_non_pass_count + 1))
+  fi
+  if [ "$required_failed" -gt 0 ]; then
+    alert_required_failure_count=1
+  fi
+  if [ "$count_warn" -gt 0 ]; then
+    alert_optional_warn_count=1
+  fi
+  if [ "$count_skipped" -gt 0 ]; then
+    alert_optional_skipped_count=1
+  fi
+  if [ "$counts_consistent" != "true" ]; then
+    alert_summary_inconsistent_count=1
+  fi
+  required_failed_stages_json="$(json_array_required_failed_stages "$SUMMARY_LINES")"
+  non_pass_optional_stages_json="$(json_array_non_pass_optional_stages "$SUMMARY_LINES")"
+  alerts_json="$(json_array_alerts "$required_failed_stages_json" "$(json_array_from_lines "$warn_stages")" "$(json_array_from_lines "$skipped_stages")" "$required_failed" "$count_warn" "$count_skipped" "$counts_consistent")"
   if command -v shasum >/dev/null 2>&1; then
     summary_hash="$(printf '%s|%s|%s|%s|%s|%s|%s\n%s\n' \
       "$SUITE_RUN_ID" \
@@ -495,13 +629,14 @@ write_summary_json() {
     printf '    "skipped": %s\n' "$count_skipped"
     printf '  },\n'
     printf '  "failedStages": %s,\n' "$(json_array_from_lines "$failed_stages")"
+    printf '  "passStages": %s,\n' "$(json_array_from_lines "$pass_stages")"
     printf '  "nonPassStages": %s,\n' "$(json_array_from_lines "$non_pass_stages")"
     printf '  "warnStages": %s,\n' "$(json_array_from_lines "$warn_stages")"
     printf '  "skippedStages": %s,\n' "$(json_array_from_lines "$skipped_stages")"
     printf '  "requiredStages": %s,\n' "$(json_array_from_lines "$required_stages")"
     printf '  "optionalStages": %s,\n' "$(json_array_from_lines "$optional_stages")"
-    printf '  "requiredFailedStages": %s,\n' "$(json_array_required_failed_stages "$SUMMARY_LINES")"
-    printf '  "nonPassOptionalStages": %s,\n' "$(json_array_non_pass_optional_stages "$SUMMARY_LINES")"
+    printf '  "requiredFailedStages": %s,\n' "$required_failed_stages_json"
+    printf '  "nonPassOptionalStages": %s,\n' "$non_pass_optional_stages_json"
     printf '  "optionalPassStages": %s,\n' "$(json_array_optional_pass_stages "$SUMMARY_LINES")"
     printf '  "hasOptionalNonPass": %s,\n' "$has_optional_non_pass"
     printf '  "hasRequiredFailures": %s,\n' "$has_required_failures"
@@ -538,6 +673,102 @@ write_summary_json() {
       printf '  "hasSkipped": false,\n'
     fi
     printf '  "countsConsistent": %s,\n' "$counts_consistent"
+    printf '  "alerts": %s,\n' "$alerts_json"
+    printf '  "alertCounts": {\n'
+    printf '    "required_failure": %s,\n' "$alert_required_failure_count"
+    printf '    "optional_warn": %s,\n' "$alert_optional_warn_count"
+    printf '    "optional_skipped": %s,\n' "$alert_optional_skipped_count"
+    printf '    "summary_inconsistent": %s\n' "$alert_summary_inconsistent_count"
+    printf '  },\n'
+    if [ "$required_failed" -gt 0 ] || [ "$counts_consistent" != "true" ]; then
+      printf '  "hasBlockingAlerts": true,\n'
+    else
+      printf '  "hasBlockingAlerts": false,\n'
+    fi
+    printf '  "codexProbes": {\n'
+    printf '    "enabled": %s,\n' "$([ "${RUN_CODEX_PROBES:-0}" = "1" ] && echo true || echo false)"
+    printf '    "strict": %s,\n' "$([ "$STRICT_CODEX_PROBES" = "1" ] && echo true || echo false)"
+    printf '    "permissionProbeStatus": "%s",\n' "$(json_escape "$codex_permission_probe_status")"
+    printf '    "multiturnProbeStatus": "%s",\n' "$(json_escape "$codex_multiturn_probe_status")"
+    printf '    "nonPassCount": %s\n' "$codex_probe_non_pass_count"
+    printf '  },\n'
+    printf '  "stageStatusBuckets": {\n'
+    printf '    "pass": %s,\n' "$(json_array_from_lines "$pass_stages")"
+    printf '    "fail": %s,\n' "$(json_array_from_lines "$failed_stages")"
+    printf '    "warn": %s,\n' "$(json_array_from_lines "$warn_stages")"
+    printf '    "skipped": %s,\n' "$(json_array_from_lines "$skipped_stages")"
+    printf '    "nonPass": %s\n' "$(json_array_from_lines "$non_pass_stages")"
+    printf '  },\n'
+    printf '  "qualityGate": {\n'
+    printf '    "blocked": %s,\n' "$([ "$overall_outcome" = "blocked" ] && echo true || echo false)"
+    printf '    "degraded": %s,\n' "$([ "$overall_outcome" = "degraded" ] && echo true || echo false)"
+    printf '    "clean": %s,\n' "$([ "$overall_outcome" = "clean" ] && echo true || echo false)"
+    printf '    "recommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
+    printf '    "reason": "%s"\n' "$(json_escape "$result_reason")"
+    printf '  },\n'
+    printf '  "timingStats": {\n'
+    printf '    "suiteDurationSeconds": %s,\n' "$duration_seconds"
+    printf '    "sumStageDurations": %s,\n' "$sum_stage_durations"
+    printf '    "maxDurationStage": "%s",\n' "$(json_escape "$max_duration_stage")"
+    printf '    "maxDurationSeconds": %s,\n' "$max_duration_seconds"
+    printf '    "minDurationStage": "%s",\n' "$(json_escape "$min_duration_stage")"
+    printf '    "minDurationSeconds": %s\n' "$min_duration_seconds"
+    printf '  },\n'
+    printf '  "summaryCompact": {\n'
+    printf '    "overallOutcome": "%s",\n' "$(json_escape "$overall_outcome")"
+    printf '    "overallOutcomeRank": %s,\n' "$overall_outcome_rank"
+    printf '    "ciRecommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
+    printf '    "requiredPassed": %s,\n' "$([ "$required_failed" -eq 0 ] && echo true || echo false)"
+    printf '    "hasWarnings": %s,\n' "$([ "$count_warn" -gt 0 ] && echo true || echo false)"
+    printf '    "hasSkipped": %s,\n' "$([ "$count_skipped" -gt 0 ] && echo true || echo false)"
+    printf '    "failedStagesCount": %s,\n' "$failed_stages_count"
+    printf '    "nonPassStagesCount": %s,\n' "$non_pass_stages_count"
+    printf '    "requiredFailedStagesCount": %s,\n' "$required_failed"
+    printf '    "optionalNonPassStagesCount": %s\n' "$((optional_total - optional_pass))"
+    printf '  },\n'
+    printf '  "compatV4": {\n'
+    printf '    "requiredPassed": %s,\n' "$([ "$required_failed" -eq 0 ] && echo true || echo false)"
+    printf '    "ciRecommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
+    printf '    "overallOutcome": "%s",\n' "$(json_escape "$overall_outcome")"
+    printf '    "overallOutcomeRank": %s,\n' "$overall_outcome_rank"
+    printf '    "failedStages": %s,\n' "$(json_array_from_lines "$failed_stages")"
+    printf '    "nonPassStages": %s,\n' "$(json_array_from_lines "$non_pass_stages")"
+    printf '    "warnStages": %s,\n' "$(json_array_from_lines "$warn_stages")"
+    printf '    "skippedStages": %s,\n' "$(json_array_from_lines "$skipped_stages")"
+    printf '    "requiredFailedStages": %s,\n' "$required_failed_stages_json"
+    printf '    "probeMode": "%s"\n' "$(json_escape "$probe_mode")"
+    printf '  },\n'
+    printf '  "consumerHints": {\n'
+    printf '    "primaryGatePath": "%s",\n' "qualityGate.recommendation"
+    printf '    "primaryOutcomePath": "%s",\n' "summaryCompact.overallOutcome"
+    printf '    "blockingSignalPath": "%s",\n' "hasBlockingAlerts"
+    printf '    "stageBucketsPath": "%s",\n' "stageStatusBuckets"
+    printf '    "compatPath": "%s",\n' "compatV4"
+    printf '    "schemaVersionPath": "%s"\n' "schemaVersion"
+    printf '  },\n'
+    printf '  "summaryIntegrity": {\n'
+    printf '    "countsConsistent": %s,\n' "$counts_consistent"
+    printf '    "hasSummaryHash": %s,\n' "$([ "$summary_hash" != "unavailable" ] && echo true || echo false)"
+    printf '    "hasRunId": %s,\n' "$([ -n "$SUITE_RUN_ID" ] && echo true || echo false)"
+    printf '    "hasStageLogs": %s,\n' "$([ -n "$SUITE_LOG_DIR" ] && echo true || echo false)"
+    printf '    "ok": %s\n' "$([ "$counts_consistent" = "true" ] && [ "$summary_hash" != "unavailable" ] && [ -n "$SUITE_RUN_ID" ] && [ -n "$SUITE_LOG_DIR" ] && echo true || echo false)"
+    printf '  },\n'
+    printf '  "drilldown": {\n'
+    printf '    "firstNonPassStage": "%s",\n' "$(json_escape "$first_non_pass_stage")"
+    printf '    "firstNonPassStatus": "%s",\n' "$(json_escape "$first_non_pass_status")"
+    printf '    "firstNonPassLogPath": "%s"\n' "$(json_escape "$first_non_pass_log_path")"
+    printf '  },\n'
+    printf '  "decisionMatrix": {\n'
+    printf '    "recommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
+    printf '    "reason": "%s",\n' "$(json_escape "$result_reason")"
+    printf '    "blockingReasons": %s,\n' "$(json_array_from_lines "$blocking_reasons")"
+    printf '    "warningReasons": %s\n' "$(json_array_from_lines "$warning_reasons")"
+    printf '  },\n'
+    printf '  "executionMode": {\n'
+    printf '    "mode": "%s",\n' "$(json_escape "$execution_mode")"
+    printf '    "description": "%s",\n' "$(json_escape "$execution_mode_description")"
+    printf '    "probeMode": "%s"\n' "$(json_escape "$probe_mode")"
+    printf '  },\n'
     printf '  "requiredStageCounts": {\n'
     printf '    "total": %s,\n' "$required_total"
     printf '    "pass": %s,\n' "$required_pass"
@@ -602,6 +833,7 @@ write_summary_json() {
       (.exitCode | type == "number") and
       (.stageCounts | type == "object") and
       (.failedStages | type == "array") and
+      (.passStages | type == "array") and
       (.nonPassStages | type == "array") and
       (.warnStages | type == "array") and
       (.skippedStages | type == "array") and
@@ -633,6 +865,20 @@ write_summary_json() {
       (.hasWarnings | type == "boolean") and
       (.hasSkipped | type == "boolean") and
       (.countsConsistent | type == "boolean") and
+      (.alerts | type == "array") and
+      (.alertCounts | type == "object") and
+      (.hasBlockingAlerts | type == "boolean") and
+      (.codexProbes | type == "object") and
+      (.stageStatusBuckets | type == "object") and
+      (.qualityGate | type == "object") and
+      (.timingStats | type == "object") and
+      (.summaryCompact | type == "object") and
+      (.compatV4 | type == "object") and
+      (.consumerHints | type == "object") and
+      (.summaryIntegrity | type == "object") and
+      (.drilldown | type == "object") and
+      (.decisionMatrix | type == "object") and
+      (.executionMode | type == "object") and
       (.requiredStageCounts | type == "object") and
       (.optionalStageCounts | type == "object") and
       (.requiredPassed | type == "boolean") and
@@ -652,6 +898,7 @@ write_summary_json() {
        ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"failedStages":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"passStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"nonPassStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"warnStages":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"skippedStages":' "$SUMMARY_JSON_PATH" || \
@@ -683,6 +930,20 @@ write_summary_json() {
        ! rg -q '"hasWarnings":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"hasSkipped":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"countsConsistent":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"alerts":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"alertCounts": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"hasBlockingAlerts":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"codexProbes": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"stageStatusBuckets": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"qualityGate": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"timingStats": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"summaryCompact": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"compatV4": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"consumerHints": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"summaryIntegrity": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"drilldown": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"decisionMatrix": \{' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"executionMode": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredPassed":' "$SUMMARY_JSON_PATH" || \
