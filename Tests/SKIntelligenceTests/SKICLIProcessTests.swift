@@ -445,6 +445,111 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertEqual(object["stopReason"], "end_turn")
     }
 
+    func testClientConnectViaWSServeProcessMultiplePromptsReuseSameSession() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18911
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let result = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--prompt", "prompt-one",
+                "--prompt", "prompt-two",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        let lines = result.stdout
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+        let promptResults = lines.compactMap { line -> [String: String]? in
+            guard let data = line.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+                  object["type"] == "prompt_result" else {
+                return nil
+            }
+            return object
+        }
+
+        XCTAssertEqual(promptResults.count, 2, "stdout: \(result.stdout)")
+        if promptResults.count == 2 {
+            XCTAssertEqual(promptResults[0]["sessionId"], promptResults[1]["sessionId"], "stdout: \(result.stdout)")
+        }
+    }
+
+    func testClientConnectViaWSRequiredPermissionDenyReturnsCancelled() throws {
+        guard let skiURL = findSKIBinary() else {
+            throw XCTSkip("ski binary not found under .build")
+        }
+
+        let port = 18912
+        let server = Process()
+        server.executableURL = skiURL
+        server.arguments = [
+            "acp", "serve",
+            "--transport", "ws",
+            "--listen", "127.0.0.1:\(port)",
+            "--permission-mode", "required",
+            "--log-level", "debug"
+        ]
+        server.standardOutput = Pipe()
+        server.standardError = Pipe()
+        try server.run()
+        Thread.sleep(forTimeInterval: 1.0)
+        defer {
+            if server.isRunning {
+                server.terminate()
+                server.waitUntilExit()
+            }
+        }
+
+        let result = try runSKI(
+            arguments: [
+                "acp", "client", "connect-ws",
+                "--endpoint", "ws://127.0.0.1:\(port)",
+                "--prompt", "permission-check",
+                "--permission-decision", "deny",
+                "--json"
+            ],
+            timeoutSeconds: 20
+        )
+
+        XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
+        let lines = result.stdout
+            .split(separator: "\n")
+            .map(String.init)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let last = try XCTUnwrap(lines.last, "stdout: \(result.stdout)")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(last.utf8)) as? [String: String])
+        XCTAssertEqual(object["type"], "prompt_result")
+        XCTAssertEqual(object["stopReason"], "cancelled")
+    }
+
     func testClientConnectViaStdioServeProcessTimeoutZeroDisablesTimeout() throws {
         guard let skiURL = findSKIBinary() else {
             throw XCTSkip("ski binary not found under .build")

@@ -8,3 +8,4 @@ DerivedData/
 .netrc
 Tests/SKIntelligenceTests/Shared.swift
 External/
+references/

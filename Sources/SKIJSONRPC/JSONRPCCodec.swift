@@ -7,7 +7,7 @@ public enum JSONRPCCodecError: Error, Sendable, Equatable {
 
 public enum JSONRPCCodec {
     public static func encode(_ message: JSONRPCMessage) throws -> Data {
-        let encoder = JSONEncoder()
+        let encoder = makeEncoder()
         switch message {
         case .request(let request):
             return try encoder.encode(request)
@@ -42,13 +42,19 @@ public enum JSONRPCCodec {
     }
 
     public static func toValue<T: Encodable>(_ value: T) throws -> JSONValue {
-        let data = try JSONEncoder().encode(value)
+        let data = try makeEncoder().encode(value)
         return try JSONDecoder().decode(JSONValue.self, from: data)
     }
 
     public static func fromValue<T: Decodable>(_ value: JSONValue, as type: T.Type = T.self) throws -> T {
-        let data = try JSONEncoder().encode(value)
+        let data = try makeEncoder().encode(value)
         return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    private static func makeEncoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        return encoder
     }
 }
 
