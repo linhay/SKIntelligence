@@ -228,3 +228,4 @@ RUN_CODEX_PROBES=1 ./scripts/acp_regression_suite.sh
 ACP_SUITE_SUMMARY_JSON=/tmp/acp_suite_summary.json ./scripts/acp_regression_suite.sh
 cat /tmp/acp_suite_summary.json
 ```
+- summary 增加 `stageFinishedAtMap`（`stage -> finishedAtUtc`），可与 `stageStartedAtMap` 组合做阶段窗口分析。
