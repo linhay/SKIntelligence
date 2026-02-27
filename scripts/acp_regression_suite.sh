@@ -101,6 +101,7 @@ write_summary_json() {
   local optional_skipped=0
   local required_failed=0
   local counts_consistent="true"
+  local ci_recommendation="fail"
   finished_at_epoch="$(date +%s)"
   finished_at_utc="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   duration_seconds="$((finished_at_epoch - SUITE_STARTED_AT_EPOCH))"
@@ -135,6 +136,13 @@ write_summary_json() {
      [ "$optional_total" -ne $((optional_pass + optional_fail + optional_warn + optional_skipped)) ]; then
     counts_consistent="false"
   fi
+  if [ "$required_failed" -gt 0 ] || [ "$count_fail" -gt 0 ]; then
+    ci_recommendation="fail"
+  elif [ "$count_warn" -gt 0 ] || [ "$count_skipped" -gt 0 ]; then
+    ci_recommendation="pass_with_warnings"
+  else
+    ci_recommendation="pass"
+  fi
   summary_dir="$(dirname "$SUMMARY_JSON_PATH")"
   mkdir -p "$SUITE_LOG_DIR"
   mkdir -p "$summary_dir"
@@ -168,6 +176,7 @@ write_summary_json() {
     printf '    "warn": %s,\n' "$count_warn"
     printf '    "skipped": %s\n' "$count_skipped"
     printf '  },\n'
+    printf '  "ciRecommendation": "%s",\n' "$(json_escape "$ci_recommendation")"
     if [ "$count_total" -eq "$count_pass" ]; then
       printf '  "allStagesPassed": true,\n'
     else
@@ -245,6 +254,7 @@ write_summary_json() {
      ! rg -q '"exitCode":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"failure":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"stageCounts": \{' "$SUMMARY_JSON_PATH" || \
+     ! rg -q '"ciRecommendation":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"allStagesPassed":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"hasWarnings":' "$SUMMARY_JSON_PATH" || \
      ! rg -q '"hasSkipped":' "$SUMMARY_JSON_PATH" || \
