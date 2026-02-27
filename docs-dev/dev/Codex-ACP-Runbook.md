@@ -61,6 +61,10 @@ swift run ski acp client stop \
 
 预期：输出 `{"type":"session_stop","sessionId":"sess_123"}`。
 
+快捷别名：
+- `ski acp client stop-stdio --cmd ... --session-id ...`
+- `ski acp client stop-ws --endpoint ... --session-id ...`
+
 ## 5. 稳定性烟测
 
 ```bash
