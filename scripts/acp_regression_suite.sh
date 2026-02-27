@@ -339,6 +339,20 @@ json_array_alerts() {
   printf ']'
 }
 
+stage_status_from_lines() {
+  local lines="$1"
+  local target_stage="$2"
+  local stage
+  local status
+  while IFS='|' read -r _index stage status _required _exit_code _started_at_utc _finished_at_utc _duration_seconds _attempts _message _log_path; do
+    if [ "$stage" = "$target_stage" ]; then
+      printf '%s' "$status"
+      return 0
+    fi
+  done <<< "$lines"
+  printf 'unknown'
+}
+
 append_summary() {
   local index="$1"
   local stage="$2"
@@ -407,6 +421,9 @@ write_summary_json() {
   local required_failed_stages_json='[]'
   local non_pass_optional_stages_json='[]'
   local alerts_json='[]'
+  local codex_permission_probe_status="unknown"
+  local codex_multiturn_probe_status="unknown"
+  local codex_probe_non_pass_count=0
   local failed_stages=""
   local non_pass_stages=""
   local warn_stages=""
@@ -497,6 +514,14 @@ write_summary_json() {
   fi
   failed_stages_count="$count_fail"
   non_pass_stages_count="$((count_total - count_pass))"
+  codex_permission_probe_status="$(stage_status_from_lines "$SUMMARY_LINES" "codex_permission_probe")"
+  codex_multiturn_probe_status="$(stage_status_from_lines "$SUMMARY_LINES" "codex_multiturn_smoke")"
+  if [ "$codex_permission_probe_status" != "pass" ]; then
+    codex_probe_non_pass_count=$((codex_probe_non_pass_count + 1))
+  fi
+  if [ "$codex_multiturn_probe_status" != "pass" ]; then
+    codex_probe_non_pass_count=$((codex_probe_non_pass_count + 1))
+  fi
   if [ "$required_failed" -gt 0 ]; then
     alert_required_failure_count=1
   fi
@@ -613,6 +638,13 @@ write_summary_json() {
     else
       printf '  "hasBlockingAlerts": false,\n'
     fi
+    printf '  "codexProbes": {\n'
+    printf '    "enabled": %s,\n' "$([ "${RUN_CODEX_PROBES:-0}" = "1" ] && echo true || echo false)"
+    printf '    "strict": %s,\n' "$([ "$STRICT_CODEX_PROBES" = "1" ] && echo true || echo false)"
+    printf '    "permissionProbeStatus": "%s",\n' "$(json_escape "$codex_permission_probe_status")"
+    printf '    "multiturnProbeStatus": "%s",\n' "$(json_escape "$codex_multiturn_probe_status")"
+    printf '    "nonPassCount": %s\n' "$codex_probe_non_pass_count"
+    printf '  },\n'
     printf '  "summaryCompact": {\n'
     printf '    "overallOutcome": "%s",\n' "$(json_escape "$overall_outcome")"
     printf '    "overallOutcomeRank": %s,\n' "$overall_outcome_rank"
@@ -723,6 +755,7 @@ write_summary_json() {
       (.alerts | type == "array") and
       (.alertCounts | type == "object") and
       (.hasBlockingAlerts | type == "boolean") and
+      (.codexProbes | type == "object") and
       (.summaryCompact | type == "object") and
       (.requiredStageCounts | type == "object") and
       (.optionalStageCounts | type == "object") and
@@ -777,6 +810,7 @@ write_summary_json() {
        ! rg -q '"alerts":' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"alertCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"hasBlockingAlerts":' "$SUMMARY_JSON_PATH" || \
+       ! rg -q '"codexProbes": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"summaryCompact": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"requiredStageCounts": \{' "$SUMMARY_JSON_PATH" || \
        ! rg -q '"optionalStageCounts": \{' "$SUMMARY_JSON_PATH" || \
