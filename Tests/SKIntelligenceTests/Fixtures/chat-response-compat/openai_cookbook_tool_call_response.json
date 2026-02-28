@@ -1,0 +1,33 @@
+{
+  "_source": "https://cookbook.openai.com/examples/how_to_call_functions_with_chat_models",
+  "_note": "Converted from official cookbook ChatCompletion pretty-print example with finish_reason=tool_calls",
+  "id": "chatcmpl-AyPNinnUqUDYo9SAdA52NobMflmj2",
+  "object": "chat.completion",
+  "created": 1739381145,
+  "model": "gpt-4o-2024-08-06",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "tool_calls",
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_49DlNOVl16NOj4gOA6JQhN4R",
+            "type": "function",
+            "function": {
+              "name": "get_n_day_weather_forecast",
+              "arguments": "{\"location\":\"Glasgow, SCT\",\"format\":\"celsius\",\"num_days\":5}"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 82,
+    "completion_tokens": 23,
+    "total_tokens": 105
+  }
+}

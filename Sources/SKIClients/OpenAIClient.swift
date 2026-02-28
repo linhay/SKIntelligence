@@ -208,7 +208,16 @@ public class OpenAIClient: SKILanguageModelClient, Sendable {
         }
 
         let httpResponse = HTTPResponse(status: .init(code: response.response?.statusCode ?? 200))
-        return try SKIResponse<ChatResponseBody>(httpResponse: httpResponse, data: data)
+        do {
+            return try SKIResponse<ChatResponseBody>(httpResponse: httpResponse, data: data)
+        } catch let decodingError as DecodingError {
+            throw Self.enrichDecodingError(
+                decodingError,
+                data: data,
+                model: model,
+                url: url
+            )
+        }
     }
 
     private func shouldRetry(error: Error) -> Bool {
@@ -230,6 +239,98 @@ public class OpenAIClient: SKILanguageModelClient, Sendable {
         }
 
         return false
+    }
+
+    static func enrichDecodingError(
+        _ error: DecodingError,
+        data: Data,
+        model: String,
+        url: URL,
+        snippetLimit: Int = 1024
+    ) -> DecodingError {
+        let (codingPath, reason, underlyingError) = decodingErrorContext(error)
+        let snippet = redactedSnippet(from: data, limit: snippetLimit)
+        let debugDescription =
+            "\(reason); model=\(model); url=\(url.absoluteString); responseSnippet=\(snippet)"
+        let context = DecodingError.Context(
+            codingPath: codingPath,
+            debugDescription: debugDescription,
+            underlyingError: underlyingError
+        )
+
+        switch error {
+        case .typeMismatch(let type, _):
+            return .typeMismatch(type, context)
+        case .valueNotFound(let type, _):
+            return .valueNotFound(type, context)
+        case .keyNotFound(let key, _):
+            return .keyNotFound(key, context)
+        case .dataCorrupted:
+            return .dataCorrupted(context)
+        @unknown default:
+            return .dataCorrupted(context)
+        }
+    }
+
+    private static func decodingErrorContext(_ error: DecodingError) -> (
+        codingPath: [CodingKey], reason: String, underlyingError: Error?
+    ) {
+        switch error {
+        case .typeMismatch(let type, let context):
+            return (
+                context.codingPath,
+                "typeMismatch(\(type)): \(context.debugDescription)",
+                context.underlyingError
+            )
+        case .valueNotFound(let type, let context):
+            return (
+                context.codingPath,
+                "valueNotFound(\(type)): \(context.debugDescription)",
+                context.underlyingError
+            )
+        case .keyNotFound(let key, let context):
+            return (
+                context.codingPath,
+                "keyNotFound(\(key.stringValue)): \(context.debugDescription)",
+                context.underlyingError
+            )
+        case .dataCorrupted(let context):
+            return (
+                context.codingPath,
+                "dataCorrupted: \(context.debugDescription)",
+                context.underlyingError
+            )
+        @unknown default:
+            return ([], "unknown decoding error", nil)
+        }
+    }
+
+    private static func redactedSnippet(from data: Data, limit: Int) -> String {
+        let prefix = data.prefix(limit)
+        let text = String(data: prefix, encoding: .utf8) ?? "<non-utf8>"
+        return redactSensitiveFields(in: text)
+    }
+
+    private static func redactSensitiveFields(in text: String) -> String {
+        let patterns = [
+            #"(?i)("authorization"\s*:\s*")[^"]*(")"#,
+            #"(?i)("api[_-]?key"\s*:\s*")[^"]*(")"#,
+            #"(?i)("token"\s*:\s*")[^"]*(")"#
+        ]
+
+        var output = text
+        for pattern in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(output.startIndex..<output.endIndex, in: output)
+                output = regex.stringByReplacingMatches(
+                    in: output,
+                    options: [],
+                    range: range,
+                    withTemplate: "$1***$2"
+                )
+            }
+        }
+        return output
     }
 
     // MARK: - Streaming

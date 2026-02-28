@@ -1,0 +1,23 @@
+{
+  "_source": "https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope",
+  "_note": "Copied from official HTTP section response example",
+  "id": "chatcmpl-1d64f4fbdc194bb5ad4fda6a3f31f2f1",
+  "object": "chat.completion",
+  "created": 1729748616,
+  "model": "qwen-plus",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "我是来自阿里云的大规模语言模型，我叫千问。"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 22,
+    "completion_tokens": 16,
+    "total_tokens": 38
+  }
+}

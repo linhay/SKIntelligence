@@ -41,6 +41,17 @@ public struct ChatResponseBody: Decodable {
         self.usage = usage
         self.systemFingerprint = systemFingerprint
     }
+
+    public init(from decoder: any Decoder) throws {
+        let raw = try RawChatResponseBody(from: decoder)
+        self.init(
+            choices: raw.choices.map { $0.normalized() },
+            created: raw.created,
+            model: raw.model,
+            usage: raw.usage,
+            systemFingerprint: raw.systemFingerprint
+        )
+    }
 }
 
 public struct ChatChoice: Decodable {
@@ -140,16 +151,245 @@ public struct Function: Decodable {
         case arguments
     }
 
+    init(name: String, arguments: [String: Any]?, argumentsRaw: String?) {
+        self.name = name
+        self.arguments = arguments
+        self.argumentsRaw = argumentsRaw
+    }
+
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
-        if let argumentsRaw = try? container.decode(String.self, forKey: .arguments),
-           let data = argumentsRaw.data(using: .utf8) {
-            self.argumentsRaw = argumentsRaw
-            arguments = try? (JSONDecoder().decode([String: JSONValue].self, from: data)).untypedDictionary
-        } else {
-            argumentsRaw = nil
-            arguments = nil
+        let value = try container.decodeIfPresent(JSONValue.self, forKey: .arguments)
+        let normalized = normalizeFunctionArguments(value)
+        arguments = normalized.arguments
+        argumentsRaw = normalized.argumentsRaw
+    }
+}
+
+private struct RawChatResponseBody: Decodable {
+    let choices: [RawChatChoice]
+    let created: Int
+    let model: String
+    let usage: ChatUsage?
+    let systemFingerprint: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case choices
+        case created
+        case model
+        case usage
+        case systemFingerprint = "system_fingerprint"
+    }
+}
+
+private struct RawChatChoice: Decodable {
+    let finishReason: String?
+    let message: RawChoiceMessage
+
+    private enum CodingKeys: String, CodingKey {
+        case finishReason = "finish_reason"
+        case message
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        finishReason = container.decodeLossyString(forKey: .finishReason)
+        message = try container.decode(RawChoiceMessage.self, forKey: .message)
+    }
+
+    func normalized() -> ChatChoice {
+        ChatChoice(finishReason: finishReason, message: message.normalized())
+    }
+}
+
+private struct RawChoiceMessage: Decodable {
+    let content: JSONValue?
+    let reasoning: JSONValue?
+    let reasoningContent: JSONValue?
+    let role: String
+    let toolCalls: [RawToolCall]?
+
+    private enum CodingKeys: String, CodingKey {
+        case content
+        case reasoning
+        case reasoningContent = "reasoning_content"
+        case role
+        case toolCalls = "tool_calls"
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        role = try container.decode(String.self, forKey: .role)
+        content = try container.decodeIfPresent(JSONValue.self, forKey: .content)
+        reasoning = try container.decodeIfPresent(JSONValue.self, forKey: .reasoning)
+        reasoningContent = try container.decodeIfPresent(JSONValue.self, forKey: .reasoningContent)
+
+        let rawToolCalls = try container.decodeIfPresent(JSONValue.self, forKey: .toolCalls)
+        toolCalls = normalizeToolCalls(rawToolCalls)
+    }
+
+    func normalized() -> ChoiceMessage {
+        ChoiceMessage(
+            content: normalizeMessageContent(content),
+            reasoning: normalizeOptionalString(reasoning),
+            reasoningContent: normalizeOptionalString(reasoningContent),
+            role: role,
+            toolCalls: toolCalls?.map { $0.normalized() }
+        )
+    }
+}
+
+private struct RawToolCall: Decodable {
+    let id: String
+    let type: String
+    let function: RawFunction
+
+    func normalized() -> ToolCall {
+        ToolCall(id: id, type: type, function: function.normalized())
+    }
+}
+
+private struct RawFunction: Decodable {
+    let name: String
+    let arguments: JSONValue?
+
+    private enum CodingKeys: CodingKey {
+        case name
+        case arguments
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        arguments = try container.decodeIfPresent(JSONValue.self, forKey: .arguments)
+    }
+
+    func normalized() -> Function {
+        let normalized = normalizeFunctionArguments(arguments)
+        return Function(name: name, arguments: normalized.arguments, argumentsRaw: normalized.argumentsRaw)
+    }
+}
+
+private struct NormalizedFunctionArguments {
+    let arguments: [String: Any]?
+    let argumentsRaw: String?
+}
+
+private func normalizeFunctionArguments(_ value: JSONValue?) -> NormalizedFunctionArguments {
+    guard let value else {
+        return .init(arguments: nil, argumentsRaw: nil)
+    }
+
+    switch value {
+    case .null:
+        return .init(arguments: nil, argumentsRaw: nil)
+    case .string(let raw):
+        return .init(arguments: parseObjectArguments(from: raw), argumentsRaw: raw)
+    case .object(let object):
+        return .init(
+            arguments: object.untypedDictionary,
+            argumentsRaw: canonicalJSONString(of: value)
+        )
+    default:
+        return .init(arguments: nil, argumentsRaw: canonicalJSONString(of: value))
+    }
+}
+
+private func parseObjectArguments(from raw: String) -> [String: Any]? {
+    guard let data = raw.data(using: .utf8),
+          let object = try? JSONDecoder().decode([String: JSONValue].self, from: data) else {
+        return nil
+    }
+    return object.untypedDictionary
+}
+
+private func canonicalJSONString(of value: JSONValue) -> String? {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    guard let data = try? encoder.encode(value) else {
+        return nil
+    }
+    return String(data: data, encoding: .utf8)
+}
+
+private func normalizeToolCalls(_ value: JSONValue?) -> [RawToolCall]? {
+    guard let value else {
+        return nil
+    }
+
+    let calls: [RawToolCall]
+    switch value {
+    case .null:
+        return nil
+    case .array(let array):
+        calls = array.compactMap { decodeDecodable(RawToolCall.self, from: $0) }
+    case .object:
+        calls = [value].compactMap { decodeDecodable(RawToolCall.self, from: $0) }
+    default:
+        calls = []
+    }
+    return calls.isEmpty ? nil : calls
+}
+
+private func normalizeMessageContent(_ value: JSONValue?) -> String? {
+    guard let value else {
+        return nil
+    }
+
+    switch value {
+    case .null:
+        return nil
+    case .string(let text):
+        return text
+    case .array(let parts):
+        let text = parts.compactMap(extractTextContent(from:)).joined()
+        return text.isEmpty ? nil : text
+    case .object:
+        let text = extractTextContent(from: value)
+        return text?.isEmpty == true ? nil : text
+    default:
+        return nil
+    }
+}
+
+private func normalizeOptionalString(_ value: JSONValue?) -> String? {
+    guard case .string(let text)? = value else {
+        return nil
+    }
+    return text
+}
+
+private func extractTextContent(from value: JSONValue) -> String? {
+    guard case .object(let object) = value else {
+        return nil
+    }
+
+    if case .string(let text)? = object["text"] {
+        return text
+    }
+    if case .object(let textObject)? = object["text"],
+       case .string(let text)? = textObject["value"] {
+        return text
+    }
+    return nil
+}
+
+private func decodeDecodable<T: Decodable>(_ type: T.Type, from value: JSONValue) -> T? {
+    guard let data = try? JSONEncoder().encode(value) else {
+        return nil
+    }
+    return try? JSONDecoder().decode(type, from: data)
+}
+
+private extension KeyedDecodingContainer {
+    func decodeLossyString(forKey key: Key) -> String? {
+        if let stringValue = try? decodeIfPresent(String.self, forKey: key) {
+            return stringValue
         }
+        if case .string(let value)? = try? decodeIfPresent(JSONValue.self, forKey: key) {
+            return value
+        }
+        return nil
     }
 }

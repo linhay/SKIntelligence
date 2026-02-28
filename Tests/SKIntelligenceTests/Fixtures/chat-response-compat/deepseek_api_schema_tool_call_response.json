@@ -1,0 +1,35 @@
+{
+  "_source": "https://api-docs.deepseek.com/api/create-chat-completion",
+  "_note": "Adapted from official response schema/example fields including tool_calls and reasoning_content",
+  "id": "deepseek-example-id",
+  "object": "chat.completion",
+  "created": 1735113344,
+  "model": "deepseek-chat",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "tool_calls",
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "reasoning_content": "string",
+        "tool_calls": [
+          {
+            "id": "call_0",
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "arguments": "{\"location\":\"Hangzhou, Zhejiang\"}"
+            }
+          }
+        ]
+      },
+      "logprobs": null
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 1,
+    "completion_tokens": 1,
+    "total_tokens": 2
+  }
+}
