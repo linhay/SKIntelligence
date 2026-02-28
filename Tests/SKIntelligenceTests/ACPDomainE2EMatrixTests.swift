@@ -1,10 +1,10 @@
 import Foundation
+ import STJSON
 import XCTest
 @testable import SKIACP
 @testable import SKIACPAgent
 @testable import SKIACPClient
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 @testable import SKIntelligence
 
 final class ACPDomainE2EMatrixTests: XCTestCase {
@@ -357,14 +357,14 @@ private extension ACPDomainE2EMatrixTests {
         try await transportClient.connect()
         defer { Task { await transportClient.close() } }
 
-        try await transportClient.send(.request(JSONRPCRequest(
+        try await transportClient.send(.request(JSONRPC.Request(
             id: .int(1),
             method: ACPMethods.initialize,
             params: try ACPCodec.encodeParams(ACPInitializeParams(protocolVersion: 1))
         )))
         _ = try await expectResponse(id: .int(1), from: transportClient)
 
-        try await transportClient.send(.request(JSONRPCRequest(
+        try await transportClient.send(.request(JSONRPC.Request(
             id: .int(2),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: FileManager.default.currentDirectoryPath))
@@ -376,7 +376,7 @@ private extension ACPDomainE2EMatrixTests {
         }
         let sessionNew = try ACPCodec.decodeParams(payload, as: ACPSessionNewResult.self)
 
-        try await transportClient.send(.request(JSONRPCRequest(
+        try await transportClient.send(.request(JSONRPC.Request(
             id: .int(3),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(
@@ -385,13 +385,13 @@ private extension ACPDomainE2EMatrixTests {
             ))
         )))
         try await Task.sleep(nanoseconds: 100_000_000)
-        try await transportClient.send(.notification(JSONRPCNotification(
+        try await transportClient.send(.notification(JSONRPC.Request(
             method: ACPMethods.cancelRequest,
             params: try ACPCodec.encodeParams(ACPCancelRequestParams(requestId: .int(3)))
         )))
 
         let promptResponse = try await expectResponse(id: .int(3), from: transportClient)
-        return promptResponse.error?.code ?? JSONRPCErrorCode.internalError
+        return promptResponse.error?.code.value ?? JSONRPCErrorCode.internalError
     }
 
     func runCancelRequestDuringPermissionScenario(transport: MatrixTransport) async throws -> Int {
@@ -486,14 +486,14 @@ private extension ACPDomainE2EMatrixTests {
         try await transportClient.connect()
         defer { Task { await transportClient.close() } }
 
-        try await transportClient.send(.request(JSONRPCRequest(
+        try await transportClient.send(.request(JSONRPC.Request(
             id: .string("init-1"),
             method: ACPMethods.initialize,
             params: try ACPCodec.encodeParams(ACPInitializeParams(protocolVersion: 1))
         )))
         _ = try await expectResponse(id: .string("init-1"), from: transportClient)
 
-        try await transportClient.send(.request(JSONRPCRequest(
+        try await transportClient.send(.request(JSONRPC.Request(
             id: .string("new-1"),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: FileManager.default.currentDirectoryPath))
@@ -505,8 +505,8 @@ private extension ACPDomainE2EMatrixTests {
         }
         let sessionNew = try ACPCodec.decodeParams(payload, as: ACPSessionNewResult.self)
 
-        let promptID = JSONRPCID.string("prompt-1")
-        try await transportClient.send(.request(JSONRPCRequest(
+        let promptID = JSONRPC.ID.string("prompt-1")
+        try await transportClient.send(.request(JSONRPC.Request(
             id: promptID,
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(
@@ -515,13 +515,13 @@ private extension ACPDomainE2EMatrixTests {
             ))
         )))
         try await Task.sleep(nanoseconds: 100_000_000)
-        try await transportClient.send(.notification(JSONRPCNotification(
+        try await transportClient.send(.notification(JSONRPC.Request(
             method: ACPMethods.cancelRequest,
             params: try ACPCodec.encodeParams(ACPCancelRequestParams(requestId: promptID))
         )))
 
         let promptResponse = try await expectResponse(id: promptID, from: transportClient)
-        return promptResponse.error?.code ?? JSONRPCErrorCode.internalError
+        return promptResponse.error?.code.value ?? JSONRPCErrorCode.internalError
     }
 
     func runPreCancelRequestPromptScenario(transport: MatrixTransport) async throws -> PreCancelResult {
@@ -544,14 +544,14 @@ private extension ACPDomainE2EMatrixTests {
         try await transportClient.connect()
         defer { Task { await transportClient.close() } }
 
-        try await transportClient.send(.request(JSONRPCRequest(
+        try await transportClient.send(.request(JSONRPC.Request(
             id: .int(1),
             method: ACPMethods.initialize,
             params: try ACPCodec.encodeParams(ACPInitializeParams(protocolVersion: 1))
         )))
         _ = try await expectResponse(id: .int(1), from: transportClient)
 
-        try await transportClient.send(.request(JSONRPCRequest(
+        try await transportClient.send(.request(JSONRPC.Request(
             id: .int(2),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: FileManager.default.currentDirectoryPath))
@@ -566,11 +566,11 @@ private extension ACPDomainE2EMatrixTests {
         }
         let sessionNew = try ACPCodec.decodeParams(payload, as: ACPSessionNewResult.self)
 
-        try await transportClient.send(.notification(JSONRPCNotification(
+        try await transportClient.send(.notification(JSONRPC.Request(
             method: ACPMethods.cancelRequest,
             params: try ACPCodec.encodeParams(ACPCancelRequestParams(requestId: .string("s2c-3")))
         )))
-        try await transportClient.send(.request(JSONRPCRequest(
+        try await transportClient.send(.request(JSONRPC.Request(
             id: .int(3),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(
@@ -580,11 +580,11 @@ private extension ACPDomainE2EMatrixTests {
         )))
         let intPromptResponse = try await expectResponse(id: .int(3), from: transportClient)
 
-        try await transportClient.send(.notification(JSONRPCNotification(
+        try await transportClient.send(.notification(JSONRPC.Request(
             method: ACPMethods.cancelRequest,
             params: try ACPCodec.encodeParams(ACPCancelRequestParams(requestId: .int(4)))
         )))
-        try await transportClient.send(.request(JSONRPCRequest(
+        try await transportClient.send(.request(JSONRPC.Request(
             id: .string("s2c-4"),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(
@@ -595,8 +595,8 @@ private extension ACPDomainE2EMatrixTests {
         let stringPromptResponse = try await expectResponse(id: .string("s2c-4"), from: transportClient)
 
         return .init(
-            intPromptCodeFromStringCancel: intPromptResponse.error?.code ?? JSONRPCErrorCode.internalError,
-            stringPromptCodeFromIntCancel: stringPromptResponse.error?.code ?? JSONRPCErrorCode.internalError
+            intPromptCodeFromStringCancel: intPromptResponse.error?.code.value ?? JSONRPCErrorCode.internalError,
+            stringPromptCodeFromIntCancel: stringPromptResponse.error?.code.value ?? JSONRPCErrorCode.internalError
         )
     }
 
@@ -799,7 +799,7 @@ private extension ACPDomainE2EMatrixTests {
             writtenContent: writtenContent,
             terminalOutputContainsToken: outputResult.output.contains("matrix-terminal"),
             terminalExitCode: waitResult.exitCode,
-            outputAfterReleaseErrorCode: afterReleaseOutput.error?.code ?? JSONRPCErrorCode.internalError
+            outputAfterReleaseErrorCode: afterReleaseOutput.error?.code.value ?? JSONRPCErrorCode.internalError
         )
     }
 
@@ -904,7 +904,7 @@ private extension ACPDomainE2EMatrixTests {
 
         return .init(
             outputContainsKilledToken: outputResult.output.contains("killed-from-matrix"),
-            outputAfterReleaseErrorCode: afterReleaseOutput.error?.code ?? JSONRPCErrorCode.internalError
+            outputAfterReleaseErrorCode: afterReleaseOutput.error?.code.value ?? JSONRPCErrorCode.internalError
         )
     }
 
@@ -913,9 +913,9 @@ private extension ACPDomainE2EMatrixTests {
             && value.contains("\"message\"")
     }
 
-    func expectResponse(id: JSONRPCID, from transport: any ACPTransport) async throws -> JSONRPCResponse {
+    func expectResponse(id: JSONRPC.ID, from transport: any ACPTransport) async throws -> JSONRPC.Response {
         while let message = try await transport.receive() {
-            if case .response(let response) = message, response.id == id {
+            if case .response(let response) = message, response.id! == id {
                 return response
             }
         }
@@ -978,19 +978,19 @@ private extension ACPDomainE2EMatrixTests {
 }
 
 private actor MatrixResponseInbox {
-    private var buffered: [JSONRPCID: JSONRPCResponse] = [:]
-    private var waiters: [JSONRPCID: CheckedContinuation<JSONRPCResponse, Error>] = [:]
+    private var buffered: [JSONRPC.ID: JSONRPC.Response] = [:]
+    private var waiters: [JSONRPC.ID: CheckedContinuation<JSONRPC.Response, Error>] = [:]
 
-    func push(_ response: JSONRPCResponse) {
-        if let waiter = waiters.removeValue(forKey: response.id) {
+    func push(_ response: JSONRPC.Response) {
+        if let waiter = waiters.removeValue(forKey: response.id!) {
             waiter.resume(returning: response)
             return
         }
-        buffered[response.id] = response
+        buffered[response.id!] = response
     }
 
-    func expect(id: JSONRPCID, timeoutNanoseconds: UInt64 = 2_000_000_000) async throws -> JSONRPCResponse {
-        try await withThrowingTaskGroup(of: JSONRPCResponse.self) { group in
+    func expect(id: JSONRPC.ID, timeoutNanoseconds: UInt64 = 2_000_000_000) async throws -> JSONRPC.Response {
+        try await withThrowingTaskGroup(of: JSONRPC.Response.self) { group in
             group.addTask { try await self.awaitResponse(id: id) }
             group.addTask {
                 try await Task.sleep(nanoseconds: timeoutNanoseconds)
@@ -1006,7 +1006,7 @@ private actor MatrixResponseInbox {
         }
     }
 
-    private func awaitResponse(id: JSONRPCID) async throws -> JSONRPCResponse {
+    private func awaitResponse(id: JSONRPC.ID) async throws -> JSONRPC.Response {
         if let response = buffered.removeValue(forKey: id) {
             return response
         }
@@ -1020,7 +1020,7 @@ private final class InProcessMatrixHarness: @unchecked Sendable {
     let clientTransport: any ACPTransport
     let serverTransport: any ACPTransport
     let permissionBridge: ACPPermissionRequestBridge?
-    let onResponse: (@Sendable (JSONRPCResponse) async -> Void)?
+    let onResponse: (@Sendable (JSONRPC.Response) async -> Void)?
     let loop: Task<Void, Never>
     private let closeServer: @Sendable () async -> Void
 
@@ -1029,7 +1029,7 @@ private final class InProcessMatrixHarness: @unchecked Sendable {
         serverTransport: any ACPTransport,
         closeServer: @escaping @Sendable () async -> Void,
         permissionBridge: ACPPermissionRequestBridge?,
-        onResponse: (@Sendable (JSONRPCResponse) async -> Void)?,
+        onResponse: (@Sendable (JSONRPC.Response) async -> Void)?,
         loop: Task<Void, Never>
     ) {
         self.clientTransport = clientTransport
@@ -1044,7 +1044,7 @@ private final class InProcessMatrixHarness: @unchecked Sendable {
         authMode: ACPDomainE2EMatrixTests.MatrixAuthMode = .none,
         modelBehavior: ACPDomainE2EMatrixTests.MatrixModelBehavior = .echo,
         permissionMode: ACPDomainE2EMatrixTests.MatrixPermissionMode = .bridge,
-        onResponse: (@Sendable (JSONRPCResponse) async -> Void)? = nil
+        onResponse: (@Sendable (JSONRPC.Response) async -> Void)? = nil
     ) async throws -> InProcessMatrixHarness {
         let (serverTransport, port) = try await ACPWebSocketTestHarness.makeServerTransport()
         let clientTransport = WebSocketClientTransport(endpoint: URL(string: "ws://127.0.0.1:\(port)")!)
@@ -1063,7 +1063,7 @@ private final class InProcessMatrixHarness: @unchecked Sendable {
         authMode: ACPDomainE2EMatrixTests.MatrixAuthMode = .none,
         modelBehavior: ACPDomainE2EMatrixTests.MatrixModelBehavior = .echo,
         permissionMode: ACPDomainE2EMatrixTests.MatrixPermissionMode = .bridge,
-        onResponse: (@Sendable (JSONRPCResponse) async -> Void)? = nil
+        onResponse: (@Sendable (JSONRPC.Response) async -> Void)? = nil
     ) async throws -> InProcessMatrixHarness {
         let (clientTransport, serverTransport) = await InMemoryLinkedTransport.makePair()
         try await serverTransport.connect()
@@ -1085,7 +1085,7 @@ private final class InProcessMatrixHarness: @unchecked Sendable {
         authMode: ACPDomainE2EMatrixTests.MatrixAuthMode,
         modelBehavior: ACPDomainE2EMatrixTests.MatrixModelBehavior,
         permissionMode: ACPDomainE2EMatrixTests.MatrixPermissionMode,
-        onResponse: (@Sendable (JSONRPCResponse) async -> Void)?
+        onResponse: (@Sendable (JSONRPC.Response) async -> Void)?
     ) async throws -> InProcessMatrixHarness {
         let permissionBridge: ACPPermissionRequestBridge? = {
             guard permissionMode == .bridge else { return nil }

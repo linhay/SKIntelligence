@@ -19,3 +19,13 @@
 - Given 在 macOS 平台调用 `SKIToolShell`
 - When 平台支持 `SKProcessRunner`
 - Then `isRuntimeSupported == true`，且原有调用路径不变
+
+4. 场景：ACP stdio client transport 平台降级明确
+- Given 当前平台不支持 `ProcessStdioTransport`（iOS/tvOS/watchOS）
+- When 调用 `ACPCLITransportFactory.makeClientTransport(kind: .stdio, ...)`
+- Then 返回 `invalidInput("stdio transport is unavailable on this platform")`
+
+5. 场景：ACP stdio client transport 在 macOS 行为保持
+- Given 当前平台支持 `ProcessStdioTransport`（macOS）
+- When 调用 `ACPCLITransportFactory.makeClientTransport(kind: .stdio, cmd: "env", ...)`
+- Then 仍返回 `ProcessStdioTransport`，不改变原有参数解析行为

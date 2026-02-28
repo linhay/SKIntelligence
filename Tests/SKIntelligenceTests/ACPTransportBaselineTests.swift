@@ -1,6 +1,6 @@
 import XCTest
+ import STJSON
 @testable import SKIACP
-@testable import SKIJSONRPC
 
 final class ACPTransportBaselineTests: XCTestCase {
     func testJSONRPCEncodeDecodeBaseline() throws {

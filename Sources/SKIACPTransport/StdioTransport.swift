@@ -1,5 +1,5 @@
 import Foundation
-import SKIJSONRPC
+import SKIACP
 
 public actor StdioTransport: ACPTransport {
     private let framer = JSONRPCLineFramer()

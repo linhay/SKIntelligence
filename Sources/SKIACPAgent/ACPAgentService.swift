@@ -1,7 +1,8 @@
 import Foundation
 import SKIACP
-import SKIJSONRPC
+import SKIACP
 import SKIntelligence
+@preconcurrency import STJSON
 
 public enum ACPAgentServiceError: Error, LocalizedError {
     case methodNotFound(String)
@@ -31,14 +32,14 @@ public enum ACPAgentServiceError: Error, LocalizedError {
 public struct ACPAgentTelemetryEvent: Sendable, Equatable {
     public var name: String
     public var sessionId: String?
-    public var requestId: JSONRPCID?
+    public var requestId: JSONRPC.ID?
     public var attributes: [String: String]
     public var timestamp: String
 
     public init(
         name: String,
         sessionId: String? = nil,
-        requestId: JSONRPCID? = nil,
+        requestId: JSONRPC.ID? = nil,
         attributes: [String: String] = [:],
         timestamp: String
     ) {
@@ -106,7 +107,7 @@ public actor ACPAgentService {
     }
 
     public typealias SessionFactory = @Sendable () throws -> any ACPAgentSession
-    public typealias NotificationSink = @Sendable (JSONRPCNotification) async -> Void
+    public typealias NotificationSink = @Sendable (JSONRPC.Request) async -> Void
     /// Non-ACP extension hook for metrics/logging pipelines.
     /// Keep protocol behavior unchanged when sink is nil.
     public typealias TelemetrySink = @Sendable (ACPAgentTelemetryEvent) async -> Void
@@ -139,9 +140,9 @@ public actor ACPAgentService {
     }
     private var sessions: [String: SessionEntry] = [:]
     private var runningPrompts: [String: Task<String, Error>] = [:]
-    private var promptRequestToSession: [JSONRPCID: String] = [:]
+    private var promptRequestToSession: [JSONRPC.ID: String] = [:]
     private var protocolCancelledSessions: Set<String> = []
-    private var pendingProtocolCancelledRequestIDs: Set<JSONRPCID> = []
+    private var pendingProtocolCancelledRequestIDs: Set<JSONRPC.ID> = []
 
     public init(
         sessionFactory: @escaping SessionFactory,
@@ -203,8 +204,14 @@ public actor ACPAgentService {
         )
     }
 
-    public func handle(_ request: JSONRPCRequest) async -> JSONRPCResponse {
+    public func handle(_ request: JSONRPC.Request) async -> JSONRPC.Response {
         pruneExpiredSessionsIfNeeded()
+        guard let requestID = request.id else {
+            return JSONRPC.Response(
+                id: .null,
+                error: .init(code: JSONRPCErrorCode.invalidRequest, message: "Missing request id")
+            )
+        }
 
         do {
             switch request.method {
@@ -220,7 +227,7 @@ public actor ACPAgentService {
                     authMethods: authMethods
                 )
                 let value = try ACPCodec.encodeParams(result)
-                return JSONRPCResponse(id: request.id, result: value)
+                return JSONRPC.Response(id: requestID, result: value)
 
             case ACPMethods.authenticate:
                 guard !authMethods.isEmpty else {
@@ -231,7 +238,7 @@ public actor ACPAgentService {
                     throw ACPAgentServiceError.invalidParams("Unsupported auth methodId: \(params.methodId)")
                 }
                 try await authenticationHandler?(params)
-                return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(ACPAuthenticateResult()))
+                return JSONRPC.Response(id: requestID, result: try ACPCodec.encodeParams(ACPAuthenticateResult()))
 
             case ACPMethods.logout:
                 guard capabilities.authCapabilities.logout != nil else {
@@ -248,7 +255,7 @@ public actor ACPAgentService {
                 promptRequestToSession.removeAll()
                 protocolCancelledSessions.removeAll()
                 pendingProtocolCancelledRequestIDs.removeAll()
-                return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(ACPLogoutResult()))
+                return JSONRPC.Response(id: requestID, result: try ACPCodec.encodeParams(ACPLogoutResult()))
 
             case ACPMethods.sessionNew:
                 let params = try ACPCodec.decodeParams(request.params, as: ACPSessionNewParams.self)
@@ -288,10 +295,10 @@ public actor ACPAgentService {
                 await emitTelemetry(
                     name: "session_new",
                     sessionId: sessionID,
-                    requestId: request.id,
+                    requestId: requestID,
                     attributes: ["cwd": params.cwd]
                 )
-                return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
+                return JSONRPC.Response(id: requestID, result: try ACPCodec.encodeParams(result))
 
             case ACPMethods.sessionList:
                 guard capabilities.sessionCapabilities.list != nil else {
@@ -337,8 +344,8 @@ public actor ACPAgentService {
                 let end = min(filtered.count, offset + options.sessionListPageSize)
                 let page = Array(filtered[offset..<end])
                 let nextCursor = end < filtered.count ? encodeSessionListCursor(end) : nil
-                return JSONRPCResponse(
-                    id: request.id,
+                return JSONRPC.Response(
+                    id: requestID,
                     result: try ACPCodec.encodeParams(ACPSessionListResult(sessions: page, nextCursor: nextCursor))
                 )
 
@@ -354,8 +361,8 @@ public actor ACPAgentService {
                 entry.lastTouchedNanos = currentMonotonicNanos()
                 entry.updatedAt = iso8601TimestampNow()
                 sessions[params.sessionId] = entry
-                return JSONRPCResponse(
-                    id: request.id,
+                return JSONRPC.Response(
+                    id: requestID,
                     result: try ACPCodec.encodeParams(
                         ACPSessionResumeResult(
                             modes: .init(
@@ -397,8 +404,8 @@ public actor ACPAgentService {
                     configOptions: sourceEntry.configOptions,
                     lastTouchedNanos: currentMonotonicNanos()
                 )
-                return JSONRPCResponse(
-                    id: request.id,
+                return JSONRPC.Response(
+                    id: requestID,
                     result: try ACPCodec.encodeParams(
                         ACPSessionForkResult(
                             sessionId: sessionID,
@@ -427,10 +434,10 @@ public actor ACPAgentService {
                 await emitTelemetry(
                     name: "session_delete",
                     sessionId: params.sessionId,
-                    requestId: request.id
+                    requestId: requestID
                 )
-                return JSONRPCResponse(
-                    id: request.id,
+                return JSONRPC.Response(
+                    id: requestID,
                     result: try ACPCodec.encodeParams(ACPSessionDeleteResult())
                 )
 
@@ -447,8 +454,8 @@ public actor ACPAgentService {
                     format: params.format,
                     entry: entry
                 )
-                return JSONRPCResponse(
-                    id: request.id,
+                return JSONRPC.Response(
+                    id: requestID,
                     result: try ACPCodec.encodeParams(
                         ACPSessionExportResult(
                             sessionId: params.sessionId,
@@ -494,10 +501,10 @@ public actor ACPAgentService {
                 await emitTelemetry(
                     name: "session_load",
                     sessionId: params.sessionId,
-                    requestId: request.id,
+                    requestId: requestID,
                     attributes: ["cwd": params.cwd]
                 )
-                return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
+                return JSONRPC.Response(id: requestID, result: try ACPCodec.encodeParams(result))
 
             case ACPMethods.sessionSetMode:
                 let params = try ACPCodec.decodeParams(request.params, as: ACPSessionSetModeParams.self)
@@ -518,7 +525,7 @@ public actor ACPAgentService {
                 ) {
                     try await emitSessionUpdate(update)
                 }
-                return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(ACPSessionSetModeResult()))
+                return JSONRPC.Response(id: requestID, result: try ACPCodec.encodeParams(ACPSessionSetModeResult()))
 
             case ACPMethods.sessionSetModel:
                 let params = try ACPCodec.decodeParams(request.params, as: ACPSessionSetModelParams.self)
@@ -532,7 +539,7 @@ public actor ACPAgentService {
                 entry.lastTouchedNanos = currentMonotonicNanos()
                 entry.updatedAt = iso8601TimestampNow()
                 sessions[params.sessionId] = entry
-                return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(ACPSessionSetModelResult()))
+                return JSONRPC.Response(id: requestID, result: try ACPCodec.encodeParams(ACPSessionSetModelResult()))
 
             case ACPMethods.sessionSetConfigOption:
                 let params = try ACPCodec.decodeParams(request.params, as: ACPSessionSetConfigOptionParams.self)
@@ -573,7 +580,7 @@ public actor ACPAgentService {
                 ) {
                     try await emitSessionUpdate(update)
                 }
-                return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
+                return JSONRPC.Response(id: requestID, result: try ACPCodec.encodeParams(result))
 
             case ACPMethods.sessionStop:
                 let params = try ACPCodec.decodeParams(request.params, as: ACPSessionCancelParams.self)
@@ -581,20 +588,20 @@ public actor ACPAgentService {
                 runningPrompts[params.sessionId] = nil
                 promptRequestToSession = promptRequestToSession.filter { $0.value != params.sessionId }
                 protocolCancelledSessions.remove(params.sessionId)
-                return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(ACPSessionStopResult()))
+                return JSONRPC.Response(id: requestID, result: try ACPCodec.encodeParams(ACPSessionStopResult()))
 
             case ACPMethods.sessionPrompt:
                 let params = try ACPCodec.decodeParams(request.params, as: ACPSessionPromptParams.self)
                 guard let entry = sessions[params.sessionId] else {
                     throw ACPAgentServiceError.sessionNotFound(params.sessionId)
                 }
-                if isProtocolCancelledRequestID(request.id) {
-                    return errorResponse(ACPAgentServiceError.requestCancelled, id: request.id)
+                if isProtocolCancelledRequestID(requestID) {
+                    return errorResponse(ACPAgentServiceError.requestCancelled, id: requestID)
                 }
                 await emitTelemetry(
                     name: "prompt_requested",
                     sessionId: params.sessionId,
-                    requestId: request.id
+                    requestId: requestID
                 )
                 try await emitExecutionStateIfNeeded(
                     sessionId: params.sessionId,
@@ -632,7 +639,7 @@ public actor ACPAgentService {
                         await emitTelemetry(
                             name: "prompt_permission_denied",
                             sessionId: params.sessionId,
-                            requestId: request.id
+                            requestId: requestID
                         )
                         try await emitExecutionStateIfNeeded(
                             sessionId: params.sessionId,
@@ -640,17 +647,17 @@ public actor ACPAgentService {
                             message: "Permission denied"
                         )
                         let result = ACPSessionPromptResult(stopReason: .cancelled)
-                        return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
+                        return JSONRPC.Response(id: requestID, result: try ACPCodec.encodeParams(result))
                     }
                 }
 
                 let text = params.prompt.compactMap(\.text).joined(separator: "\n")
                 let toolCallID = "call_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
-                promptRequestToSession[request.id] = params.sessionId
-                defer { promptRequestToSession[request.id] = nil }
-                if isProtocolCancelledRequestID(request.id)
+                promptRequestToSession[requestID] = params.sessionId
+                defer { promptRequestToSession[requestID] = nil }
+                if isProtocolCancelledRequestID(requestID)
                     || protocolCancelledSessions.remove(params.sessionId) != nil {
-                    return errorResponse(ACPAgentServiceError.requestCancelled, id: request.id)
+                    return errorResponse(ACPAgentServiceError.requestCancelled, id: requestID)
                 }
                 try await emitExecutionStateIfNeeded(
                     sessionId: params.sessionId,
@@ -659,7 +666,7 @@ public actor ACPAgentService {
                 await emitTelemetry(
                     name: "prompt_started",
                     sessionId: params.sessionId,
-                    requestId: request.id
+                    requestId: requestID
                 )
                 let task = Task<String, Error> {
                     try await self.runPromptWithRetry(
@@ -715,10 +722,10 @@ public actor ACPAgentService {
                     await emitTelemetry(
                         name: "prompt_completed",
                         sessionId: params.sessionId,
-                        requestId: request.id
+                        requestId: requestID
                     )
                     let result = ACPSessionPromptResult(stopReason: .endTurn)
-                    return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
+                    return JSONRPC.Response(id: requestID, result: try ACPCodec.encodeParams(result))
                 } catch is CancellationError {
                     runningPrompts[params.sessionId] = nil
                     try await emitExecutionStateIfNeeded(
@@ -728,13 +735,13 @@ public actor ACPAgentService {
                     await emitTelemetry(
                         name: "prompt_cancelled",
                         sessionId: params.sessionId,
-                        requestId: request.id
+                        requestId: requestID
                     )
                     if protocolCancelledSessions.remove(params.sessionId) != nil {
-                        return errorResponse(ACPAgentServiceError.requestCancelled, id: request.id)
+                        return errorResponse(ACPAgentServiceError.requestCancelled, id: requestID)
                     }
                     let result = ACPSessionPromptResult(stopReason: .cancelled)
-                    return JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))
+                    return JSONRPC.Response(id: requestID, result: try ACPCodec.encodeParams(result))
                 } catch let error as ACPAgentServiceError where error == .promptTimedOut {
                     runningPrompts[params.sessionId] = nil
                     try await emitExecutionStateIfNeeded(
@@ -744,9 +751,9 @@ public actor ACPAgentService {
                     await emitTelemetry(
                         name: "prompt_timed_out",
                         sessionId: params.sessionId,
-                        requestId: request.id
+                        requestId: requestID
                     )
-                    return errorResponse(error, id: request.id)
+                    return errorResponse(error, id: requestID)
                 } catch {
                     runningPrompts[params.sessionId] = nil
                     try await emitExecutionStateIfNeeded(
@@ -757,7 +764,7 @@ public actor ACPAgentService {
                     await emitTelemetry(
                         name: "prompt_failed",
                         sessionId: params.sessionId,
-                        requestId: request.id,
+                        requestId: requestID,
                         attributes: ["error": error.localizedDescription]
                     )
                     throw error
@@ -767,11 +774,11 @@ public actor ACPAgentService {
                 throw ACPAgentServiceError.methodNotFound(request.method)
             }
         } catch {
-            return errorResponse(error, id: request.id)
+            return errorResponse(error, id: requestID)
         }
     }
 
-    public func handleCancel(_ notification: JSONRPCNotification) async {
+    public func handleCancel(_ notification: JSONRPC.Request) async {
         if notification.method == ACPMethods.sessionCancel || notification.method == ACPMethods.sessionStop {
             guard let params = try? ACPCodec.decodeParams(notification.params, as: ACPSessionCancelParams.self) else { return }
             runningPrompts[params.sessionId]?.cancel()
@@ -797,15 +804,15 @@ public actor ACPAgentService {
         }
     }
 
-    private func requestIDCandidates(from requestID: JSONRPCID) -> [JSONRPCID] {
-        var values: [JSONRPCID] = [requestID]
+    private func requestIDCandidates(from requestID: JSONRPC.ID) -> [JSONRPC.ID] {
+        var values: [JSONRPC.ID] = [requestID]
         if let mapped = remapRequestIDFallback(requestID), mapped != requestID {
             values.append(mapped)
         }
         return values
     }
 
-    private func remapRequestIDFallback(_ requestID: JSONRPCID) -> JSONRPCID? {
+    private func remapRequestIDFallback(_ requestID: JSONRPC.ID) -> JSONRPC.ID? {
         switch requestID {
         case .int(let number):
             return .string("s2c-\(number)")
@@ -813,10 +820,12 @@ public actor ACPAgentService {
             guard value.hasPrefix("s2c-"),
                   let number = Int(value.dropFirst(4)) else { return nil }
             return .int(number)
+        case .null:
+            return nil
         }
     }
 
-    private func isProtocolCancelledRequestID(_ requestID: JSONRPCID) -> Bool {
+    private func isProtocolCancelledRequestID(_ requestID: JSONRPC.ID) -> Bool {
         var matched = false
         if pendingProtocolCancelledRequestIDs.remove(requestID) != nil {
             matched = true
@@ -862,8 +871,8 @@ public actor ACPAgentService {
         }
     }
 
-    private func errorResponse(_ error: Error, id: JSONRPCID) -> JSONRPCResponse {
-        let rpcError: JSONRPCErrorObject
+    private func errorResponse(_ error: Error, id: JSONRPC.ID) -> JSONRPC.Response {
+        let rpcError: JSONRPC.ErrorObject
         if let serviceError = error as? ACPAgentServiceError {
             switch serviceError {
             case .methodNotFound:
@@ -880,7 +889,7 @@ public actor ACPAgentService {
         } else {
             rpcError = .init(code: JSONRPCErrorCode.internalError, message: error.localizedDescription)
         }
-        return JSONRPCResponse(id: id, error: rpcError)
+        return JSONRPC.Response(id: id, error: rpcError)
     }
 
     private func touchSession(_ id: String) {
@@ -1130,7 +1139,7 @@ public actor ACPAgentService {
     }
 
     private func emitSessionUpdate(_ params: ACPSessionUpdateParams) async throws {
-        let notification = JSONRPCNotification(
+        let notification = JSONRPC.Request(
             method: ACPMethods.sessionUpdate,
             params: try ACPCodec.encodeParams(params)
         )
@@ -1231,7 +1240,7 @@ public actor ACPAgentService {
     private func emitTelemetry(
         name: String,
         sessionId: String? = nil,
-        requestId: JSONRPCID? = nil,
+        requestId: JSONRPC.ID? = nil,
         attributes: [String: String] = [:]
     ) async {
         guard let telemetrySink else { return }

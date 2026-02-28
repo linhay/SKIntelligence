@@ -8,6 +8,8 @@
 import MCP
 import SKIClients
 import XCTest
+ import STJSON
+ import SKIACP
 
 @testable import SKIntelligence
 

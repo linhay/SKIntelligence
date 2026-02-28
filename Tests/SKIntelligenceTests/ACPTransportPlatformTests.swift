@@ -1,6 +1,6 @@
 import XCTest
+ import STJSON
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 
 final class ACPTransportPlatformTests: XCTestCase {
     func testProcessStdioTransportPlatformSemantics() async throws {

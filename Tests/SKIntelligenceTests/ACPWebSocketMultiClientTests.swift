@@ -1,9 +1,9 @@
 import XCTest
+ import STJSON
 @testable import SKIACP
 @testable import SKIACPAgent
 @testable import SKIACPClient
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 @testable import SKIntelligence
 
 final class ACPWebSocketMultiClientTests: XCTestCase {
@@ -137,7 +137,7 @@ final class ACPWebSocketMultiClientTests: XCTestCase {
             }
         }
 
-        let notification = JSONRPCNotification(method: ACPMethods.sessionUpdate, params: nil)
+        let notification = JSONRPC.Request(method: ACPMethods.sessionUpdate, params: nil)
         try await serverTransport.send(.notification(notification))
 
         let incomingA = try await clientTransportA.receive()

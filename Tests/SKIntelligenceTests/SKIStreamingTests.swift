@@ -8,6 +8,8 @@
 import JSONSchema
 import JSONSchemaBuilder
 import XCTest
+ import STJSON
+ import SKIACP
 
 @testable import SKIntelligence
 

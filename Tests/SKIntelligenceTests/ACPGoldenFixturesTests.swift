@@ -1,7 +1,7 @@
 import Foundation
+ import STJSON
 import XCTest
 @testable import SKIACP
-@testable import SKIJSONRPC
 
 final class ACPGoldenFixturesTests: XCTestCase {
     func testSessionUpdateGoldenFixturesRoundTrip() throws {
@@ -20,7 +20,7 @@ final class ACPGoldenFixturesTests: XCTestCase {
                 continue
             }
             let data = try Data(contentsOf: url)
-            let original = try JSONDecoder().decode(JSONValue.self, from: data)
+            let original = try JSONDecoder().decode(AnyCodable.self, from: data)
             let decoded = try ACPCodec.decodeParams(original, as: ACPSessionUpdateParams.self)
             let reencoded = try ACPCodec.encodeParams(decoded)
             XCTAssertEqual(

@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+ import STJSON
 @testable import SKIACPTransport
 
 #if canImport(Darwin)

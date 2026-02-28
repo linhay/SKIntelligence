@@ -1,4 +1,5 @@
 import XCTest
+ import STJSON
 @testable import SKIACPTransport
 
 final class ACPTransportResilienceTests: XCTestCase {

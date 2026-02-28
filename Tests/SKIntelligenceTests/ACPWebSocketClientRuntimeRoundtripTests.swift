@@ -1,10 +1,10 @@
 import Foundation
+ import STJSON
 import XCTest
 @testable import SKIACP
 @testable import SKIACPAgent
 @testable import SKIACPClient
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 @testable import SKIntelligence
 
 final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
@@ -71,7 +71,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
         )
         let session = try await client.newSession(.init(cwd: root.path))
 
-        let fsReadID: JSONRPCID = .string("fs-read-1")
+        let fsReadID: JSONRPC.ID = .string("fs-read-1")
         try await serverTransport.send(.request(.init(
             id: fsReadID,
             method: ACPMethods.fsReadTextFile,
@@ -85,7 +85,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
         XCTAssertEqual(fsReadResult.content, "line-2")
 
         let target = root.appendingPathComponent("written.txt")
-        let fsWriteID: JSONRPCID = .string("fs-write-1")
+        let fsWriteID: JSONRPC.ID = .string("fs-write-1")
         try await serverTransport.send(.request(.init(
             id: fsWriteID,
             method: ACPMethods.fsWriteTextFile,
@@ -97,7 +97,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
         XCTAssertNil(fsWriteResp.error)
         XCTAssertEqual(try String(contentsOf: target, encoding: .utf8), "hello-ws")
 
-        let createID: JSONRPCID = .string("term-create-1")
+        let createID: JSONRPC.ID = .string("term-create-1")
         try await serverTransport.send(.request(.init(
             id: createID,
             method: ACPMethods.terminalCreate,
@@ -113,7 +113,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
         XCTAssertNil(createResp.error)
         let createResult = try ACPCodec.decodeResult(createResp.result, as: ACPTerminalCreateResult.self)
 
-        let waitID: JSONRPCID = .string("term-wait-1")
+        let waitID: JSONRPC.ID = .string("term-wait-1")
         try await serverTransport.send(.request(.init(
             id: waitID,
             method: ACPMethods.terminalWaitForExit,
@@ -126,7 +126,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
         let waitResult = try ACPCodec.decodeResult(waitResp.result, as: ACPTerminalWaitForExitResult.self)
         XCTAssertEqual(waitResult.exitCode, 0)
 
-        let outputID: JSONRPCID = .string("term-output-1")
+        let outputID: JSONRPC.ID = .string("term-output-1")
         try await serverTransport.send(.request(.init(
             id: outputID,
             method: ACPMethods.terminalOutput,
@@ -140,7 +140,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
         XCTAssertTrue(outputResult.output.contains("ws-terminal"))
         XCTAssertEqual(outputResult.exitStatus?.exitCode, 0)
 
-        let releaseID: JSONRPCID = .string("term-release-1")
+        let releaseID: JSONRPC.ID = .string("term-release-1")
         try await serverTransport.send(.request(.init(
             id: releaseID,
             method: ACPMethods.terminalRelease,
@@ -204,7 +204,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
         )
         let session = try await client.newSession(.init(cwd: "/tmp"))
 
-        let createID: JSONRPCID = .string("kill-create")
+        let createID: JSONRPC.ID = .string("kill-create")
         try await serverTransport.send(.request(.init(
             id: createID,
             method: ACPMethods.terminalCreate,
@@ -222,7 +222,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 150_000_000)
 
-        let killID: JSONRPCID = .string("kill-now")
+        let killID: JSONRPC.ID = .string("kill-now")
         try await serverTransport.send(.request(.init(
             id: killID,
             method: ACPMethods.terminalKill,
@@ -233,7 +233,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
         let killResp = try await waitResponse(inbox: inbox, id: killID)
         XCTAssertNil(killResp.error)
 
-        let waitID: JSONRPCID = .string("kill-wait")
+        let waitID: JSONRPC.ID = .string("kill-wait")
         try await serverTransport.send(.request(.init(
             id: waitID,
             method: ACPMethods.terminalWaitForExit,
@@ -244,7 +244,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
         let waitResp = try await waitResponse(inbox: inbox, id: waitID)
         XCTAssertNil(waitResp.error)
 
-        let outputID: JSONRPCID = .string("kill-output")
+        let outputID: JSONRPC.ID = .string("kill-output")
         try await serverTransport.send(.request(.init(
             id: outputID,
             method: ACPMethods.terminalOutput,
@@ -257,7 +257,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
         let outputResult = try ACPCodec.decodeResult(outputResp.result, as: ACPTerminalOutputResult.self)
         XCTAssertTrue(outputResult.output.contains("killed-output"))
 
-        let releaseID: JSONRPCID = .string("kill-release")
+        let releaseID: JSONRPC.ID = .string("kill-release")
         try await serverTransport.send(.request(.init(
             id: releaseID,
             method: ACPMethods.terminalRelease,
@@ -267,7 +267,7 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
         )))
         _ = try await waitResponse(inbox: inbox, id: releaseID)
 
-        let afterReleaseOutputID: JSONRPCID = .string("kill-output-after-release")
+        let afterReleaseOutputID: JSONRPC.ID = .string("kill-output-after-release")
         try await serverTransport.send(.request(.init(
             id: afterReleaseOutputID,
             method: ACPMethods.terminalOutput,
@@ -276,15 +276,15 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
             )
         )))
         let afterReleaseOutputResp = try await waitResponse(inbox: inbox, id: afterReleaseOutputID)
-        XCTAssertEqual(afterReleaseOutputResp.error?.code, JSONRPCErrorCode.internalError)
+        XCTAssertEqual(afterReleaseOutputResp.error?.code.value, JSONRPCErrorCode.internalError)
     }
 
     private func waitResponse(
         inbox: WSRuntimeResponseInbox,
-        id: JSONRPCID,
+        id: JSONRPC.ID,
         timeoutNanoseconds: UInt64 = 2_000_000_000
-    ) async throws -> JSONRPCResponse {
-        try await withThrowingTaskGroup(of: JSONRPCResponse.self) { group in
+    ) async throws -> JSONRPC.Response {
+        try await withThrowingTaskGroup(of: JSONRPC.Response.self) { group in
             group.addTask {
                 try await inbox.awaitResponse(id: id)
             }
@@ -305,18 +305,18 @@ final class ACPWebSocketClientRuntimeRoundtripTests: XCTestCase {
 }
 
 private actor WSRuntimeResponseInbox {
-    private var buffered: [JSONRPCID: JSONRPCResponse] = [:]
-    private var waiters: [JSONRPCID: CheckedContinuation<JSONRPCResponse, Error>] = [:]
+    private var buffered: [JSONRPC.ID: JSONRPC.Response] = [:]
+    private var waiters: [JSONRPC.ID: CheckedContinuation<JSONRPC.Response, Error>] = [:]
 
-    func push(_ response: JSONRPCResponse) {
-        if let continuation = waiters.removeValue(forKey: response.id) {
+    func push(_ response: JSONRPC.Response) {
+        if let continuation = waiters.removeValue(forKey: response.id!) {
             continuation.resume(returning: response)
             return
         }
-        buffered[response.id] = response
+        buffered[response.id!] = response
     }
 
-    func awaitResponse(id: JSONRPCID) async throws -> JSONRPCResponse {
+    func awaitResponse(id: JSONRPC.ID) async throws -> JSONRPC.Response {
         if let response = buffered.removeValue(forKey: id) {
             return response
         }

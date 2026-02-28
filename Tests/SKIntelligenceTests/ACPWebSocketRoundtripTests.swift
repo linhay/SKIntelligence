@@ -1,9 +1,9 @@
 import XCTest
+ import STJSON
 @testable import SKIACP
 @testable import SKIACPAgent
 @testable import SKIACPClient
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 @testable import SKIntelligence
 
 final class ACPWebSocketRoundtripTests: XCTestCase {

@@ -1,4 +1,5 @@
 import XCTest
+ import STJSON
 @testable import SKIACP
 @testable import SKIACPTransport
 

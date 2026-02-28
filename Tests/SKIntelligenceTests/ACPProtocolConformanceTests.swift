@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+ import STJSON
 @testable import SKIACP
 
 final class ACPProtocolConformanceTests: XCTestCase {

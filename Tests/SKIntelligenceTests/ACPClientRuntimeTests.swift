@@ -1,8 +1,8 @@
 import XCTest
+ import STJSON
 @testable import SKIACP
 @testable import SKIACPClient
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 
 final class ACPClientRuntimeTests: XCTestCase {
     func testLocalFilesystemRuntimeReadWriteAndRootPolicy() async throws {
@@ -93,8 +93,16 @@ final class ACPClientRuntimeTests: XCTestCase {
         let waited = try await runtime.waitForExit(.init(sessionId: "sess_1", terminalId: terminalId))
         XCTAssertEqual(waited.exitCode, 0)
 
-        let output = try await runtime.output(.init(sessionId: "sess_1", terminalId: terminalId))
-        XCTAssertTrue(output.output.contains("hello-runtime"))
+        var captured = ""
+        for _ in 0..<10 {
+            let output = try await runtime.output(.init(sessionId: "sess_1", terminalId: terminalId))
+            captured = output.output
+            if captured.contains("hello-runtime") {
+                break
+            }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(captured.contains("hello-runtime"), "output: \(captured)")
 
         _ = try await runtime.release(.init(sessionId: "sess_1", terminalId: terminalId))
 
@@ -189,7 +197,7 @@ final class ACPClientRuntimeTests: XCTestCase {
 private actor RuntimeRequestTransport: ACPTransport {
     private var connected = false
     private var inbox: [JSONRPCMessage] = []
-    private(set) var responses: [JSONRPCResponse] = []
+    private(set) var responses: [JSONRPC.Response] = []
 
     func connect() async throws {
         connected = true
@@ -214,7 +222,7 @@ private actor RuntimeRequestTransport: ACPTransport {
                     agentCapabilities: .init(loadSession: true),
                     agentInfo: .init(name: "runtime-agent", version: "1.0.0")
                 )
-                inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+                inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
             }
         case .response(let response):
             responses.append(response)

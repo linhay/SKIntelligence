@@ -33,6 +33,14 @@ public enum SKICLITransportKind: String, Sendable {
 }
 
 public enum ACPCLITransportFactory {
+    public static var isProcessStdioSupported: Bool {
+#if os(iOS) || os(tvOS) || os(watchOS)
+        false
+#else
+        true
+#endif
+    }
+
     public static func millisecondsToNanosecondsNonNegative(_ value: Int?) -> UInt64? {
         value.map { UInt64(max($0, 0)) * 1_000_000 }
     }
@@ -49,6 +57,9 @@ public enum ACPCLITransportFactory {
     ) throws -> any ACPTransport {
         switch kind {
         case .stdio:
+            guard isProcessStdioSupported else {
+                throw SKICLIValidationError.invalidInput("stdio transport is unavailable on this platform")
+            }
             guard let cmd else {
                 throw SKICLIValidationError.invalidInput("--cmd is required for stdio transport")
             }

@@ -1,5 +1,7 @@
 import Foundation
 import XCTest
+ import STJSON
+ import SKIACP
 
 final class ACPSpecCoverageMatrixTests: XCTestCase {
     func testCoverageMatrixReferencesExistingTests() throws {

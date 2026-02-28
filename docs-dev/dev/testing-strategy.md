@@ -1,4 +1,9 @@
 
+技能入口（测试执行方法）：
+- `skills/skintelligence/SKILL.md`
+- `skills/skintelligence/scripts/run_targeted_tests.sh`
+- `skills/skintelligence/scripts/run_library_smoke.sh`
+
 ## Live Provider Tests 开关约定（2026-02-17）
 - 目标：避免外部 API 波动导致默认 `swift test` 不稳定。
 - 约定：依赖外部模型/网络/第三方密钥的测试，统一通过环境变量 `RUN_LIVE_PROVIDER_TESTS=1` 显式开启。
@@ -176,3 +181,21 @@
   - 统一执行 `ACP + SKICLITests + SKICLIProcessTests + JSONRPCCodecTests`。
 - 新增 stdio 进程级不变性测试：
   - `SKICLIProcessTests/testClientConnectViaStdioServeProcessSucceeds`（`client connect --transport stdio` + `--cmd ski --args acp serve --transport stdio`）。
+
+## OpenAI-compatible Chat 解码兼容回归（2026-02-28）
+- 背景：`ChatResponseBody` 在部分 OpenAI-compatible `tool_calls` 响应上发生 decode fail。
+- 测试资产：
+  - `Tests/SKIntelligenceTests/ChatResponseBodyCompatibilityTests.swift`
+    - `content` 兼容：`string/null/[]/[{type,text}]`
+    - `tool_calls` 兼容：`missing/null/[]/部分坏项`
+    - `arguments` 兼容：`string/object/non-object JSON`
+    - 历史标准样例不回归
+    - 最小随机稳健性测试（20 组 deterministic payload）
+    - 官方文档 fixture 回归（`Fixtures/chat-response-compat/*.json`）
+  - `Tests/SKIntelligenceTests/OpenAIClientDecodingDiagnosticsTests.swift`
+    - decode 失败错误信息包含 `codingPath/model/url/responseSnippet`
+    - `api_key/authorization/token` 片段脱敏
+- 推荐执行：
+  - `swift test --filter ChatResponseBodyCompatibilityTests`
+  - `swift test --filter OpenAIClientDecodingDiagnosticsTests`
+  - `swift test --filter "SKIAgentSessionTests|SKIStreamingTests"`（回归工具调用与流式路径）

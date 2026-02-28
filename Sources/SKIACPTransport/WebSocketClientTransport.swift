@@ -1,5 +1,5 @@
 import Foundation
-import SKIJSONRPC
+import SKIACP
 
 public enum WebSocketIncomingMessage: Sendable, Equatable {
     case string(String)

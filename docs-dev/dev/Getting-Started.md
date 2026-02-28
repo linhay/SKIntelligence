@@ -22,6 +22,10 @@
 
 ## 模块结构（你应该从哪里看起）
 
+技能入口：
+
+- [Skills-Index.md](Skills-Index.md)
+
 核心 LLM 能力在 `Sources/SKIntelligence/`：
 
 - `SKILanguageModelClient`：抽象的模型客户端（不同供应商可各自实现）

@@ -6,6 +6,8 @@
 //
 
 import XCTest
+ import STJSON
+ import SKIACP
 import SKIClip
 
 #if canImport(CoreML) 

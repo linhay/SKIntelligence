@@ -1,5 +1,5 @@
 import Foundation
-import SKIJSONRPC
+import SKIACP
 
 #if os(iOS) || os(tvOS) || os(watchOS)
 public final class ProcessStdioTransport: ACPTransport, @unchecked Sendable {

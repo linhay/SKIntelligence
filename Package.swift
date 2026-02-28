@@ -11,7 +11,6 @@ let package = Package(
         .library(name: "SKIClip", targets: ["SKIClip"]),
         .library(name: "SKITools", targets: ["SKITools"]),
         .library(name: "SKIClients", targets: ["SKIClients"]),
-        .library(name: "SKIJSONRPC", targets: ["SKIJSONRPC"]),
         .library(name: "SKIACP", targets: ["SKIACP"]),
         .library(name: "SKIACPTransport", targets: ["SKIACPTransport"]),
         .library(name: "SKIACPClient", targets: ["SKIACPClient"]),
@@ -25,7 +24,7 @@ let package = Package(
         .package(url: "https://github.com/swiftlang/swift-syntax", from: "602.0.0"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.3.0"),
         .package(url: "https://github.com/linhay/SKProcessRunner", from: "0.0.17"),
-        .package(url: "https://github.com/linhay/STJSON", from: "1.4.8"),
+        .package(url: "https://github.com/linhay/STJSON", from: "1.4.9"),
         .package(url: "https://github.com/linhay/STFilePath", from: "1.3.4"),
         .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.11.0")),
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.10.2"),
@@ -33,17 +32,16 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
     ],
     targets: [
-        .target(name: "SKIJSONRPC"),
         .target(
             name: "SKIACP",
             dependencies: [
-                "SKIJSONRPC"
+                "STJSON"
             ]
         ),
         .target(
             name: "SKIACPTransport",
             dependencies: [
-                "SKIJSONRPC"
+                "SKIACP"
             ]
         ),
         .target(
@@ -132,12 +130,12 @@ let package = Package(
                 "SKIClients",
                 "SKITools",
                 "SKIClip",
-                "SKIJSONRPC",
                 "SKIACP",
                 "SKIACPTransport",
                 "SKIACPClient",
                 "SKIACPAgent",
                 "SKICLIShared",
+                "STJSON",
                 .product(name: "HTTPTypesFoundation", package: "swift-http-types"),
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "JSONSchema", package: "swift-json-schema"),

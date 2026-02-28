@@ -5,7 +5,7 @@ import SKIACPAgent
 import SKIACPClient
 import SKIACPTransport
 import SKICLIShared
-import SKIJSONRPC
+import SKIACP
 import SKIntelligence
 
 typealias CLIError = SKICLIValidationError

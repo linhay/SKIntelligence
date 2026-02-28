@@ -1,5 +1,7 @@
 import Foundation
 import XCTest
+ import STJSON
+ import SKIACP
 
 @testable import SKIClients
 @testable import SKIntelligence

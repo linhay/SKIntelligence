@@ -1,6 +1,7 @@
 import Foundation
 import SKIACP
-import SKIJSONRPC
+import SKIACP
+@preconcurrency import STJSON
 
 public enum ACPPermissionRequestBridgeError: Error, LocalizedError, Equatable {
     case requestTimeout
@@ -17,12 +18,12 @@ public enum ACPPermissionRequestBridgeError: Error, LocalizedError, Equatable {
 }
 
 public actor ACPPermissionRequestBridge {
-    public typealias RequestSender = @Sendable (JSONRPCRequest) async throws -> Void
+    public typealias RequestSender = @Sendable (JSONRPC.Request) async throws -> Void
 
     private let timeoutNanoseconds: UInt64?
     private var nextID: Int = 1
-    private var pending: [JSONRPCID: CheckedContinuation<ACPSessionPermissionRequestResult, Error>] = [:]
-    private var timeoutTasks: [JSONRPCID: Task<Void, Never>] = [:]
+    private var pending: [JSONRPC.ID: CheckedContinuation<ACPSessionPermissionRequestResult, Error>] = [:]
+    private var timeoutTasks: [JSONRPC.ID: Task<Void, Never>] = [:]
 
     public init(timeoutNanoseconds: UInt64? = 10_000_000_000) {
         self.timeoutNanoseconds = timeoutNanoseconds
@@ -32,10 +33,10 @@ public actor ACPPermissionRequestBridge {
         _ params: ACPSessionPermissionRequestParams,
         send: @escaping RequestSender
     ) async throws -> ACPSessionPermissionRequestResult {
-        let id = JSONRPCID.string("perm-\(nextID)")
+        let id = JSONRPC.ID.string("perm-\(nextID)")
         nextID += 1
 
-        let request = JSONRPCRequest(
+        let request = JSONRPC.Request(
             id: id,
             method: ACPMethods.sessionRequestPermission,
             params: try ACPCodec.encodeParams(params)
@@ -59,15 +60,16 @@ public actor ACPPermissionRequestBridge {
         }
     }
 
-    public func handleIncomingResponse(_ response: JSONRPCResponse) -> Bool {
-        guard let continuation = pending.removeValue(forKey: response.id) else {
+    public func handleIncomingResponse(_ response: JSONRPC.Response) -> Bool {
+        guard let responseID = response.id,
+              let continuation = pending.removeValue(forKey: responseID) else {
             return false
         }
-        timeoutTasks[response.id]?.cancel()
-        timeoutTasks[response.id] = nil
+        timeoutTasks[responseID]?.cancel()
+        timeoutTasks[responseID] = nil
 
         if let rpcError = response.error {
-            continuation.resume(throwing: ACPPermissionRequestBridgeError.rpcError(code: rpcError.code, message: rpcError.message))
+            continuation.resume(throwing: ACPPermissionRequestBridgeError.rpcError(code: rpcError.code.value, message: rpcError.message))
             return true
         }
 
@@ -91,12 +93,12 @@ public actor ACPPermissionRequestBridge {
 }
 
 private extension ACPPermissionRequestBridge {
-    func timeoutPending(_ id: JSONRPCID) {
+    func timeoutPending(_ id: JSONRPC.ID) {
         guard pending[id] != nil else { return }
         failPending(id, error: ACPPermissionRequestBridgeError.requestTimeout)
     }
 
-    func failPending(_ id: JSONRPCID, error: Error) {
+    func failPending(_ id: JSONRPC.ID, error: Error) {
         timeoutTasks[id]?.cancel()
         timeoutTasks[id] = nil
         guard let continuation = pending.removeValue(forKey: id) else { return }

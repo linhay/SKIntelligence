@@ -1,9 +1,18 @@
 import XCTest
+ import STJSON
 @testable import SKICLIShared
 @testable import SKIACPClient
 @testable import SKIACPTransport
 
 final class SKICLITests: XCTestCase {
+    func testProcessStdioSupportFlagMatchesPlatform() {
+#if os(iOS) || os(tvOS) || os(watchOS)
+        XCTAssertFalse(ACPCLITransportFactory.isProcessStdioSupported)
+#else
+        XCTAssertTrue(ACPCLITransportFactory.isProcessStdioSupported)
+#endif
+    }
+
     func testACPClientConnectRequiresCmdForStdio() throws {
         do {
             _ = try ACPCLITransportFactory.makeClientTransport(
@@ -65,6 +74,28 @@ final class SKICLITests: XCTestCase {
     }
 
     func testACPClientConnectResolvesCommandFromPATHForStdio() throws {
+#if os(iOS) || os(tvOS) || os(watchOS)
+        do {
+            _ = try ACPCLITransportFactory.makeClientTransport(
+                kind: .stdio,
+                cmd: "env",
+                args: [],
+                endpoint: nil,
+                wsHeartbeatMS: 15_000,
+                wsReconnectAttempts: 2,
+                wsReconnectBaseDelayMS: 200,
+                maxInFlightSends: 64
+            )
+            XCTFail("Expected unsupported stdio transport on this platform")
+        } catch let error as SKICLIValidationError {
+            guard case .invalidInput(let message) = error else {
+                return XCTFail("Unexpected CLIError: \(error)")
+            }
+            XCTAssertEqual(message, "stdio transport is unavailable on this platform")
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+#else
         let transport = try ACPCLITransportFactory.makeClientTransport(
             kind: .stdio,
             cmd: "env",
@@ -76,6 +107,7 @@ final class SKICLITests: XCTestCase {
             maxInFlightSends: 64
         )
         XCTAssertTrue(transport is ProcessStdioTransport)
+#endif
     }
 
     func testACPClientConnectRejectsUnknownCommandForStdio() throws {

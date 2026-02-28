@@ -1,4 +1,6 @@
 import XCTest
+ import STJSON
+ import SKIACP
 @testable import SKIClip
 
 #if canImport(CoreML)

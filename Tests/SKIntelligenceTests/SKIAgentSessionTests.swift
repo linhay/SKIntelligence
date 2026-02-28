@@ -1,4 +1,6 @@
 import XCTest
+ import STJSON
+ import SKIACP
 import HTTPTypes
 import JSONSchemaBuilder
 import MCP

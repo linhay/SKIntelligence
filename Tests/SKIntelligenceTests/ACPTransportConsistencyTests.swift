@@ -1,10 +1,10 @@
 import Foundation
+ import STJSON
 import XCTest
 @testable import SKIACP
 @testable import SKIACPAgent
 @testable import SKIACPClient
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 @testable import SKIntelligence
 
 final class ACPTransportConsistencyTests: XCTestCase {
@@ -108,7 +108,7 @@ private extension ACPTransportConsistencyTests {
             Task { await transport.close() }
         }
 
-        let initialize = JSONRPCRequest(
+        let initialize = JSONRPC.Request(
             id: .int(1),
             method: ACPMethods.initialize,
             params: try ACPCodec.encodeParams(ACPInitializeParams(protocolVersion: 1))
@@ -116,7 +116,7 @@ private extension ACPTransportConsistencyTests {
         try await transport.send(.request(initialize))
         _ = try await receiveResponse(id: .int(1), transport: transport)
 
-        let newSession = JSONRPCRequest(
+        let newSession = JSONRPC.Request(
             id: .int(2),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: FileManager.default.currentDirectoryPath))
@@ -125,7 +125,7 @@ private extension ACPTransportConsistencyTests {
         let sessionResponse = try await receiveResponse(id: .int(2), transport: transport)
         let session = try ACPCodec.decodeResult(sessionResponse.result, as: ACPSessionNewResult.self)
 
-        let prompt = JSONRPCRequest(
+        let prompt = JSONRPC.Request(
             id: .int(3),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(
@@ -146,7 +146,7 @@ private extension ACPTransportConsistencyTests {
                 let params = try ACPCodec.decodeParams(notification.params, as: ACPSessionUpdateParams.self)
                 kinds.append(params.update.sessionUpdate)
             case .response(let response):
-                guard response.id == .int(3) else { continue }
+                guard response.id! == .int(3) else { continue }
                 let result = try ACPCodec.decodeResult(response.result, as: ACPSessionPromptResult.self)
                 stopReason = result.stopReason
             case .request:
@@ -175,15 +175,15 @@ private extension ACPTransportConsistencyTests {
     }
 
     func receiveResponse(
-        id: JSONRPCID,
+        id: JSONRPC.ID,
         transport: any ACPTransport
-    ) async throws -> JSONRPCResponse {
+    ) async throws -> JSONRPC.Response {
         while true {
             guard let message = try await transport.receive() else {
                 throw ACPTransportError.eof
             }
             switch message {
-            case .response(let response) where response.id == id:
+            case .response(let response) where response.id! == id:
                 return response
             default:
                 continue

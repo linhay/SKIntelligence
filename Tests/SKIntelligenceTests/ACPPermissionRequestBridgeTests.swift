@@ -1,8 +1,8 @@
 import XCTest
+ import STJSON
 @testable import SKIACP
 @testable import SKIACPAgent
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 
 final class ACPPermissionRequestBridgeTests: XCTestCase {
     func testPermissionRequestRoundTripSuccess() async throws {
@@ -25,7 +25,7 @@ final class ACPPermissionRequestBridgeTests: XCTestCase {
         XCTAssertEqual(request.method, ACPMethods.sessionRequestPermission)
 
         let handled = await bridge.handleIncomingResponse(.init(
-            id: request.id,
+            id: request.id!,
             result: try ACPCodec.encodeParams(
                 ACPSessionPermissionRequestResult(
                     outcome: .selected(.init(optionId: "allow_once"))
@@ -61,7 +61,7 @@ final class ACPPermissionRequestBridgeTests: XCTestCase {
 
         let request = await sent.wait()
         _ = await bridge.handleIncomingResponse(.init(
-            id: request.id,
+            id: request.id!,
             error: .init(code: JSONRPCErrorCode.methodNotFound, message: "unsupported")
         ))
 
@@ -136,13 +136,13 @@ final class ACPPermissionRequestBridgeTests: XCTestCase {
 }
 
 private actor SentRequestBox {
-    private var request: JSONRPCRequest?
+    private var request: JSONRPC.Request?
 
-    func set(_ value: JSONRPCRequest) {
+    func set(_ value: JSONRPC.Request) {
         request = value
     }
 
-    func wait() async -> JSONRPCRequest {
+    func wait() async -> JSONRPC.Request {
         while request == nil {
             try? await Task.sleep(nanoseconds: 1_000_000)
         }

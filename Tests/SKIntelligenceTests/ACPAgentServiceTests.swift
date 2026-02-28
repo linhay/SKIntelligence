@@ -1,8 +1,8 @@
 import XCTest
+ import STJSON
 import HTTPTypes
 @testable import SKIACP
 @testable import SKIACPAgent
-@testable import SKIJSONRPC
 @testable import SKIntelligence
 
 final class ACPAgentServiceTests: XCTestCase {
@@ -16,7 +16,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let initReq = JSONRPCRequest(
+        let initReq = JSONRPC.Request(
             id: .int(101),
             method: ACPMethods.initialize,
             params: try ACPCodec.encodeParams(ACPInitializeParams(protocolVersion: 1))
@@ -24,7 +24,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let initResp = await service.handle(initReq)
         XCTAssertNil(initResp.error)
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(102),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -32,7 +32,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(103),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("hello")]))
@@ -51,7 +51,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let initReq = JSONRPCRequest(
+        let initReq = JSONRPC.Request(
             id: .int(1),
             method: ACPMethods.initialize,
             params: try ACPCodec.encodeParams(ACPInitializeParams(protocolVersion: 1))
@@ -59,7 +59,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let initResp = await service.handle(initReq)
         XCTAssertNil(initResp.error)
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(2),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -67,7 +67,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(3),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("hello")]))
@@ -88,7 +88,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(9991),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -96,7 +96,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(9992),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("hello")]))
@@ -126,7 +126,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(9993),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -134,7 +134,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(9994),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("hello")]))
@@ -170,9 +170,9 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let req = JSONRPCRequest(id: .int(999), method: "not/exist", params: nil)
+        let req = JSONRPC.Request(id: .int(999), method: "not/exist", params: nil)
         let resp = await service.handle(req)
-        XCTAssertEqual(resp.error?.code, JSONRPCErrorCode.methodNotFound)
+        XCTAssertEqual(resp.error?.code.value, JSONRPCErrorCode.methodNotFound)
     }
 
     func testPromptCanBeCancelled() async throws {
@@ -183,7 +183,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(10),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -191,7 +191,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(11),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("will cancel")]))
@@ -202,7 +202,7 @@ final class ACPAgentServiceTests: XCTestCase {
         }
 
         try await Task.sleep(nanoseconds: 60_000_000)
-        await service.handleCancel(JSONRPCNotification(
+        await service.handleCancel(JSONRPC.Request(
             method: ACPMethods.sessionCancel,
             params: try ACPCodec.encodeParams(ACPSessionCancelParams(sessionId: newResult.sessionId))
         ))
@@ -220,7 +220,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(210),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -228,7 +228,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(211),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("will stop")]))
@@ -236,7 +236,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let promptTask = Task { await service.handle(promptReq) }
 
         try await Task.sleep(nanoseconds: 60_000_000)
-        let stopReq = JSONRPCRequest(
+        let stopReq = JSONRPC.Request(
             id: .int(212),
             method: ACPMethods.sessionStop,
             params: try ACPCodec.encodeParams(ACPSessionCancelParams(sessionId: newResult.sessionId))
@@ -258,7 +258,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(12),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -266,7 +266,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(13),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("will cancel by request id")]))
@@ -277,13 +277,13 @@ final class ACPAgentServiceTests: XCTestCase {
         }
 
         try await Task.sleep(nanoseconds: 60_000_000)
-        await service.handleCancel(JSONRPCNotification(
+        await service.handleCancel(JSONRPC.Request(
             method: ACPMethods.cancelRequest,
             params: try ACPCodec.encodeParams(ACPCancelRequestParams(requestId: .int(13)))
         ))
 
         let promptResp = await promptTask.value
-        XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.requestCancelled)
+        XCTAssertEqual(promptResp.error?.code.value, JSONRPCErrorCode.requestCancelled)
     }
 
     func testPromptCanBeCancelledByProtocolCancelRequestDuringPermissionStage() async throws {
@@ -318,7 +318,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(14),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -326,7 +326,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(15),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("cancel during permission")]))
@@ -343,7 +343,7 @@ final class ACPAgentServiceTests: XCTestCase {
         await gate.release()
 
         let promptResp = await promptTask.value
-        XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.requestCancelled)
+        XCTAssertEqual(promptResp.error?.code.value, JSONRPCErrorCode.requestCancelled)
     }
 
     func testPromptPreCancelledByProtocolStringRequestIDMatchesIntPromptID() async throws {
@@ -354,7 +354,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(16),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -369,7 +369,7 @@ final class ACPAgentServiceTests: XCTestCase {
             )
         )
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(17),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(
@@ -377,7 +377,7 @@ final class ACPAgentServiceTests: XCTestCase {
             )
         )
         let promptResp = await service.handle(promptReq)
-        XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.requestCancelled)
+        XCTAssertEqual(promptResp.error?.code.value, JSONRPCErrorCode.requestCancelled)
     }
 
     func testPromptPreCancelledByProtocolIntRequestIDMatchesStringPromptID() async throws {
@@ -388,7 +388,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(18),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -403,7 +403,7 @@ final class ACPAgentServiceTests: XCTestCase {
             )
         )
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .string("s2c-19"),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(
@@ -411,7 +411,7 @@ final class ACPAgentServiceTests: XCTestCase {
             )
         )
         let promptResp = await service.handle(promptReq)
-        XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.requestCancelled)
+        XCTAssertEqual(promptResp.error?.code.value, JSONRPCErrorCode.requestCancelled)
     }
 
     func testPreCancelledRequestIsConsumedOnlyOnceForIntToStringFallback() async throws {
@@ -422,7 +422,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(20),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -437,7 +437,7 @@ final class ACPAgentServiceTests: XCTestCase {
             )
         )
 
-        let firstPrompt = JSONRPCRequest(
+        let firstPrompt = JSONRPC.Request(
             id: .string("s2c-21"),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(
@@ -445,9 +445,9 @@ final class ACPAgentServiceTests: XCTestCase {
             )
         )
         let firstResponse = await service.handle(firstPrompt)
-        XCTAssertEqual(firstResponse.error?.code, JSONRPCErrorCode.requestCancelled)
+        XCTAssertEqual(firstResponse.error?.code.value, JSONRPCErrorCode.requestCancelled)
 
-        let secondPrompt = JSONRPCRequest(
+        let secondPrompt = JSONRPC.Request(
             id: .int(21),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(
@@ -467,7 +467,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(22),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -482,7 +482,7 @@ final class ACPAgentServiceTests: XCTestCase {
             )
         )
 
-        let firstPrompt = JSONRPCRequest(
+        let firstPrompt = JSONRPC.Request(
             id: .int(23),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(
@@ -490,9 +490,9 @@ final class ACPAgentServiceTests: XCTestCase {
             )
         )
         let firstResponse = await service.handle(firstPrompt)
-        XCTAssertEqual(firstResponse.error?.code, JSONRPCErrorCode.requestCancelled)
+        XCTAssertEqual(firstResponse.error?.code.value, JSONRPCErrorCode.requestCancelled)
 
-        let secondPrompt = JSONRPCRequest(
+        let secondPrompt = JSONRPC.Request(
             id: .string("s2c-23"),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(
@@ -514,7 +514,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(1200),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -522,7 +522,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(1201),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("cancel path")]))
@@ -563,7 +563,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(1202),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -571,7 +571,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(1203),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("retry me")]))
@@ -610,7 +610,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(1204),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -618,13 +618,13 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(1205),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("always fail")]))
         )
         let promptResp = await service.handle(promptReq)
-        XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.internalError)
+        XCTAssertEqual(promptResp.error?.code.value, JSONRPCErrorCode.internalError)
 
         let updates = try await notifications.snapshot()
             .map { try ACPCodec.decodeParams($0.params, as: ACPSessionUpdateParams.self) }
@@ -645,7 +645,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(1300),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -653,7 +653,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(1301),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("telemetry")]))
@@ -760,9 +760,9 @@ final class ACPAgentServiceTests: XCTestCase {
             capabilities: .init(loadSession: true),
             notificationSink: { _ in }
         )
-        let req = JSONRPCRequest(id: .int(14), method: ACPMethods.logout, params: try ACPCodec.encodeParams(ACPLogoutParams()))
+        let req = JSONRPC.Request(id: .int(14), method: ACPMethods.logout, params: try ACPCodec.encodeParams(ACPLogoutParams()))
         let resp = await service.handle(req)
-        XCTAssertEqual(resp.error?.code, JSONRPCErrorCode.methodNotFound)
+        XCTAssertEqual(resp.error?.code.value, JSONRPCErrorCode.methodNotFound)
     }
 
     func testLogoutClearsSessionsWhenCapabilityEnabled() async throws {
@@ -773,18 +773,18 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(15),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
         )
         _ = await service.handle(newReq)
 
-        let logoutReq = JSONRPCRequest(id: .int(16), method: ACPMethods.logout, params: try ACPCodec.encodeParams(ACPLogoutParams()))
+        let logoutReq = JSONRPC.Request(id: .int(16), method: ACPMethods.logout, params: try ACPCodec.encodeParams(ACPLogoutParams()))
         let logoutResp = await service.handle(logoutReq)
         XCTAssertNil(logoutResp.error)
 
-        let listReq = JSONRPCRequest(
+        let listReq = JSONRPC.Request(
             id: .int(17),
             method: ACPMethods.sessionList,
             params: try ACPCodec.encodeParams(ACPSessionListParams())
@@ -803,7 +803,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(20),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -811,13 +811,13 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(21),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("timeout")]))
         )
         let promptResp = await service.handle(promptReq)
-        XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.internalError)
+        XCTAssertEqual(promptResp.error?.code.value, JSONRPCErrorCode.internalError)
     }
 
     func testSessionTTLExpiresAndLoadReturnsInvalidParams() async throws {
@@ -829,7 +829,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(30),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -839,13 +839,13 @@ final class ACPAgentServiceTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 80_000_000)
 
-        let loadReq = JSONRPCRequest(
+        let loadReq = JSONRPC.Request(
             id: .int(31),
             method: ACPMethods.sessionLoad,
             params: try ACPCodec.encodeParams(ACPSessionLoadParams(sessionId: newResult.sessionId, cwd: "/tmp"))
         )
         let loadResp = await service.handle(loadReq)
-        XCTAssertEqual(loadResp.error?.code, JSONRPCErrorCode.invalidParams)
+        XCTAssertEqual(loadResp.error?.code.value, JSONRPCErrorCode.invalidParams)
     }
 
     func testInitializeMissingParamsReturnsInvalidParams() async throws {
@@ -856,9 +856,9 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let req = JSONRPCRequest(id: .int(41), method: ACPMethods.initialize, params: nil)
+        let req = JSONRPC.Request(id: .int(41), method: ACPMethods.initialize, params: nil)
         let resp = await service.handle(req)
-        XCTAssertEqual(resp.error?.code, JSONRPCErrorCode.invalidParams)
+        XCTAssertEqual(resp.error?.code.value, JSONRPCErrorCode.invalidParams)
     }
 
     func testInitializeUnsupportedProtocolVersionReturnsInvalidParams() async throws {
@@ -869,13 +869,13 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let req = JSONRPCRequest(
+        let req = JSONRPC.Request(
             id: .int(410),
             method: ACPMethods.initialize,
             params: try ACPCodec.encodeParams(ACPInitializeParams(protocolVersion: 2))
         )
         let resp = await service.handle(req)
-        XCTAssertEqual(resp.error?.code, JSONRPCErrorCode.invalidParams)
+        XCTAssertEqual(resp.error?.code.value, JSONRPCErrorCode.invalidParams)
     }
 
     func testSessionLoadUnsupportedByCapabilitiesReturnsMethodNotFound() async throws {
@@ -886,13 +886,13 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let req = JSONRPCRequest(
+        let req = JSONRPC.Request(
             id: .int(411),
             method: ACPMethods.sessionLoad,
             params: try ACPCodec.encodeParams(ACPSessionLoadParams(sessionId: "sess_x", cwd: "/tmp"))
         )
         let resp = await service.handle(req)
-        XCTAssertEqual(resp.error?.code, JSONRPCErrorCode.methodNotFound)
+        XCTAssertEqual(resp.error?.code.value, JSONRPCErrorCode.methodNotFound)
     }
 
     func testSessionLoadRestoresPersistedTranscriptWhenSessionNotInMemory() async throws {
@@ -911,14 +911,14 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newResp = await service1.handle(JSONRPCRequest(
+        let newResp = await service1.handle(JSONRPC.Request(
             id: .int(412),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
         ))
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        _ = await service1.handle(JSONRPCRequest(
+        _ = await service1.handle(JSONRPC.Request(
             id: .int(413),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("persisted one")]))
@@ -935,14 +935,14 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let loadResp = await service2.handle(JSONRPCRequest(
+        let loadResp = await service2.handle(JSONRPC.Request(
             id: .int(414),
             method: ACPMethods.sessionLoad,
             params: try ACPCodec.encodeParams(ACPSessionLoadParams(sessionId: session.sessionId, cwd: "/tmp"))
         ))
         XCTAssertNil(loadResp.error)
 
-        _ = await service2.handle(JSONRPCRequest(
+        _ = await service2.handle(JSONRPC.Request(
             id: .int(415),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("persisted two")]))
@@ -970,13 +970,13 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let req = JSONRPCRequest(
+        let req = JSONRPC.Request(
             id: .int(42),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
         )
         let resp = await service.handle(req)
-        XCTAssertEqual(resp.error?.code, JSONRPCErrorCode.internalError)
+        XCTAssertEqual(resp.error?.code.value, JSONRPCErrorCode.internalError)
     }
 
     func testPromptWhileRunningReturnsInvalidParams() async throws {
@@ -987,7 +987,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(50),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -995,7 +995,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let firstPrompt = JSONRPCRequest(
+        let firstPrompt = JSONRPC.Request(
             id: .int(51),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("first")]))
@@ -1004,15 +1004,15 @@ final class ACPAgentServiceTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 40_000_000)
 
-        let secondPrompt = JSONRPCRequest(
+        let secondPrompt = JSONRPC.Request(
             id: .int(52),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("second")]))
         )
         let secondResp = await service.handle(secondPrompt)
-        XCTAssertEqual(secondResp.error?.code, JSONRPCErrorCode.invalidParams)
+        XCTAssertEqual(secondResp.error?.code.value, JSONRPCErrorCode.invalidParams)
 
-        await service.handleCancel(JSONRPCNotification(
+        await service.handleCancel(JSONRPC.Request(
             method: ACPMethods.sessionCancel,
             params: try ACPCodec.encodeParams(ACPSessionCancelParams(sessionId: newResult.sessionId))
         ))
@@ -1027,7 +1027,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(60),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -1035,7 +1035,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(61),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("cancel me")]))
@@ -1044,7 +1044,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let promptTask = Task { await service.handle(promptReq) }
         try await Task.sleep(nanoseconds: 30_000_000)
 
-        let cancel = JSONRPCNotification(
+        let cancel = JSONRPC.Request(
             method: ACPMethods.sessionCancel,
             params: try ACPCodec.encodeParams(ACPSessionCancelParams(sessionId: newResult.sessionId))
         )
@@ -1065,7 +1065,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(70),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -1073,7 +1073,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(71),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("cancel path")]))
@@ -1100,7 +1100,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(72),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -1108,13 +1108,13 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(73),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("timeout path")]))
         )
         let promptResp = await service.handle(promptReq)
-        XCTAssertEqual(promptResp.error?.code, JSONRPCErrorCode.internalError)
+        XCTAssertEqual(promptResp.error?.code.value, JSONRPCErrorCode.internalError)
 
         let values = await notifications.snapshot()
         XCTAssertTrue(values.isEmpty)
@@ -1134,7 +1134,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(80),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -1142,7 +1142,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let newResult = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptReq = JSONRPCRequest(
+        let promptReq = JSONRPC.Request(
             id: .int(81),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: newResult.sessionId, prompt: [.text("secret task")]))
@@ -1172,7 +1172,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let initReq = JSONRPCRequest(
+        let initReq = JSONRPC.Request(
             id: .int(90),
             method: ACPMethods.initialize,
             params: try ACPCodec.encodeParams(ACPInitializeParams(protocolVersion: 1))
@@ -1181,7 +1181,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let initResult = try ACPCodec.decodeResult(initResp.result, as: ACPInitializeResult.self)
         XCTAssertEqual(initResult.authMethods.map(\.id), ["token"])
 
-        let authReq = JSONRPCRequest(
+        let authReq = JSONRPC.Request(
             id: .int(91),
             method: ACPMethods.authenticate,
             params: try ACPCodec.encodeParams(ACPAuthenticateParams(methodId: "token"))
@@ -1200,7 +1200,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(100),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -1208,7 +1208,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let setModeReq = JSONRPCRequest(
+        let setModeReq = JSONRPC.Request(
             id: .int(101),
             method: ACPMethods.sessionSetMode,
             params: try ACPCodec.encodeParams(ACPSessionSetModeParams(sessionId: session.sessionId, modeId: "safe"))
@@ -1232,7 +1232,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(110),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -1240,7 +1240,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let setConfigReq = JSONRPCRequest(
+        let setConfigReq = JSONRPC.Request(
             id: .int(111),
             method: ACPMethods.sessionSetConfigOption,
             params: try ACPCodec.encodeParams(ACPSessionSetConfigOptionParams(
@@ -1270,7 +1270,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(113),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -1278,7 +1278,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let newResp = await service.handle(newReq)
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let setConfigReq = JSONRPCRequest(
+        let setConfigReq = JSONRPC.Request(
             id: .int(114),
             method: ACPMethods.sessionSetConfigOption,
             params: try ACPCodec.encodeParams(ACPSessionSetConfigOptionParams(
@@ -1302,7 +1302,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(120),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
@@ -1311,7 +1311,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
         XCTAssertEqual(session.models?.currentModelId, "default")
 
-        let setModelReq = JSONRPCRequest(
+        let setModelReq = JSONRPC.Request(
             id: .int(121),
             method: ACPMethods.sessionSetModel,
             params: try ACPCodec.encodeParams(ACPSessionSetModelParams(sessionId: session.sessionId, modelId: "gpt-5"))
@@ -1319,7 +1319,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let setModelResp = await service.handle(setModelReq)
         XCTAssertNil(setModelResp.error)
 
-        let loadReq = JSONRPCRequest(
+        let loadReq = JSONRPC.Request(
             id: .int(122),
             method: ACPMethods.sessionLoad,
             params: try ACPCodec.encodeParams(ACPSessionLoadParams(sessionId: session.sessionId, cwd: "/tmp"))
@@ -1338,21 +1338,21 @@ final class ACPAgentServiceTests: XCTestCase {
         )
 
         let listResp = await service.handle(.init(id: .int(130), method: ACPMethods.sessionList, params: try ACPCodec.encodeParams(ACPSessionListParams())))
-        XCTAssertEqual(listResp.error?.code, JSONRPCErrorCode.methodNotFound)
+        XCTAssertEqual(listResp.error?.code.value, JSONRPCErrorCode.methodNotFound)
 
         let resumeResp = await service.handle(.init(
             id: .int(131),
             method: ACPMethods.sessionResume,
             params: try ACPCodec.encodeParams(ACPSessionResumeParams(sessionId: "sess_x", cwd: "/tmp"))
         ))
-        XCTAssertEqual(resumeResp.error?.code, JSONRPCErrorCode.methodNotFound)
+        XCTAssertEqual(resumeResp.error?.code.value, JSONRPCErrorCode.methodNotFound)
 
         let forkResp = await service.handle(.init(
             id: .int(132),
             method: ACPMethods.sessionFork,
             params: try ACPCodec.encodeParams(ACPSessionForkParams(sessionId: "sess_x", cwd: "/tmp"))
         ))
-        XCTAssertEqual(forkResp.error?.code, JSONRPCErrorCode.methodNotFound)
+        XCTAssertEqual(forkResp.error?.code.value, JSONRPCErrorCode.methodNotFound)
     }
 
     func testListResumeAndForkWhenCapabilitiesEnabled() async throws {
@@ -1366,7 +1366,7 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newReq = JSONRPCRequest(
+        let newReq = JSONRPC.Request(
             id: .int(140),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp/origin"))
@@ -1412,32 +1412,32 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newResp = await service.handle(JSONRPCRequest(
+        let newResp = await service.handle(JSONRPC.Request(
             id: .int(1440),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp/origin"))
         ))
         let origin = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        _ = await service.handle(JSONRPCRequest(
+        _ = await service.handle(JSONRPC.Request(
             id: .int(1441),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: origin.sessionId, prompt: [.text("alpha")]))
         ))
 
-        let forkResp = await service.handle(JSONRPCRequest(
+        let forkResp = await service.handle(JSONRPC.Request(
             id: .int(1442),
             method: ACPMethods.sessionFork,
             params: try ACPCodec.encodeParams(ACPSessionForkParams(sessionId: origin.sessionId, cwd: "/tmp/forked"))
         ))
         let forked = try ACPCodec.decodeResult(forkResp.result, as: ACPSessionForkResult.self)
 
-        _ = await service.handle(JSONRPCRequest(
+        _ = await service.handle(JSONRPC.Request(
             id: .int(1443),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: forked.sessionId, prompt: [.text("beta")]))
         ))
-        _ = await service.handle(JSONRPCRequest(
+        _ = await service.handle(JSONRPC.Request(
             id: .int(1444),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: origin.sessionId, prompt: [.text("gamma")]))
@@ -1472,7 +1472,7 @@ final class ACPAgentServiceTests: XCTestCase {
 
         var created: [String] = []
         for idx in 0..<3 {
-            let newResp = await service.handle(JSONRPCRequest(
+            let newResp = await service.handle(JSONRPC.Request(
                 id: .int(150 + idx),
                 method: ACPMethods.sessionNew,
                 params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp/page-\(idx)"))
@@ -1481,7 +1481,7 @@ final class ACPAgentServiceTests: XCTestCase {
             created.append(session.sessionId)
         }
 
-        let firstResp = await service.handle(JSONRPCRequest(
+        let firstResp = await service.handle(JSONRPC.Request(
             id: .int(160),
             method: ACPMethods.sessionList,
             params: try ACPCodec.encodeParams(ACPSessionListParams())
@@ -1490,7 +1490,7 @@ final class ACPAgentServiceTests: XCTestCase {
         XCTAssertEqual(first.sessions.count, 2)
         XCTAssertNotNil(first.nextCursor)
 
-        let secondResp = await service.handle(JSONRPCRequest(
+        let secondResp = await service.handle(JSONRPC.Request(
             id: .int(161),
             method: ACPMethods.sessionList,
             params: try ACPCodec.encodeParams(ACPSessionListParams(cursor: first.nextCursor))
@@ -1514,20 +1514,20 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newResp = await service.handle(JSONRPCRequest(
+        let newResp = await service.handle(JSONRPC.Request(
             id: .int(1660),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp/parent"))
         ))
         let origin = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        _ = await service.handle(JSONRPCRequest(
+        _ = await service.handle(JSONRPC.Request(
             id: .int(1661),
             method: ACPMethods.sessionFork,
             params: try ACPCodec.encodeParams(ACPSessionForkParams(sessionId: origin.sessionId, cwd: "/tmp/child"))
         ))
 
-        let listResp = await service.handle(JSONRPCRequest(
+        let listResp = await service.handle(JSONRPC.Request(
             id: .int(1662),
             method: ACPMethods.sessionList,
             params: try ACPCodec.encodeParams(ACPSessionListParams())
@@ -1545,12 +1545,12 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let resp = await service.handle(JSONRPCRequest(
+        let resp = await service.handle(JSONRPC.Request(
             id: .int(1663),
             method: ACPMethods.sessionExport,
             params: try ACPCodec.encodeParams(ACPSessionExportParams(sessionId: "sess_x"))
         ))
-        XCTAssertEqual(resp.error?.code, JSONRPCErrorCode.methodNotFound)
+        XCTAssertEqual(resp.error?.code.value, JSONRPCErrorCode.methodNotFound)
     }
 
     func testSessionExportReturnsJSONLContent() async throws {
@@ -1564,20 +1564,20 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newResp = await service.handle(JSONRPCRequest(
+        let newResp = await service.handle(JSONRPC.Request(
             id: .int(1664),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp/export"))
         ))
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        _ = await service.handle(JSONRPCRequest(
+        _ = await service.handle(JSONRPC.Request(
             id: .int(1665),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(ACPSessionPromptParams(sessionId: session.sessionId, prompt: [.text("hello export")]))
         ))
 
-        let exportResp = await service.handle(JSONRPCRequest(
+        let exportResp = await service.handle(JSONRPC.Request(
             id: .int(1666),
             method: ACPMethods.sessionExport,
             params: try ACPCodec.encodeParams(ACPSessionExportParams(sessionId: session.sessionId))
@@ -1601,18 +1601,18 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        _ = await service.handle(JSONRPCRequest(
+        _ = await service.handle(JSONRPC.Request(
             id: .int(170),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp"))
         ))
 
-        let resp = await service.handle(JSONRPCRequest(
+        let resp = await service.handle(JSONRPC.Request(
             id: .int(171),
             method: ACPMethods.sessionList,
             params: try ACPCodec.encodeParams(ACPSessionListParams(cursor: "bad-cursor"))
         ))
-        XCTAssertEqual(resp.error?.code, JSONRPCErrorCode.invalidParams)
+        XCTAssertEqual(resp.error?.code.value, JSONRPCErrorCode.invalidParams)
     }
 
     func testSessionDeleteRequiresCapability() async throws {
@@ -1623,12 +1623,12 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let resp = await service.handle(JSONRPCRequest(
+        let resp = await service.handle(JSONRPC.Request(
             id: .int(180),
             method: ACPMethods.sessionDelete,
             params: try ACPCodec.encodeParams(ACPSessionDeleteParams(sessionId: "sess_x"))
         ))
-        XCTAssertEqual(resp.error?.code, JSONRPCErrorCode.methodNotFound)
+        XCTAssertEqual(resp.error?.code.value, JSONRPCErrorCode.methodNotFound)
     }
 
     func testSessionDeleteRemovesFromListAndIsIdempotent() async throws {
@@ -1642,21 +1642,21 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { _ in }
         )
 
-        let newResp = await service.handle(JSONRPCRequest(
+        let newResp = await service.handle(JSONRPC.Request(
             id: .int(181),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp/delete"))
         ))
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let deleteResp = await service.handle(JSONRPCRequest(
+        let deleteResp = await service.handle(JSONRPC.Request(
             id: .int(182),
             method: ACPMethods.sessionDelete,
             params: try ACPCodec.encodeParams(ACPSessionDeleteParams(sessionId: session.sessionId))
         ))
         XCTAssertNil(deleteResp.error)
 
-        let listResp = await service.handle(JSONRPCRequest(
+        let listResp = await service.handle(JSONRPC.Request(
             id: .int(183),
             method: ACPMethods.sessionList,
             params: try ACPCodec.encodeParams(ACPSessionListParams())
@@ -1664,7 +1664,7 @@ final class ACPAgentServiceTests: XCTestCase {
         let list = try ACPCodec.decodeResult(listResp.result, as: ACPSessionListResult.self)
         XCTAssertFalse(list.sessions.contains(where: { $0.sessionId == session.sessionId }))
 
-        let secondDelete = await service.handle(JSONRPCRequest(
+        let secondDelete = await service.handle(JSONRPC.Request(
             id: .int(184),
             method: ACPMethods.sessionDelete,
             params: try ACPCodec.encodeParams(ACPSessionDeleteParams(sessionId: session.sessionId))
@@ -1682,14 +1682,14 @@ final class ACPAgentServiceTests: XCTestCase {
             notificationSink: { n in await notifications.append(n) }
         )
 
-        let newResp = await service.handle(JSONRPCRequest(
+        let newResp = await service.handle(JSONRPC.Request(
             id: .int(185),
             method: ACPMethods.sessionNew,
             params: try ACPCodec.encodeParams(ACPSessionNewParams(cwd: "/tmp/info"))
         ))
         let session = try ACPCodec.decodeResult(newResp.result, as: ACPSessionNewResult.self)
 
-        let promptResp = await service.handle(JSONRPCRequest(
+        let promptResp = await service.handle(JSONRPC.Request(
             id: .int(186),
             method: ACPMethods.sessionPrompt,
             params: try ACPCodec.encodeParams(
@@ -1708,11 +1708,11 @@ final class ACPAgentServiceTests: XCTestCase {
 }
 
 private actor NotificationBox {
-    private var values: [JSONRPCNotification] = []
-    func append(_ value: JSONRPCNotification) {
+    private var values: [JSONRPC.Request] = []
+    func append(_ value: JSONRPC.Request) {
         values.append(value)
     }
-    func snapshot() -> [JSONRPCNotification] { values }
+    func snapshot() -> [JSONRPC.Request] { values }
 }
 
 private actor TelemetryBox {

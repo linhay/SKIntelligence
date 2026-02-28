@@ -1,5 +1,5 @@
 import Foundation
-import SKIJSONRPC
+import SKIACP
 
 public enum ACPTransportError: Error, LocalizedError, Sendable {
     case notConnected

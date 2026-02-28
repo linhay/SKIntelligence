@@ -1,5 +1,7 @@
 import Foundation
 import XCTest
+ import STJSON
+ import SKIACP
 
 final class SKICLIProcessTests: XCTestCase {
     func testClientConnectRejectsEmptyPrompt() throws {
@@ -926,7 +928,7 @@ final class SKICLIProcessTests: XCTestCase {
         )
 
         XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)\nstdout: \(result.stdout)")
-        XCTAssertTrue(result.stderr.contains("permission requests=1"), "stderr: \(result.stderr)")
+        XCTAssertTrue(result.stderr.contains("permission requests=2"), "stderr: \(result.stderr)")
         let lines = result.stdout
             .split(separator: "\n")
             .map(String.init)

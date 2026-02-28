@@ -1,7 +1,8 @@
 import Foundation
 import SKIACP
 import SKIACPTransport
-import SKIJSONRPC
+import SKIACP
+@preconcurrency import STJSON
 
 public enum ACPClientServiceError: Error, LocalizedError {
     case requestTimeout(method: String)
@@ -18,7 +19,7 @@ public enum ACPClientServiceError: Error, LocalizedError {
 }
 
 public actor ACPClientService {
-    public typealias NotificationHandler = @Sendable (JSONRPCNotification) async -> Void
+    public typealias NotificationHandler = @Sendable (JSONRPC.Request) async -> Void
     public typealias PermissionRequestHandler = @Sendable (ACPSessionPermissionRequestParams) async throws -> ACPSessionPermissionRequestResult
     public typealias ReadTextFileHandler = @Sendable (ACPReadTextFileParams) async throws -> ACPReadTextFileResult
     public typealias WriteTextFileHandler = @Sendable (ACPWriteTextFileParams) async throws -> ACPWriteTextFileResult
@@ -31,9 +32,9 @@ public actor ACPClientService {
     private let transport: any ACPTransport
     private let requestTimeoutNanoseconds: UInt64?
     private var nextID: Int = 1
-    private var pending: [JSONRPCID: CheckedContinuation<JSONRPCResponse, Error>] = [:]
-    private var timeoutTasks: [JSONRPCID: Task<Void, Never>] = [:]
-    private var pendingMethods: [JSONRPCID: String] = [:]
+    private var pending: [JSONRPC.ID: CheckedContinuation<JSONRPC.Response, Error>] = [:]
+    private var timeoutTasks: [JSONRPC.ID: Task<Void, Never>] = [:]
+    private var pendingMethods: [JSONRPC.ID: String] = [:]
     private var receiveTask: Task<Void, Never>?
 
     public var onNotification: NotificationHandler?
@@ -184,7 +185,7 @@ public actor ACPClientService {
 
     public func cancel(_ params: ACPSessionCancelParams) async throws {
         let payload = try ACPCodec.encodeParams(params)
-        let message = JSONRPCNotification(method: ACPMethods.sessionCancel, params: payload)
+        let message = JSONRPC.Request(method: ACPMethods.sessionCancel, params: payload)
         try await transport.send(.notification(message))
     }
 
@@ -197,16 +198,16 @@ public actor ACPClientService {
 
     public func cancelRequest(_ params: ACPCancelRequestParams) async throws {
         let payload = try ACPCodec.encodeParams(params)
-        let message = JSONRPCNotification(method: ACPMethods.cancelRequest, params: payload)
+        let message = JSONRPC.Request(method: ACPMethods.cancelRequest, params: payload)
         try await transport.send(.notification(message))
     }
 
-    public func call<Params: Encodable>(method: String, params: Params) async throws -> JSONRPCResponse {
-        let id = JSONRPCID.int(nextID)
+    public func call<Params: Encodable>(method: String, params: Params) async throws -> JSONRPC.Response {
+        let id = JSONRPC.ID.int(nextID)
         nextID += 1
 
         let payload = try ACPCodec.encodeParams(params)
-        let request = JSONRPCRequest(id: id, method: method, params: payload)
+        let request = JSONRPC.Request(id: id, method: method, params: payload)
 
         return try await withCheckedThrowingContinuation { continuation in
             pending[id] = continuation
@@ -236,12 +237,13 @@ public actor ACPClientService {
 
                 switch message {
                 case .response(let response):
-                    timeoutTasks[response.id]?.cancel()
-                    timeoutTasks[response.id] = nil
-                    pendingMethods[response.id] = nil
-                    if let continuation = pending.removeValue(forKey: response.id) {
+                    guard let responseID = response.id else { continue }
+                    timeoutTasks[responseID]?.cancel()
+                    timeoutTasks[responseID] = nil
+                    pendingMethods[responseID] = nil
+                    if let continuation = pending.removeValue(forKey: responseID) {
                         if let rpcError = response.error {
-                            continuation.resume(throwing: ACPClientServiceError.rpcError(code: rpcError.code, message: rpcError.message))
+                            continuation.resume(throwing: ACPClientServiceError.rpcError(code: rpcError.code.value, message: rpcError.message))
                         } else {
                             continuation.resume(returning: response)
                         }
@@ -264,7 +266,7 @@ public actor ACPClientService {
         }
     }
 
-    private func failPending(id: JSONRPCID, error: Error) {
+    private func failPending(id: JSONRPC.ID, error: Error) {
         timeoutTasks[id]?.cancel()
         timeoutTasks[id] = nil
         pendingMethods[id] = nil
@@ -272,12 +274,15 @@ public actor ACPClientService {
         continuation.resume(throwing: normalizeTerminalError(error))
     }
 
-    private func timeoutPending(id: JSONRPCID, method: String) {
+    private func timeoutPending(id: JSONRPC.ID, method: String) {
         guard pending[id] != nil else { return }
         failPending(id: id, error: ACPClientServiceError.requestTimeout(method: method))
     }
 
-    private func handleIncomingRequest(_ request: JSONRPCRequest) async throws {
+    private func handleIncomingRequest(_ request: JSONRPC.Request) async throws {
+        guard let requestID = request.id else {
+            return
+        }
         switch request.method {
         case ACPMethods.sessionRequestPermission:
             try await handleTypedIncomingRequest(
@@ -328,21 +333,24 @@ public actor ACPClientService {
                 decodeAs: ACPTerminalRefParams.self
             )
         default:
-            try await transport.send(.response(JSONRPCResponse(
-                id: request.id,
+            try await transport.send(.response(JSONRPC.Response(
+                id: requestID,
                 error: .init(code: JSONRPCErrorCode.methodNotFound, message: "Method not found: \(request.method)")
             )))
         }
     }
 
     private func handleTypedIncomingRequest<Params: Decodable, Result: Encodable>(
-        _ request: JSONRPCRequest,
+        _ request: JSONRPC.Request,
         handler: (@Sendable (Params) async throws -> Result)?,
         decodeAs: Params.Type
     ) async throws {
+        guard let requestID = request.id else {
+            return
+        }
         guard let handler else {
-            try await transport.send(.response(JSONRPCResponse(
-                id: request.id,
+            try await transport.send(.response(JSONRPC.Response(
+                id: requestID,
                 error: .init(code: JSONRPCErrorCode.methodNotFound, message: "Method not found: \(request.method)")
             )))
             return
@@ -352,14 +360,14 @@ public actor ACPClientService {
             let params = try ACPCodec.decodeParams(request.params, as: decodeAs)
             let result = try await handler(params)
             let payload = try ACPCodec.encodeParams(result)
-            try await transport.send(.response(JSONRPCResponse(id: request.id, result: payload)))
+            try await transport.send(.response(JSONRPC.Response(id: requestID, result: payload)))
         } catch {
             let rpcError = mapIncomingRequestError(error)
-            try await transport.send(.response(JSONRPCResponse(id: request.id, error: rpcError)))
+            try await transport.send(.response(JSONRPC.Response(id: requestID, error: rpcError)))
         }
     }
 
-    private func mapIncomingRequestError(_ error: Error) -> JSONRPCErrorObject {
+    private func mapIncomingRequestError(_ error: Error) -> JSONRPC.ErrorObject {
         if let nsError = error as NSError?, nsError.domain == "ACPCodec" || error is DecodingError {
             return .init(code: JSONRPCErrorCode.invalidParams, message: error.localizedDescription)
         }

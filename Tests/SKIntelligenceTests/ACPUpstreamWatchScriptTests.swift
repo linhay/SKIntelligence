@@ -1,5 +1,7 @@
 import Foundation
 import XCTest
+ import STJSON
+ import SKIACP
 
 final class ACPUpstreamWatchScriptTests: XCTestCase {
     func testWatchReportIncludesPriorityItemsAndSupportsRepoOverride() throws {
@@ -98,6 +100,7 @@ final class ACPUpstreamWatchScriptTests: XCTestCase {
     }
 
     private func installMockGH(into bin: URL, withPRPayload: Bool) throws {
+        let now = ISO8601DateFormatter().string(from: Date())
         let prs: String
         if withPRPayload {
             prs = """
@@ -105,7 +108,7 @@ final class ACPUpstreamWatchScriptTests: XCTestCase {
               {
                 "title": "breaking: adjust transport contract",
                 "body": "protocol update",
-                "updated_at": "2026-02-27T00:00:00Z",
+                "updated_at": "\(now)",
                 "html_url": "https://github.com/testorg/spec/pull/42"
               }
             ]

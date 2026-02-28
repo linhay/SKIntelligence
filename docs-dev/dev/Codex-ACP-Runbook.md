@@ -1,5 +1,10 @@
 # Codex ACP Runbook
 
+技能入口（方法优先）：
+- `skills/skintelligence/SKILL.md`
+- `skills/skintelligence/scripts/run_acp_regression.sh`
+- `skills/skintelligence/scripts/run_codex_connect_smoke.sh`
+
 ## 1. 前置条件
 
 1. 已安装 `codex` CLI，并完成登录。
