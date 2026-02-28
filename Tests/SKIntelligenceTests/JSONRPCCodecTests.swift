@@ -1,31 +1,32 @@
 import XCTest
-@testable import SKIJSONRPC
+ import STJSON
+ import SKIACP
 
 final class JSONRPCCodecTests: XCTestCase {
 
     func testEncodeDecodeRequest() throws {
-        let req = JSONRPCRequest(id: .int(1), method: "initialize", params: .object(["protocolVersion": .number(1)]))
+        let req = JSONRPC.Request(id: .int(1), method: "initialize", params: AnyCodable(["protocolVersion": AnyCodable(1)]))
         let data = try JSONRPCCodec.encode(.request(req))
         let decoded = try JSONRPCCodec.decode(data)
         XCTAssertEqual(decoded, .request(req))
     }
 
     func testEncodeDecodeNotification() throws {
-        let n = JSONRPCNotification(method: "session/update", params: .object(["sessionId": .string("s1")]))
+        let n = JSONRPC.Request(method: "session/update", params: AnyCodable(["sessionId": AnyCodable("s1")]))
         let data = try JSONRPCCodec.encode(.notification(n))
         let decoded = try JSONRPCCodec.decode(data)
         XCTAssertEqual(decoded, .notification(n))
     }
 
     func testEncodeDecodeResponseError() throws {
-        let r = JSONRPCResponse(id: .string("abc"), error: JSONRPCErrorObject(code: -32601, message: "not found"))
+        let r = JSONRPC.Response(id: .string("abc"), error: JSONRPC.ErrorObject(code: -32601, message: "not found"))
         let data = try JSONRPCCodec.encode(.response(r))
         let decoded = try JSONRPCCodec.decode(data)
         XCTAssertEqual(decoded, .response(r))
     }
 
     func testLineFramerRoundTrip() throws {
-        let req = JSONRPCRequest(id: .int(2), method: "ping", params: nil)
+        let req = JSONRPC.Request(id: .int(2), method: "ping", params: nil)
         let framer = JSONRPCLineFramer()
         let data = try framer.encodeLine(.request(req))
         let line = String(decoding: data, as: UTF8.self)
@@ -84,10 +85,10 @@ final class JSONRPCCodecTests: XCTestCase {
 
     func testLineFramerLargePayloadRoundTrip() throws {
         let large = String(repeating: "x", count: 512 * 1024)
-        let req = JSONRPCRequest(
+        let req = JSONRPC.Request(
             id: .int(42),
             method: "session/prompt",
-            params: .object(["text": .string(large)])
+            params: AnyCodable(["text": AnyCodable(large)])
         )
         let framer = JSONRPCLineFramer()
         let data = try framer.encodeLine(.request(req))
@@ -97,7 +98,7 @@ final class JSONRPCCodecTests: XCTestCase {
     }
 
     func testEncodeRequestDoesNotEscapeForwardSlashesInMethod() throws {
-        let req = JSONRPCRequest(id: .int(7), method: "session/new", params: nil)
+        let req = JSONRPC.Request(id: .int(7), method: "session/new", params: nil)
         let data = try JSONRPCCodec.encode(.request(req))
         let raw = String(decoding: data, as: UTF8.self)
         XCTAssertTrue(raw.contains("\"method\":\"session/new\""))

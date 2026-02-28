@@ -1,6 +1,7 @@
 import XCTest
+ import STJSON
+@testable import SKIACP
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 
 final class ACPWebSocketReconnectTests: XCTestCase {
     func testClientReconnectsAfterServerRestart() async throws {
@@ -24,10 +25,10 @@ final class ACPWebSocketReconnectTests: XCTestCase {
             )
             try await client.connect()
 
-            let req1 = JSONRPCRequest(id: .int(1), method: "ping", params: .object(["k": .string("v1")]))
+            let req1 = JSONRPC.Request(id: .int(1), method: "ping", params: AnyCodable(["k": AnyCodable("v1")]))
             try await withTimeout(seconds: 1.0) { try await client.send(.request(req1)) }
             let msg1 = try await withTimeout(seconds: 1.0) { try await client.receive() }
-            XCTAssertEqual(msg1, .response(JSONRPCResponse(id: .int(1), result: .object(["ok": .bool(true)]))))
+            XCTAssertEqual(msg1, .response(JSONRPC.Response(id: .int(1), result: AnyCodable(["ok": AnyCodable(true)]))))
 
             await server1.close()
             serverLoop1.cancel()
@@ -49,10 +50,10 @@ final class ACPWebSocketReconnectTests: XCTestCase {
             // Leave one heartbeat window for client-side reconnect path.
             try await Task.sleep(nanoseconds: 350_000_000)
 
-            let req2 = JSONRPCRequest(id: .int(2), method: "ping", params: .object(["k": .string("v2")]))
+            let req2 = JSONRPC.Request(id: .int(2), method: "ping", params: AnyCodable(["k": AnyCodable("v2")]))
             try await withTimeout(seconds: 1.0) { try await client.send(.request(req2)) }
             let msg2 = try await withTimeout(seconds: 1.0) { try await client.receive() }
-            XCTAssertEqual(msg2, .response(JSONRPCResponse(id: .int(2), result: .object(["ok": .bool(true)]))))
+            XCTAssertEqual(msg2, .response(JSONRPC.Response(id: .int(2), result: AnyCodable(["ok": AnyCodable(true)]))))
         }
     }
 }
@@ -60,7 +61,7 @@ final class ACPWebSocketReconnectTests: XCTestCase {
 private func runEchoLoop(on server: WebSocketServerTransport) async throws {
     while let incoming = try await server.receive() {
         guard case .request(let req) = incoming else { continue }
-        let resp = JSONRPCResponse(id: req.id, result: .object(["ok": .bool(true)]))
+        let resp = JSONRPC.Response(id: req.id!, result: AnyCodable(["ok": AnyCodable(true)]))
         try await server.send(.response(resp))
     }
 }

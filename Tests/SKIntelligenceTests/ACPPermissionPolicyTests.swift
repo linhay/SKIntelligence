@@ -1,7 +1,7 @@
 import XCTest
+ import STJSON
 @testable import SKIACP
 @testable import SKIACPAgent
-@testable import SKIJSONRPC
 @testable import SKIntelligence
 
 final class ACPPermissionPolicyTests: XCTestCase {
@@ -214,7 +214,7 @@ final class ACPPermissionPolicyTests: XCTestCase {
                 title: "Execute session prompt",
                 kind: .execute,
                 locations: [.init(path: "/tmp")],
-                rawInput: .object(["command": .string("ls -la")])
+                rawInput: AnyCodable(["command": AnyCodable("ls -la")])
             ),
             options: [
                 .init(optionId: "allow_once", name: "Allow once", kind: .allowOnce),

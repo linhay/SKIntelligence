@@ -1,6 +1,6 @@
 import XCTest
+ import STJSON
 @testable import SKIACP
-@testable import SKIJSONRPC
 
 final class ACPModelsTests: XCTestCase {
     func testSessionUpdatePlanRoundTrip() throws {
@@ -20,10 +20,10 @@ final class ACPModelsTests: XCTestCase {
     }
 
     func testSessionUpdateRejectsUnknownKind() throws {
-        let json: JSONValue = .object([
-            "sessionId": .string("sess_2"),
-            "update": .object([
-                "sessionUpdate": .string("unknown_update")
+        let json = AnyCodable([
+            "sessionId": AnyCodable("sess_2"),
+            "update": AnyCodable([
+                "sessionUpdate": AnyCodable("unknown_update")
             ])
         ])
 
@@ -31,10 +31,10 @@ final class ACPModelsTests: XCTestCase {
     }
 
     func testSessionUpdatePlanRequiresPlanField() throws {
-        let json: JSONValue = .object([
-            "sessionId": .string("sess_plan_missing"),
-            "update": .object([
-                "sessionUpdate": .string("plan")
+        let json = AnyCodable([
+            "sessionId": AnyCodable("sess_plan_missing"),
+            "update": AnyCodable([
+                "sessionUpdate": AnyCodable("plan")
             ])
         ])
 
@@ -42,10 +42,10 @@ final class ACPModelsTests: XCTestCase {
     }
 
     func testSessionUpdateAgentMessageChunkRequiresContentField() throws {
-        let json: JSONValue = .object([
-            "sessionId": .string("sess_msg_missing"),
-            "update": .object([
-                "sessionUpdate": .string("agent_message_chunk")
+        let json = AnyCodable([
+            "sessionId": AnyCodable("sess_msg_missing"),
+            "update": AnyCodable([
+                "sessionUpdate": AnyCodable("agent_message_chunk")
             ])
         ])
 
@@ -80,9 +80,9 @@ final class ACPModelsTests: XCTestCase {
                 kind: .execute,
                 status: .inProgress,
                 content: [
-                    .content(.object([
-                        "type": .string("text"),
-                        "text": .string("running")
+                    .content(AnyCodable([
+                        "type": AnyCodable("text"),
+                        "text": AnyCodable("running")
                     ])),
                     .terminal(.init(terminalId: "term_1")),
                     .diff(.init(path: "README.md", newText: "new", oldText: "old"))
@@ -90,8 +90,8 @@ final class ACPModelsTests: XCTestCase {
                 locations: [
                     .init(path: "README.md", line: 3)
                 ],
-                rawInput: .object(["cmd": .string("echo hi")]),
-                rawOutput: .object(["stdout": .string("hi")])
+                rawInput: AnyCodable(["cmd": AnyCodable("echo hi")]),
+                rawOutput: AnyCodable(["stdout": AnyCodable("hi")])
             )
         )
         let params = ACPSessionUpdateParams(sessionId: "sess_tool", update: payload)
@@ -104,19 +104,21 @@ final class ACPModelsTests: XCTestCase {
         XCTAssertEqual(toolCall.status, .inProgress)
         XCTAssertEqual(toolCall.locations?.first?.path, "README.md")
         XCTAssertEqual(toolCall.locations?.first?.line, 3)
-        XCTAssertEqual(toolCall.rawInput, .object(["cmd": .string("echo hi")]))
-        XCTAssertEqual(toolCall.rawOutput, .object(["stdout": .string("hi")]))
+        let inputObject = try XCTUnwrap(toolCall.rawInput?.decode(to: [String: AnyCodable].self))
+        let outputObject = try XCTUnwrap(toolCall.rawOutput?.decode(to: [String: AnyCodable].self))
+        XCTAssertEqual(inputObject["cmd"]?.value as? String, "echo hi")
+        XCTAssertEqual(outputObject["stdout"]?.value as? String, "hi")
         XCTAssertEqual(toolCall.content?.count, 3)
     }
 
     func testToolCallUpdateSupportsPartialPayload() throws {
-        let json: JSONValue = .object([
-            "sessionId": .string("sess_partial"),
-            "update": .object([
-                "sessionUpdate": .string("tool_call_update"),
-                "toolCall": .object([
-                    "toolCallId": .string("call_2"),
-                    "status": .string("completed")
+        let json = AnyCodable([
+            "sessionId": AnyCodable("sess_partial"),
+            "update": AnyCodable([
+                "sessionUpdate": AnyCodable("tool_call_update"),
+                "toolCall": AnyCodable([
+                    "toolCallId": AnyCodable("call_2"),
+                    "status": AnyCodable("completed")
                 ])
             ])
         ])
@@ -168,14 +170,14 @@ final class ACPModelsTests: XCTestCase {
     }
 
     func testSessionUpdateContentUnknownTypePreserved() throws {
-        let json: JSONValue = .object([
-            "sessionId": .string("sess_unknown"),
-            "update": .object([
-                "sessionUpdate": .string("agent_message_chunk"),
-                "content": .object([
-                    "type": .string("custom_block"),
-                    "foo": .string("bar"),
-                    "answer": .number(42)
+        let json = AnyCodable([
+            "sessionId": AnyCodable("sess_unknown"),
+            "update": AnyCodable([
+                "sessionUpdate": AnyCodable("agent_message_chunk"),
+                "content": AnyCodable([
+                    "type": AnyCodable("custom_block"),
+                    "foo": AnyCodable("bar"),
+                    "answer": AnyCodable(Double(42))
                 ])
             ])
         ])
@@ -185,13 +187,15 @@ final class ACPModelsTests: XCTestCase {
         XCTAssertEqual(content.type, "custom_block")
 
         let reencoded = try ACPCodec.encodeParams(decoded)
-        guard case .object(let root) = reencoded,
-              case .object(let update)? = root["update"],
-              case .object(let contentObj)? = update["content"] else {
+        let root = try XCTUnwrap(try? reencoded.decode(to: [String: AnyCodable].self))
+        let update = try XCTUnwrap(try? root["update"]?.decode(to: [String: AnyCodable].self))
+        let contentObj = try XCTUnwrap(try? update["content"]?.decode(to: [String: AnyCodable].self))
+        if contentObj.isEmpty {
             return XCTFail("Missing re-encoded content payload")
         }
-        XCTAssertEqual(contentObj["foo"], .string("bar"))
-        XCTAssertEqual(contentObj["answer"], .number(42))
+        XCTAssertEqual(contentObj["foo"], AnyCodable("bar"))
+        let answer = numericDouble(from: contentObj["answer"]?.value)
+        XCTAssertEqual(answer, 42)
     }
 
     func testSessionSetModelParamsRoundTrip() throws {
@@ -203,22 +207,40 @@ final class ACPModelsTests: XCTestCase {
     }
 
     func testBooleanConfigOptionDecodesFromBoolCurrentValue() throws {
-        let json: JSONValue = .object([
-            "type": .string("boolean"),
-            "id": .string("streaming"),
-            "name": .string("Streaming"),
-            "currentValue": .bool(true)
+        let json = AnyCodable([
+            "type": AnyCodable("boolean"),
+            "id": AnyCodable("streaming"),
+            "name": AnyCodable("Streaming"),
+            "currentValue": AnyCodable(true)
         ])
         let decoded = try ACPCodec.decodeParams(json, as: ACPSessionConfigOption.self)
         XCTAssertEqual(decoded.type, .boolean)
         XCTAssertEqual(decoded.currentValue, "true")
 
         let reencoded = try ACPCodec.encodeParams(decoded)
-        guard case .object(let root) = reencoded else {
+        guard let root = try? reencoded.decode(to: [String: AnyCodable].self) else {
             return XCTFail("Expected object")
         }
-        XCTAssertEqual(root["type"], .string("boolean"))
-        XCTAssertEqual(root["currentValue"], .bool(true))
+        XCTAssertEqual(root["type"], AnyCodable("boolean"))
+        XCTAssertEqual(root["currentValue"], AnyCodable(true))
+    }
+
+    private func numericDouble(from raw: Any?) -> Double? {
+        switch raw {
+        case let value as Double: return value
+        case let value as Float: return Double(value)
+        case let value as Int: return Double(value)
+        case let value as Int8: return Double(value)
+        case let value as Int16: return Double(value)
+        case let value as Int32: return Double(value)
+        case let value as Int64: return Double(value)
+        case let value as UInt: return Double(value)
+        case let value as UInt8: return Double(value)
+        case let value as UInt16: return Double(value)
+        case let value as UInt32: return Double(value)
+        case let value as UInt64: return Double(value)
+        default: return nil
+        }
     }
 
     func testCancelRequestParamsRoundTrip() throws {

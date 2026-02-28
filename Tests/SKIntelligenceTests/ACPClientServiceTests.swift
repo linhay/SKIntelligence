@@ -1,8 +1,8 @@
 import XCTest
+ import STJSON
 @testable import SKIACP
 @testable import SKIACPClient
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 
 actor ScriptedTransport: ACPTransport {
     private(set) var sent: [JSONRPCMessage] = []
@@ -22,11 +22,11 @@ actor ScriptedTransport: ACPTransport {
             case ACPMethods.initialize:
                 let result = ACPInitializeResult(protocolVersion: 1, agentCapabilities: .init(loadSession: true), agentInfo: .init(name: "mock-agent", version: "1.0.0"))
                 let value = try ACPCodec.encodeParams(result)
-                inbox.append(.response(JSONRPCResponse(id: request.id, result: value)))
+                inbox.append(.response(JSONRPC.Response(id: request.id!, result: value)))
             case ACPMethods.sessionNew:
                 let result = ACPSessionNewResult(sessionId: "sess_test")
                 let value = try ACPCodec.encodeParams(result)
-                inbox.append(.response(JSONRPCResponse(id: request.id, result: value)))
+                inbox.append(.response(JSONRPC.Response(id: request.id!, result: value)))
             case ACPMethods.sessionPrompt:
                 let update = ACPSessionUpdateParams(
                     sessionId: "sess_test",
@@ -34,9 +34,9 @@ actor ScriptedTransport: ACPTransport {
                 )
                 inbox.append(.notification(.init(method: ACPMethods.sessionUpdate, params: try ACPCodec.encodeParams(update))))
                 let result = ACPSessionPromptResult(stopReason: .endTurn)
-                inbox.append(.response(JSONRPCResponse(id: request.id, result: try ACPCodec.encodeParams(result))))
+                inbox.append(.response(JSONRPC.Response(id: request.id!, result: try ACPCodec.encodeParams(result))))
             default:
-                inbox.append(.response(JSONRPCResponse(id: request.id, error: .init(code: -32601, message: "method not found"))))
+                inbox.append(.response(JSONRPC.Response(id: request.id!, error: .init(code: -32601, message: "method not found"))))
             }
         }
     }
@@ -84,14 +84,14 @@ actor DuplicateResponseTransport: ACPTransport {
         case ACPMethods.initialize:
             let first = ACPInitializeResult(protocolVersion: 1, agentCapabilities: .init(loadSession: true), agentInfo: .init(name: "a", version: "1"))
             let second = ACPInitializeResult(protocolVersion: 9, agentCapabilities: .init(loadSession: false), agentInfo: .init(name: "b", version: "9"))
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(first))))
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(second))))
-            inbox.append(.response(.init(id: .int(99999), result: .object(["ignored": .bool(true)]))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(first))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(second))))
+            inbox.append(.response(.init(id: .int(99999), result: AnyCodable(["ignored": AnyCodable(true)]))))
         case ACPMethods.sessionNew:
             let result = ACPSessionNewResult(sessionId: "sess_ok")
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
         default:
-            inbox.append(.response(.init(id: request.id, error: .init(code: -32601, message: "unsupported"))))
+            inbox.append(.response(.init(id: request.id!, error: .init(code: -32601, message: "unsupported"))))
         }
     }
 
@@ -116,10 +116,10 @@ actor ChaoticResponseTransport: ACPTransport {
         guard connected else { throw ACPTransportError.notConnected }
         guard case .request(let request) = message else { return }
 
-        let requestID = request.id
+        let requestID = request.id!
         Task {
             // Emit an unknown response first to verify client ignores it.
-            self.enqueue(.response(.init(id: .int(777777), result: .object(["noise": .bool(true)]))))
+            self.enqueue(.response(.init(id: .int(777777), result: AnyCodable(["noise": AnyCodable(true)]))))
 
             // Stable pseudo-random delay derived from request id.
             let delay = UInt64((Self.idInt(requestID) % 7 + 1) * 2_000_000)
@@ -153,10 +153,11 @@ actor ChaoticResponseTransport: ACPTransport {
         inbox.append(message)
     }
 
-    private static func idInt(_ id: JSONRPCID) -> Int {
+    private static func idInt(_ id: JSONRPC.ID) -> Int {
         switch id {
         case .int(let value): return value
         case .string(let value): return abs(value.hashValue)
+        case .null: return 0
         }
     }
 }
@@ -190,18 +191,18 @@ actor IDCaptureTransport: ACPTransport {
     func send(_ message: JSONRPCMessage) async throws {
         guard connected else { throw ACPTransportError.notConnected }
         guard case .request(let request) = message else { return }
-        let id = Self.idInt(request.id)
+        let id = Self.idInt(request.id!)
         requestIDs.append(id)
 
         switch request.method {
         case ACPMethods.sessionNew:
             let result = ACPSessionNewResult(sessionId: "sess_\(id)")
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
         case ACPMethods.initialize:
             let result = ACPInitializeResult(protocolVersion: 1, agentCapabilities: .init(loadSession: true), agentInfo: .init(name: "idcap", version: "1"))
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
         default:
-            inbox.append(.response(.init(id: request.id, error: .init(code: -32601, message: "unsupported"))))
+            inbox.append(.response(.init(id: request.id!, error: .init(code: -32601, message: "unsupported"))))
         }
     }
 
@@ -215,10 +216,11 @@ actor IDCaptureTransport: ACPTransport {
 
     func close() async { connected = false }
 
-    private static func idInt(_ id: JSONRPCID) -> Int {
+    private static func idInt(_ id: JSONRPC.ID) -> Int {
         switch id {
         case .int(let value): return value
         case .string(let value): return abs(value.hashValue)
+        case .null: return 0
         }
     }
 }
@@ -226,7 +228,7 @@ actor IDCaptureTransport: ACPTransport {
 actor PermissionRequestTransport: ACPTransport {
     private var connected = false
     private var inbox: [JSONRPCMessage] = []
-    private(set) var permissionResponses: [JSONRPCResponse] = []
+    private(set) var permissionResponses: [JSONRPC.Response] = []
 
     func connect() async throws {
         connected = true
@@ -249,7 +251,7 @@ actor PermissionRequestTransport: ACPTransport {
         case .request(let request):
             if request.method == ACPMethods.initialize {
                 let result = ACPInitializeResult(protocolVersion: 1, agentCapabilities: .init(loadSession: true), agentInfo: .init(name: "perm-agent", version: "1.0.0"))
-                inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+                inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
             }
         case .response(let response):
             permissionResponses.append(response)
@@ -274,7 +276,7 @@ actor PermissionRequestTransport: ACPTransport {
 actor ClientSideMethodRequestTransport: ACPTransport {
     private var connected = false
     private var inbox: [JSONRPCMessage] = []
-    private(set) var responses: [JSONRPCResponse] = []
+    private(set) var responses: [JSONRPC.Response] = []
 
     func connect() async throws {
         connected = true
@@ -299,7 +301,7 @@ actor ClientSideMethodRequestTransport: ACPTransport {
                     agentCapabilities: .init(loadSession: true),
                     agentInfo: .init(name: "ops-agent", version: "1.0.0")
                 )
-                inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+                inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
             }
         case .response(let response):
             responses.append(response)
@@ -335,28 +337,28 @@ actor SessionDomainTransport: ACPTransport {
         switch request.method {
         case ACPMethods.initialize:
             let result = ACPInitializeResult(protocolVersion: 1, agentCapabilities: .init(loadSession: true), agentInfo: .init(name: "domain-agent", version: "1.0.0"))
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
         case ACPMethods.sessionNew:
             let result = ACPSessionNewResult(
                 sessionId: "sess_domain",
                 models: .init(currentModelId: "default", availableModels: [.init(modelId: "default", name: "Default"), .init(modelId: "gpt-5", name: "GPT-5")])
             )
             currentModelBySession["sess_domain"] = "default"
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
         case ACPMethods.sessionSetModel:
             let params = try ACPCodec.decodeParams(request.params, as: ACPSessionSetModelParams.self)
             currentModelBySession[params.sessionId] = params.modelId
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(ACPSessionSetModelResult()))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(ACPSessionSetModelResult()))))
         case ACPMethods.sessionList:
             let result = ACPSessionListResult(sessions: [.init(sessionId: "sess_domain", cwd: "/tmp", title: "Domain Session")], nextCursor: nil)
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
         case ACPMethods.sessionResume:
             let result = ACPSessionResumeResult(
                 modes: .init(currentModeId: "default", availableModes: [.init(id: "default", name: "Default")]),
                 models: .init(currentModelId: currentModelBySession["sess_domain"] ?? "default", availableModels: [.init(modelId: "default", name: "Default"), .init(modelId: "gpt-5", name: "GPT-5")]),
                 configOptions: []
             )
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
         case ACPMethods.sessionFork:
             let result = ACPSessionForkResult(
                 sessionId: "sess_forked",
@@ -364,9 +366,9 @@ actor SessionDomainTransport: ACPTransport {
                 models: .init(currentModelId: currentModelBySession["sess_domain"] ?? "default", availableModels: [.init(modelId: "default", name: "Default"), .init(modelId: "gpt-5", name: "GPT-5")]),
                 configOptions: []
             )
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
         case ACPMethods.sessionDelete:
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(ACPSessionDeleteResult()))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(ACPSessionDeleteResult()))))
         case ACPMethods.sessionExport:
             let result = ACPSessionExportResult(
                 sessionId: "sess_domain",
@@ -374,11 +376,11 @@ actor SessionDomainTransport: ACPTransport {
                 mimeType: "application/x-ndjson",
                 content: "{\"type\":\"session\"}\n{\"message\":{\"role\":\"user\"}}\n"
             )
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
         case ACPMethods.logout:
-            inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(ACPLogoutResult()))))
+            inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(ACPLogoutResult()))))
         default:
-            inbox.append(.response(.init(id: request.id, error: .init(code: -32601, message: "unsupported"))))
+            inbox.append(.response(.init(id: request.id!, error: .init(code: -32601, message: "unsupported"))))
         }
     }
 
@@ -414,11 +416,11 @@ final class ACPClientServiceTests: XCTestCase {
                         agentCapabilities: .init(loadSession: true),
                         agentInfo: .init(name: "stop-agent", version: "1.0.0")
                     )
-                    inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(result))))
+                    inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(result))))
                 case ACPMethods.sessionStop:
-                    inbox.append(.response(.init(id: request.id, result: try ACPCodec.encodeParams(ACPSessionStopResult()))))
+                    inbox.append(.response(.init(id: request.id!, result: try ACPCodec.encodeParams(ACPSessionStopResult()))))
                 default:
-                    inbox.append(.response(.init(id: request.id, error: .init(code: -32601, message: "unsupported"))))
+                    inbox.append(.response(.init(id: request.id!, error: .init(code: -32601, message: "unsupported"))))
                 }
             }
 
@@ -564,7 +566,7 @@ final class ACPClientServiceTests: XCTestCase {
         let responses = await transport.permissionResponses
         XCTAssertEqual(responses.count, 1)
         XCTAssertEqual(responses.first?.id, .string("perm-1"))
-        XCTAssertEqual(responses.first?.error?.code, JSONRPCErrorCode.methodNotFound)
+        XCTAssertEqual(responses.first?.error?.code.value, JSONRPCErrorCode.methodNotFound)
     }
 
     func testInitializeNewPromptFlow() async throws {

@@ -1,5 +1,5 @@
 import Foundation
-import SKIJSONRPC
+@preconcurrency import STJSON
 
 public enum ACPStopReason: String, Codable, Sendable {
     case endTurn = "end_turn"
@@ -536,9 +536,9 @@ public struct ACPSessionLoadResult: Codable, Sendable, Equatable {
 
 public struct ACPTextContentBlock: Codable, Sendable, Equatable {
     public var text: String
-    public var annotations: JSONValue?
+    public var annotations: AnyCodable?
 
-    public init(text: String, annotations: JSONValue? = nil) {
+    public init(text: String, annotations: AnyCodable? = nil) {
         self.text = text
         self.annotations = annotations
     }
@@ -548,9 +548,9 @@ public struct ACPImageContentBlock: Codable, Sendable, Equatable {
     public var data: String
     public var mimeType: String
     public var uri: String?
-    public var annotations: JSONValue?
+    public var annotations: AnyCodable?
 
-    public init(data: String, mimeType: String, uri: String? = nil, annotations: JSONValue? = nil) {
+    public init(data: String, mimeType: String, uri: String? = nil, annotations: AnyCodable? = nil) {
         self.data = data
         self.mimeType = mimeType
         self.uri = uri
@@ -561,9 +561,9 @@ public struct ACPImageContentBlock: Codable, Sendable, Equatable {
 public struct ACPAudioContentBlock: Codable, Sendable, Equatable {
     public var data: String
     public var mimeType: String
-    public var annotations: JSONValue?
+    public var annotations: AnyCodable?
 
-    public init(data: String, mimeType: String, annotations: JSONValue? = nil) {
+    public init(data: String, mimeType: String, annotations: AnyCodable? = nil) {
         self.data = data
         self.mimeType = mimeType
         self.annotations = annotations
@@ -577,7 +577,7 @@ public struct ACPResourceLinkContentBlock: Codable, Sendable, Equatable {
     public var mimeType: String?
     public var size: Int64?
     public var title: String?
-    public var annotations: JSONValue?
+    public var annotations: AnyCodable?
 
     public init(
         name: String,
@@ -586,7 +586,7 @@ public struct ACPResourceLinkContentBlock: Codable, Sendable, Equatable {
         mimeType: String? = nil,
         size: Int64? = nil,
         title: String? = nil,
-        annotations: JSONValue? = nil
+        annotations: AnyCodable? = nil
     ) {
         self.name = name
         self.uri = uri
@@ -599,10 +599,10 @@ public struct ACPResourceLinkContentBlock: Codable, Sendable, Equatable {
 }
 
 public struct ACPResourceContentBlock: Codable, Sendable, Equatable {
-    public var resource: JSONValue
-    public var annotations: JSONValue?
+    public var resource: AnyCodable
+    public var annotations: AnyCodable?
 
-    public init(resource: JSONValue, annotations: JSONValue? = nil) {
+    public init(resource: AnyCodable, annotations: AnyCodable? = nil) {
         self.resource = resource
         self.annotations = annotations
     }
@@ -610,9 +610,9 @@ public struct ACPResourceContentBlock: Codable, Sendable, Equatable {
 
 public struct ACPUnknownContentBlock: Codable, Sendable, Equatable {
     public var type: String
-    public var payload: [String: JSONValue]
+    public var payload: [String: AnyCodable]
 
-    public init(type: String, payload: [String: JSONValue]) {
+    public init(type: String, payload: [String: AnyCodable]) {
         self.type = type
         self.payload = payload
     }
@@ -636,8 +636,8 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
         description: String? = nil,
         size: Int64? = nil,
         title: String? = nil,
-        resource: JSONValue? = nil,
-        annotations: JSONValue? = nil
+        resource: AnyCodable? = nil,
+        annotations: AnyCodable? = nil
     ) {
         switch type {
         case "text":
@@ -659,17 +659,17 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
                 )
             )
         case "resource":
-            self = .resource(.init(resource: resource ?? .object([:]), annotations: annotations))
+            self = .resource(.init(resource: resource ?? AnyCodable([String: AnyCodable]()), annotations: annotations))
         default:
-            var payload: [String: JSONValue] = [:]
-            if let text { payload["text"] = .string(text) }
-            if let data { payload["data"] = .string(data) }
-            if let mimeType { payload["mimeType"] = .string(mimeType) }
-            if let uri { payload["uri"] = .string(uri) }
-            if let name { payload["name"] = .string(name) }
-            if let description { payload["description"] = .string(description) }
-            if let size { payload["size"] = .number(Double(size)) }
-            if let title { payload["title"] = .string(title) }
+            var payload: [String: AnyCodable] = [:]
+            if let text { payload["text"] = AnyCodable(text) }
+            if let data { payload["data"] = AnyCodable(data) }
+            if let mimeType { payload["mimeType"] = AnyCodable(mimeType) }
+            if let uri { payload["uri"] = AnyCodable(uri) }
+            if let name { payload["name"] = AnyCodable(name) }
+            if let description { payload["description"] = AnyCodable(description) }
+            if let size { payload["size"] = AnyCodable(Double(size)) }
+            if let title { payload["title"] = AnyCodable(title) }
             if let resource { payload["resource"] = resource }
             if let annotations { payload["annotations"] = annotations }
             self = .unknown(.init(type: type, payload: payload))
@@ -677,7 +677,7 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
     }
 
     public static func text(_ value: String) -> ACPContentBlock {
-        .text(.init(text: value))
+        .text(ACPTextContentBlock(text: value))
     }
 
     public static func image(data: String, mimeType: String, uri: String? = nil) -> ACPContentBlock {
@@ -721,7 +721,7 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
 
     public var text: String? {
         if case .text(let block) = self { return block.text }
-        if case .unknown(let block) = self, case .string(let value)? = block.payload["text"] { return value }
+        if case .unknown(let block) = self, let value = Self.stringValue(from: block.payload["text"]) { return value }
         return nil
     }
 
@@ -730,7 +730,7 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
         case .image(let block): return block.data
         case .audio(let block): return block.data
         case .unknown(let block):
-            if case .string(let value)? = block.payload["data"] { return value }
+            if let value = Self.stringValue(from: block.payload["data"]) { return value }
             return nil
         default:
             return nil
@@ -743,7 +743,7 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
         case .audio(let block): return block.mimeType
         case .resourceLink(let block): return block.mimeType
         case .unknown(let block):
-            if case .string(let value)? = block.payload["mimeType"] { return value }
+            if let value = Self.stringValue(from: block.payload["mimeType"]) { return value }
             return nil
         default:
             return nil
@@ -755,7 +755,7 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
         case .image(let block): return block.uri
         case .resourceLink(let block): return block.uri
         case .unknown(let block):
-            if case .string(let value)? = block.payload["uri"] { return value }
+            if let value = Self.stringValue(from: block.payload["uri"]) { return value }
             return nil
         default:
             return nil
@@ -766,7 +766,7 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
         switch self {
         case .resourceLink(let block): return block.name
         case .unknown(let block):
-            if case .string(let value)? = block.payload["name"] { return value }
+            if let value = Self.stringValue(from: block.payload["name"]) { return value }
             return nil
         default:
             return nil
@@ -777,7 +777,7 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
         switch self {
         case .resourceLink(let block): return block.description
         case .unknown(let block):
-            if case .string(let value)? = block.payload["description"] { return value }
+            if let value = Self.stringValue(from: block.payload["description"]) { return value }
             return nil
         default:
             return nil
@@ -788,7 +788,7 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
         switch self {
         case .resourceLink(let block): return block.size
         case .unknown(let block):
-            if case .number(let value)? = block.payload["size"] { return Int64(value) }
+            if let value = Self.numberValue(from: block.payload["size"]) { return Int64(value) }
             return nil
         default:
             return nil
@@ -799,14 +799,14 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
         switch self {
         case .resourceLink(let block): return block.title
         case .unknown(let block):
-            if case .string(let value)? = block.payload["title"] { return value }
+            if let value = Self.stringValue(from: block.payload["title"]) { return value }
             return nil
         default:
             return nil
         }
     }
 
-    public var resource: JSONValue? {
+    public var resource: AnyCodable? {
         switch self {
         case .resource(let block): return block.resource
         case .unknown(let block): return block.payload["resource"]
@@ -814,7 +814,7 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
         }
     }
 
-    public var annotations: JSONValue? {
+    public var annotations: AnyCodable? {
         switch self {
         case .text(let block): return block.annotations
         case .image(let block): return block.annotations
@@ -827,11 +827,11 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        let value = try container.decode(JSONValue.self)
-        guard case .object(let object) = value else {
+        let value = try container.decode(AnyCodable.self)
+        guard let object = try? value.decode(to: [String: AnyCodable].self) else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Content block must be an object")
         }
-        guard case .string(let type)? = object["type"] else {
+        guard let type = Self.decodeString(object, key: "type") else {
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Missing content block type")
         }
         switch type {
@@ -865,7 +865,7 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
             ))
         case "resource":
             self = .resource(.init(
-                resource: object["resource"] ?? .object([:]),
+                resource: object["resource"] ?? AnyCodable([String: AnyCodable]()),
                 annotations: object["annotations"]
             ))
         default:
@@ -876,27 +876,27 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
     }
 
     public func encode(to encoder: Encoder) throws {
-        var object: [String: JSONValue] = ["type": .string(type)]
+        var object: [String: AnyCodable] = ["type": AnyCodable(type)]
         switch self {
         case .text(let block):
-            object["text"] = .string(block.text)
+            object["text"] = AnyCodable(block.text)
             if let annotations = block.annotations { object["annotations"] = annotations }
         case .image(let block):
-            object["data"] = .string(block.data)
-            object["mimeType"] = .string(block.mimeType)
-            if let uri = block.uri { object["uri"] = .string(uri) }
+            object["data"] = AnyCodable(block.data)
+            object["mimeType"] = AnyCodable(block.mimeType)
+            if let uri = block.uri { object["uri"] = AnyCodable(uri) }
             if let annotations = block.annotations { object["annotations"] = annotations }
         case .audio(let block):
-            object["data"] = .string(block.data)
-            object["mimeType"] = .string(block.mimeType)
+            object["data"] = AnyCodable(block.data)
+            object["mimeType"] = AnyCodable(block.mimeType)
             if let annotations = block.annotations { object["annotations"] = annotations }
         case .resourceLink(let block):
-            object["name"] = .string(block.name)
-            object["uri"] = .string(block.uri)
-            if let description = block.description { object["description"] = .string(description) }
-            if let mimeType = block.mimeType { object["mimeType"] = .string(mimeType) }
-            if let size = block.size { object["size"] = .number(Double(size)) }
-            if let title = block.title { object["title"] = .string(title) }
+            object["name"] = AnyCodable(block.name)
+            object["uri"] = AnyCodable(block.uri)
+            if let description = block.description { object["description"] = AnyCodable(description) }
+            if let mimeType = block.mimeType { object["mimeType"] = AnyCodable(mimeType) }
+            if let size = block.size { object["size"] = AnyCodable(Double(size)) }
+            if let title = block.title { object["title"] = AnyCodable(title) }
             if let annotations = block.annotations { object["annotations"] = annotations }
         case .resource(let block):
             object["resource"] = block.resource
@@ -908,17 +908,39 @@ public enum ACPContentBlock: Codable, Sendable, Equatable {
         }
 
         var container = encoder.singleValueContainer()
-        try container.encode(JSONValue.object(object))
+        try container.encode(AnyCodable(object))
     }
 
-    private static func decodeString(_ object: [String: JSONValue], key: String) -> String? {
-        guard case .string(let value)? = object[key] else { return nil }
-        return value
+    private static func decodeString(_ object: [String: AnyCodable], key: String) -> String? {
+        stringValue(from: object[key])
     }
 
-    private static func decodeInt64(_ object: [String: JSONValue], key: String) -> Int64? {
-        guard case .number(let value)? = object[key] else { return nil }
+    private static func decodeInt64(_ object: [String: AnyCodable], key: String) -> Int64? {
+        guard let value = numberValue(from: object[key]) else { return nil }
         return Int64(value)
+    }
+
+    private static func stringValue(from value: AnyCodable?) -> String? {
+        value?.value as? String
+    }
+
+    private static func numberValue(from value: AnyCodable?) -> Double? {
+        guard let raw = value?.value else { return nil }
+        switch raw {
+        case let v as Double: return v
+        case let v as Float: return Double(v)
+        case let v as Int: return Double(v)
+        case let v as Int8: return Double(v)
+        case let v as Int16: return Double(v)
+        case let v as Int32: return Double(v)
+        case let v as Int64: return Double(v)
+        case let v as UInt: return Double(v)
+        case let v as UInt8: return Double(v)
+        case let v as UInt16: return Double(v)
+        case let v as UInt32: return Double(v)
+        case let v as UInt64: return Double(v)
+        default: return nil
+        }
     }
 }
 
@@ -1155,9 +1177,9 @@ public struct ACPSessionStopResult: Codable, Sendable, Equatable {
 }
 
 public struct ACPCancelRequestParams: Codable, Sendable, Equatable {
-    public var requestId: JSONRPCID
+    public var requestId: JSONRPC.ID
 
-    public init(requestId: JSONRPCID) {
+    public init(requestId: JSONRPC.ID) {
         self.requestId = requestId
     }
 }
@@ -1220,7 +1242,7 @@ public struct ACPToolCallTerminalContent: Codable, Sendable, Equatable {
 }
 
 public enum ACPToolCallContent: Codable, Sendable, Equatable {
-    case content(JSONValue)
+    case content(AnyCodable)
     case diff(ACPToolCallDiffContent)
     case terminal(ACPToolCallTerminalContent)
 
@@ -1238,7 +1260,7 @@ public enum ACPToolCallContent: Codable, Sendable, Equatable {
         let type = try container.decode(String.self, forKey: .type)
         switch type {
         case "content":
-            self = .content(try container.decode(JSONValue.self, forKey: .content))
+            self = .content(try container.decode(AnyCodable.self, forKey: .content))
         case "diff":
             self = .diff(
                 .init(
@@ -1291,8 +1313,8 @@ public struct ACPToolCallUpdate: Codable, Sendable, Equatable {
     public var status: ACPToolCallStatus?
     public var content: [ACPToolCallContent]?
     public var locations: [ACPToolCallLocation]?
-    public var rawInput: JSONValue?
-    public var rawOutput: JSONValue?
+    public var rawInput: AnyCodable?
+    public var rawOutput: AnyCodable?
 
     public init(
         toolCallId: String,
@@ -1301,8 +1323,8 @@ public struct ACPToolCallUpdate: Codable, Sendable, Equatable {
         status: ACPToolCallStatus? = nil,
         content: [ACPToolCallContent]? = nil,
         locations: [ACPToolCallLocation]? = nil,
-        rawInput: JSONValue? = nil,
-        rawOutput: JSONValue? = nil
+        rawInput: AnyCodable? = nil,
+        rawOutput: AnyCodable? = nil
     ) {
         self.toolCallId = toolCallId
         self.title = title
@@ -1886,18 +1908,32 @@ public struct ACPTerminalReleaseResult: Codable, Sendable, Equatable {
 }
 
 public enum ACPCodec {
-    public static func encodeParams<T: Encodable>(_ value: T) throws -> JSONValue {
+    public static func encodeParams<T: Encodable>(_ value: T) throws -> AnyCodable {
         try JSONRPCCodec.toValue(value)
     }
 
-    public static func decodeParams<T: Decodable>(_ value: JSONValue?, as type: T.Type = T.self) throws -> T {
+    public static func decodeParams<T: Decodable>(_ value: JSONRPC.Params?, as type: T.Type = T.self) throws -> T {
+        guard let value else {
+            throw NSError(domain: "ACPCodec", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing params"])
+        }
+        let any: AnyCodable
+        switch value {
+        case .object(let object):
+            any = AnyCodable(object)
+        case .array(let array):
+            any = AnyCodable(array)
+        }
+        return try JSONRPCCodec.fromValue(any, as: type)
+    }
+
+    public static func decodeParams<T: Decodable>(_ value: AnyCodable?, as type: T.Type = T.self) throws -> T {
         guard let value else {
             throw NSError(domain: "ACPCodec", code: 1, userInfo: [NSLocalizedDescriptionKey: "Missing params"])
         }
         return try JSONRPCCodec.fromValue(value, as: type)
     }
 
-    public static func decodeResult<T: Decodable>(_ value: JSONValue?, as type: T.Type = T.self) throws -> T {
+    public static func decodeResult<T: Decodable>(_ value: AnyCodable?, as type: T.Type = T.self) throws -> T {
         guard let value else {
             throw NSError(domain: "ACPCodec", code: 2, userInfo: [NSLocalizedDescriptionKey: "Missing result"])
         }

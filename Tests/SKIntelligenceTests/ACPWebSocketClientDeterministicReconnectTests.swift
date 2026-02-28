@@ -1,11 +1,12 @@
 import XCTest
+ import STJSON
+@testable import SKIACP
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 
 final class ACPWebSocketClientDeterministicReconnectTests: XCTestCase {
     func testSendRetriesWithReconnectUsingInjectedFactory() async throws {
         let endpoint = URL(string: "ws://unit.test/reconnect")!
-        let request = JSONRPCRequest(id: .int(1), method: "ping", params: .object([:]))
+        let request = JSONRPC.Request(id: .int(1), method: "ping", params: AnyCodable([String: AnyCodable]()))
         let message = try XCTUnwrap(String(data: JSONRPCCodec.encode(.request(request)), encoding: .utf8))
 
         let factory = ScriptedWebSocketFactory(
@@ -34,7 +35,7 @@ final class ACPWebSocketClientDeterministicReconnectTests: XCTestCase {
 
     func testReceiveRetriesWithReconnectUsingInjectedFactory() async throws {
         let endpoint = URL(string: "ws://unit.test/reconnect-receive")!
-        let response = JSONRPCResponse(id: .int(42), result: .object(["ok": .bool(true)]))
+        let response = JSONRPC.Response(id: .int(42), result: AnyCodable(["ok": AnyCodable(true)]))
         let payload = try JSONRPCCodec.encode(.response(response))
 
         let factory = ScriptedWebSocketFactory(
@@ -56,7 +57,13 @@ final class ACPWebSocketClientDeterministicReconnectTests: XCTestCase {
 
         try await client.connect()
         let received = try await client.receive()
-        XCTAssertEqual(received, .response(response))
+        guard case .response(let actual)? = received else {
+            return XCTFail("Expected response, got \(String(describing: received))")
+        }
+        XCTAssertEqual(actual.id, .int(42))
+        let resultObject = try XCTUnwrap(actual.result?.decode(to: [String: AnyCodable].self))
+        XCTAssertEqual(resultObject["ok"]?.value as? Bool, true)
+        XCTAssertNil(actual.error)
         await client.close()
     }
 }

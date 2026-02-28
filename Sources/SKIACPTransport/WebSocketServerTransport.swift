@@ -1,6 +1,7 @@
 import Foundation
 import Network
-import SKIJSONRPC
+import SKIACP
+@preconcurrency import STJSON
 
 public actor WebSocketServerTransport: ACPTransport {
     public struct Options: Sendable, Equatable {
@@ -13,7 +14,7 @@ public actor WebSocketServerTransport: ACPTransport {
 
     private struct ResponseRoute {
         let connectionID: ObjectIdentifier
-        let originalID: JSONRPCID
+        let originalID: JSONRPC.ID
         let method: String
     }
 
@@ -23,7 +24,7 @@ public actor WebSocketServerTransport: ACPTransport {
 
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: NWConnection] = [:]
-    private var responseRoutes: [JSONRPCID: ResponseRoute] = [:]
+    private var responseRoutes: [JSONRPC.ID: ResponseRoute] = [:]
     private var sessionOwners: [String: ObjectIdentifier] = [:]
     private var nextInternalRequestID: UInt64 = 1
     private var startContinuation: CheckedContinuation<Void, Error>?
@@ -253,10 +254,13 @@ private extension WebSocketServerTransport {
     func routeInboundMessage(_ message: JSONRPCMessage, from connectionID: ObjectIdentifier) -> JSONRPCMessage {
         switch message {
         case .request(let request):
-            let internalID = JSONRPCID.string("s2c-\(nextInternalRequestID)")
+            guard let originalID = request.id else {
+                return .notification(request)
+            }
+            let internalID = JSONRPC.ID.string("s2c-\(nextInternalRequestID)")
             nextInternalRequestID += 1
-            responseRoutes[internalID] = .init(connectionID: connectionID, originalID: request.id, method: request.method)
-            let routed = JSONRPCRequest(id: internalID, method: request.method, params: request.params)
+            responseRoutes[internalID] = .init(connectionID: connectionID, originalID: originalID, method: request.method)
+            let routed = JSONRPC.Request(id: internalID, method: request.method, params: request.paramsValue)
             return .request(routed)
         case .notification(let notification):
             return .notification(remapCancelRequestIfNeeded(notification, connectionID: connectionID))
@@ -265,64 +269,68 @@ private extension WebSocketServerTransport {
         }
     }
 
-    func remapCancelRequestIfNeeded(_ notification: JSONRPCNotification, connectionID: ObjectIdentifier) -> JSONRPCNotification {
+    func remapCancelRequestIfNeeded(_ notification: JSONRPC.Request, connectionID: ObjectIdentifier) -> JSONRPC.Request {
         guard notification.method == "$/cancel_request",
-              let params = notification.params,
-              case .object(var object) = params,
+              let paramsValue = notification.paramsValue,
+              var object = try? paramsValue.decode(to: [String: AnyCodable].self),
               let requestIDValue = object["requestId"],
               let originalID = jsonRPCID(from: requestIDValue),
               let internalID = internalRequestID(for: originalID, connectionID: connectionID) else {
             return notification
         }
         object["requestId"] = jsonValue(from: internalID)
-        return JSONRPCNotification(method: notification.method, params: .object(object))
+        return JSONRPC.Request(method: notification.method, params: AnyCodable(object))
     }
 
-    func internalRequestID(for originalID: JSONRPCID, connectionID: ObjectIdentifier) -> JSONRPCID? {
+    func internalRequestID(for originalID: JSONRPC.ID, connectionID: ObjectIdentifier) -> JSONRPC.ID? {
         for (internalID, route) in responseRoutes where route.connectionID == connectionID && route.originalID == originalID {
             return internalID
         }
         return nil
     }
 
-    func jsonRPCID(from value: JSONValue) -> JSONRPCID? {
-        switch value {
-        case .number(let number):
+    func jsonRPCID(from value: AnyCodable) -> JSONRPC.ID? {
+        if let number = numericDouble(from: value.value) {
             let rounded = number.rounded(.towardZero)
             guard rounded == number else { return nil }
             return .int(Int(rounded))
-        case .string(let string):
-            return .string(string)
-        default:
-            return nil
         }
+        if let string = value.value as? String {
+            return .string(string)
+        }
+        return nil
     }
 
-    func jsonValue(from id: JSONRPCID) -> JSONValue {
+    func jsonValue(from id: JSONRPC.ID) -> AnyCodable {
         switch id {
         case .int(let value):
-            return .number(Double(value))
+            return AnyCodable(Double(value))
         case .string(let value):
-            return .string(value)
+            return AnyCodable(value)
+        case .null:
+            return AnyCodable(nil as String?)
         }
     }
 
     func routedTargets(for message: JSONRPCMessage) throws -> [(NWConnection, JSONRPCMessage)] {
         switch message {
         case .response(let response):
-            if let route = responseRoutes.removeValue(forKey: response.id),
+            guard let responseID = response.id else {
+                throw ACPTransportError.notConnected
+            }
+            if let route = responseRoutes.removeValue(forKey: responseID),
                let connection = connections[route.connectionID] {
                 if (route.method == "session/new" || route.method == "session/fork"),
                    let sessionID = extractSessionIDFromResult(response.result) {
                     sessionOwners[sessionID] = route.connectionID
                 }
-                let restored = JSONRPCResponse(id: route.originalID, result: response.result, error: response.error)
+                let restored = JSONRPC.Response(id: route.originalID, result: response.result, error: response.error)
                 return [(connection, .response(restored))]
             }
             throw ACPTransportError.notConnected
         case .notification:
             if case .notification(let notification) = message,
-               let sessionID = extractSessionIDFromParams(notification.params),
+               let sessionID = extractSessionIDFromParams(notification.paramsValue),
                let ownerID = sessionOwners[sessionID],
                let connection = connections[ownerID] {
                 return [(connection, message)]
@@ -330,7 +338,7 @@ private extension WebSocketServerTransport {
             return connections.values.map { ($0, message) }
         case .request:
             if case .request(let request) = message,
-               let sessionID = extractSessionIDFromParams(request.params),
+               let sessionID = extractSessionIDFromParams(request.paramsValue),
                let ownerID = sessionOwners[sessionID],
                let connection = connections[ownerID] {
                 return [(connection, message)]
@@ -341,22 +349,46 @@ private extension WebSocketServerTransport {
 
     func removeConnection(_ connectionID: ObjectIdentifier) {
         connections.removeValue(forKey: connectionID)
-        responseRoutes = responseRoutes.filter { $0.value.connectionID != connectionID }
+        responseRoutes = responseRoutes.reduce(into: [:]) { partial, element in
+            if element.value.connectionID != connectionID {
+                partial[element.key] = element.value
+            }
+        }
         sessionOwners = sessionOwners.filter { $0.value != connectionID }
     }
 
-    func extractSessionIDFromParams(_ params: JSONValue?) -> String? {
-        guard let params, case .object(let object) = params, case .string(let sessionID)? = object["sessionId"] else {
-            return nil
-        }
-        return sessionID
+    func extractSessionIDFromParams(_ params: AnyCodable?) -> String? {
+        guard
+            let params,
+            let object = try? params.decode(to: [String: AnyCodable].self)
+        else { return nil }
+        return object["sessionId"]?.value as? String
     }
 
-    func extractSessionIDFromResult(_ result: JSONValue?) -> String? {
-        guard let result, case .object(let object) = result, case .string(let sessionID)? = object["sessionId"] else {
-            return nil
+    func extractSessionIDFromResult(_ result: AnyCodable?) -> String? {
+        guard
+            let result,
+            let object = try? result.decode(to: [String: AnyCodable].self)
+        else { return nil }
+        return object["sessionId"]?.value as? String
+    }
+
+    func numericDouble(from raw: Any) -> Double? {
+        switch raw {
+        case let value as Double: return value
+        case let value as Float: return Double(value)
+        case let value as Int: return Double(value)
+        case let value as Int8: return Double(value)
+        case let value as Int16: return Double(value)
+        case let value as Int32: return Double(value)
+        case let value as Int64: return Double(value)
+        case let value as UInt: return Double(value)
+        case let value as UInt8: return Double(value)
+        case let value as UInt16: return Double(value)
+        case let value as UInt32: return Double(value)
+        case let value as UInt64: return Double(value)
+        default: return nil
         }
-        return sessionID
     }
 
     func send(data: Data, to connection: NWConnection) async throws {

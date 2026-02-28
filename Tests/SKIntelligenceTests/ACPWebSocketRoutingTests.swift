@@ -1,6 +1,7 @@
 import XCTest
+import STJSON
+@testable import SKIACP
 @testable import SKIACPTransport
-@testable import SKIJSONRPC
 
 final class ACPWebSocketRoutingTests: XCTestCase {
     func testCancelRequestNotificationRequestIDIsRemappedToInternalID() async throws {
@@ -15,24 +16,24 @@ final class ACPWebSocketRoutingTests: XCTestCase {
             }
         }
 
-        let promptRequest = JSONRPCRequest(
+        let promptRequest = JSONRPC.Request(
             id: .int(3),
             method: "session/prompt",
-            params: .object(["sessionId": .string("sess_1")])
+            params: AnyCodable(["sessionId": AnyCodable("sess_1")])
         )
         try await clientTransport.send(.request(promptRequest))
 
         guard case .request(let routedPrompt)? = try await serverTransport.receive() else {
             return XCTFail("Expected routed request")
         }
-        guard case .string(let internalIDText) = routedPrompt.id else {
+        guard case .string(let internalIDText)? = routedPrompt.id else {
             return XCTFail("Expected internal request id to be string")
         }
         XCTAssertTrue(internalIDText.hasPrefix("s2c-"))
 
-        let cancelNotification = JSONRPCNotification(
+        let cancelNotification = JSONRPC.Request(
             method: "$/cancel_request",
-            params: .object(["requestId": .number(3)])
+            params: AnyCodable(["requestId": AnyCodable(Double(3))])
         )
         try await clientTransport.send(.notification(cancelNotification))
 
@@ -42,7 +43,7 @@ final class ACPWebSocketRoutingTests: XCTestCase {
         guard case .object(let routedParams)? = routedCancel.params else {
             return XCTFail("Expected cancel_request params object")
         }
-        guard case .string(let routedRequestID)? = routedParams["requestId"] else {
+        guard let routedRequestID = routedParams["requestId"]?.value as? String else {
             return XCTFail("Expected remapped requestId string")
         }
         XCTAssertEqual(routedRequestID, internalIDText)
@@ -60,9 +61,9 @@ final class ACPWebSocketRoutingTests: XCTestCase {
             }
         }
 
-        let cancelNotification = JSONRPCNotification(
+        let cancelNotification = JSONRPC.Request(
             method: "$/cancel_request",
-            params: .object(["requestId": .number(42)])
+            params: AnyCodable(["requestId": AnyCodable(Double(42))])
         )
         try await clientTransport.send(.notification(cancelNotification))
 
@@ -72,7 +73,7 @@ final class ACPWebSocketRoutingTests: XCTestCase {
         guard case .object(let routedParams)? = routedCancel.params else {
             return XCTFail("Expected cancel_request params object")
         }
-        guard case .number(let routedRequestID)? = routedParams["requestId"] else {
+        guard let routedRequestID = numericDouble(from: routedParams["requestId"]?.value) else {
             return XCTFail("Expected original numeric requestId")
         }
         XCTAssertEqual(routedRequestID, 42)
@@ -90,24 +91,24 @@ final class ACPWebSocketRoutingTests: XCTestCase {
             }
         }
 
-        let promptRequest = JSONRPCRequest(
+        let promptRequest = JSONRPC.Request(
             id: .string("prompt-a"),
             method: "session/prompt",
-            params: .object(["sessionId": .string("sess_1")])
+            params: AnyCodable(["sessionId": AnyCodable("sess_1")])
         )
         try await clientTransport.send(.request(promptRequest))
 
         guard case .request(let routedPrompt)? = try await serverTransport.receive() else {
             return XCTFail("Expected routed request")
         }
-        guard case .string(let internalIDText) = routedPrompt.id else {
+        guard case .string(let internalIDText)? = routedPrompt.id else {
             return XCTFail("Expected internal request id to be string")
         }
         XCTAssertTrue(internalIDText.hasPrefix("s2c-"))
 
-        let cancelNotification = JSONRPCNotification(
+        let cancelNotification = JSONRPC.Request(
             method: "$/cancel_request",
-            params: .object(["requestId": .string("prompt-a")])
+            params: AnyCodable(["requestId": AnyCodable("prompt-a")])
         )
         try await clientTransport.send(.notification(cancelNotification))
 
@@ -117,9 +118,27 @@ final class ACPWebSocketRoutingTests: XCTestCase {
         guard case .object(let routedParams)? = routedCancel.params else {
             return XCTFail("Expected cancel_request params object")
         }
-        guard case .string(let routedRequestID)? = routedParams["requestId"] else {
+        guard let routedRequestID = routedParams["requestId"]?.value as? String else {
             return XCTFail("Expected remapped requestId string")
         }
         XCTAssertEqual(routedRequestID, internalIDText)
+    }
+
+    private func numericDouble(from raw: Any?) -> Double? {
+        switch raw {
+        case let value as Double: return value
+        case let value as Float: return Double(value)
+        case let value as Int: return Double(value)
+        case let value as Int8: return Double(value)
+        case let value as Int16: return Double(value)
+        case let value as Int32: return Double(value)
+        case let value as Int64: return Double(value)
+        case let value as UInt: return Double(value)
+        case let value as UInt8: return Double(value)
+        case let value as UInt16: return Double(value)
+        case let value as UInt32: return Double(value)
+        case let value as UInt64: return Double(value)
+        default: return nil
+        }
     }
 }
