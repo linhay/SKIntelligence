@@ -246,11 +246,13 @@ import Testing
 
         /// Default client configuration for game tests
         private var client: OpenAIClient {
-            OpenAIClient()
-                .model("nex-agi/deepseek-v3.1-nex-n1:free")
-                .model("xiaomi/mimo-v2-flash:free")
-                .token(Keys.openrouter)
-                .url(.openrouter)
+            OpenAIClient().profiles([
+                .init(
+                    url: URL(string: OpenAIClient.EmbeddedURL.openrouter.rawValue)!,
+                    token: Keys.openrouter,
+                    model: "xiaomi/mimo-v2-flash:free"
+                )
+            ])
         }
 
         private var transcript: SKITranscript {

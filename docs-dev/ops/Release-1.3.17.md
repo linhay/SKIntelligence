@@ -43,8 +43,13 @@ import SKIClients
 import SKIntelligence
 
 let client = OpenAIClient()
-    .token(ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "")
-    .model("gpt-4o-mini")
+    .profiles([
+        .init(
+            url: URL(string: OpenAIClient.EmbeddedURL.openai.rawValue)!,
+            token: ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? "",
+            model: "gpt-4o-mini"
+        )
+    ])
 
 let response = try await client.respond(
     ChatRequestBody(

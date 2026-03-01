@@ -11,10 +11,13 @@ import SKIClients
     guard ProcessInfo.processInfo.environment["RUN_LIVE_PROVIDER_TESTS"] == "1" else {
         return
     }
-    let client = OpenAIClient()
-        .model(.deepseek_chat)
-        .token(Keys.deepseek)
-        .url(.deepseek)
+    let client = OpenAIClient().profiles([
+        .init(
+            url: URL(string: OpenAIClient.EmbeddedURL.deepseek.rawValue)!,
+            token: Keys.deepseek,
+            model: OpenAIClient.EmbeddedModel.deepseek_chat.rawValue
+        )
+    ])
     let session = SKILanguageModelSession(client: client,
                                           tools: [
                                             SKIToolLocalDate(),

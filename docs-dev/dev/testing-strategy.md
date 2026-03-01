@@ -199,3 +199,20 @@
   - `swift test --filter ChatResponseBodyCompatibilityTests`
   - `swift test --filter OpenAIClientDecodingDiagnosticsTests`
   - `swift test --filter "SKIAgentSessionTests|SKIStreamingTests"`（回归工具调用与流式路径）
+
+## Token Usage Tracking 测试策略（2026-03-01）
+
+- 目标：保证会话级 token 统计在同步/流式链路一致且可回归。
+- 覆盖文件：`Tests/SKIntelligenceTests/SKITokenUsageTrackingTests.swift`
+
+核心场景：
+1. 单次非流式响应累计 usage。
+2. 工具调用触发多轮 `respond` 时累计总和正确。
+3. 流式最终 usage chunk 能被累计。
+4. `resetTokenUsage()` 后归零。
+5. `SKIAgentSession.stats().tokenUsage` 能透传会话累计。
+
+回归建议：
+- `swift test --filter SKITokenUsageTrackingTests`
+- `swift test --filter SKIStreamingTests`
+- `swift test --filter SKIAgentSessionTests`

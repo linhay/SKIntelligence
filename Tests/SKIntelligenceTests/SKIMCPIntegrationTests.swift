@@ -24,9 +24,13 @@ final class SKIMCPIntegrationTests: XCTestCase {
         // Since we don't have a live MCP server, we can't fully integration test the tool call.
 
         // Create a dummy client using Builder Pattern
-        let client = OpenAIClient()
-            .token("test")
-            .model("gpt-4")
+        let client = OpenAIClient().profiles([
+            .init(
+                url: URL(string: OpenAIClient.EmbeddedURL.openai.rawValue)!,
+                token: "test",
+                model: "gpt-4"
+            )
+        ])
         let session = SKILanguageModelSession(client: client)
 
         // We can't init SKIMCPTool directly without a valid SKIMCPClient, which needs an endpoint.

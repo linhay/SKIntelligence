@@ -25,12 +25,13 @@ struct MedicalReportTests {
     let imageURL = URL(string: "https://img1p.dxycdn.com/p/s115/2025/1022/933/8212768101915001891.jpg%21q70?Expires=1766569966&OSSAccessKeyId=LTAI5t8gdqA59d55WCEDtWsJ&Signature=WWSuDHoN7UeyhiTy%2FidyGodTs4Q%3D")
     
     // 配置客户端
-    let client = OpenAIClient()
-        .model("google/gemma-3-27b-it:free")
-        .model("qwen/qwen-2.5-vl-7b-instruct:free")
-        .model("nvidia/nemotron-nano-12b-v2-vl:free")
-        .token(Keys.openrouter)
-        .url(.openrouter)
+    let client = OpenAIClient().profiles([
+        .init(
+            url: URL(string: OpenAIClient.EmbeddedURL.openrouter.rawValue)!,
+            token: Keys.openrouter,
+            model: "nvidia/nemotron-nano-12b-v2-vl:free"
+        )
+    ])
 //        .model(.gemini_2_5_flash)
 //        .token(Keys.google)
 //        .url(.gemini)

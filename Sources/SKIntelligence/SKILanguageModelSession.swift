@@ -19,6 +19,12 @@ public actor SKILanguageModelSession: SKIChatSection {
 
     private var tools = [String: any SKITool]()
     private var mcpTools = [String: SKIMCPTool]()
+    private var tokenPromptTokens = 0
+    private var tokenCompletionTokens = 0
+    private var tokenTotalTokens = 0
+    private var tokenReasoningTokens = 0
+    private var tokenRequestsCount = 0
+    private var tokenUsageUpdatedAt: Date?
 
     public init(
         client: SKILanguageModelClient,
@@ -37,6 +43,26 @@ public actor SKILanguageModelSession: SKIChatSection {
 // MARK: - Public API
 
 extension SKILanguageModelSession {
+
+    public func tokenUsageSnapshot() -> SKITokenUsageSnapshot {
+        .init(
+            promptTokens: tokenPromptTokens,
+            completionTokens: tokenCompletionTokens,
+            totalTokens: tokenTotalTokens,
+            reasoningTokens: tokenReasoningTokens,
+            requestsCount: tokenRequestsCount,
+            updatedAt: tokenUsageUpdatedAt
+        )
+    }
+
+    public func resetTokenUsage() {
+        tokenPromptTokens = 0
+        tokenCompletionTokens = 0
+        tokenTotalTokens = 0
+        tokenReasoningTokens = 0
+        tokenRequestsCount = 0
+        tokenUsageUpdatedAt = nil
+    }
 
     /// Responds to a simple string prompt.
     public nonisolated func respond(to prompt: String) async throws -> sending String {
@@ -120,6 +146,7 @@ extension SKILanguageModelSession {
         var body = ChatRequestBody(messages: [])
         body.messages = try await transcript.messages()
         body.tools = enabledTools()
+        body.streamOptions = .init(includeUsage: true)
 
         var shouldContinue = true
 
@@ -132,6 +159,8 @@ extension SKILanguageModelSession {
 
             // Process the stream
             for try await chunk in rawStream {
+                mergeUsage(chunk.usage)
+
                 // Accumulate tool call deltas
                 if let deltas = chunk.toolCallDeltas {
                     for delta in deltas {
@@ -356,6 +385,7 @@ extension SKILanguageModelSession {
         body.tools = enabledTools()
         try await beforeRequests?(&body)
         var response = try await client.respond(body)
+        mergeUsage(response.content.usage)
         var responseMessage: ChoiceMessage?
 
         while responseMessage == nil {
@@ -418,6 +448,7 @@ extension SKILanguageModelSession {
                 body.tools = enabledTools()
                 body.messages = try await transcript.messages()
                 response = try await client.respond(body)
+                mergeUsage(response.content.usage)
             } else {
                 responseMessage = message
             }
@@ -455,6 +486,16 @@ extension SKILanguageModelSession {
             reasoningContent: reasoningContent,
             role: message.role
         )
+    }
+
+    private func mergeUsage(_ usage: ChatUsage?) {
+        guard let usage else { return }
+        tokenPromptTokens += usage.promptTokens ?? 0
+        tokenCompletionTokens += usage.completionTokens ?? 0
+        tokenTotalTokens += usage.totalTokens ?? 0
+        tokenReasoningTokens += usage.completionTokensDetails?.reasoningTokens ?? 0
+        tokenRequestsCount += 1
+        tokenUsageUpdatedAt = Date()
     }
 
 }

@@ -35,6 +35,9 @@ public struct SKIResponseChunk: Sendable {
     /// References from search tools (title, url pairs)
     public let references: [SKIReference]?
 
+    /// Usage statistics for the request when available (typically final usage chunk in streaming)
+    public let usage: ChatUsage?
+
     public init(
         text: String? = nil,
         reasoning: String? = nil,
@@ -43,7 +46,8 @@ public struct SKIResponseChunk: Sendable {
         toolResults: [SKIToolResult]? = nil,
         finishReason: String? = nil,
         role: String? = nil,
-        references: [SKIReference]? = nil
+        references: [SKIReference]? = nil,
+        usage: ChatUsage? = nil
     ) {
         self.text = text
         self.reasoning = reasoning
@@ -53,6 +57,7 @@ public struct SKIResponseChunk: Sendable {
         self.finishReason = finishReason
         self.role = role
         self.references = references
+        self.usage = usage
     }
 
     /// Create from a streaming delta (includes raw tool call deltas)
@@ -65,11 +70,20 @@ public struct SKIResponseChunk: Sendable {
         self.finishReason = finishReason
         self.role = delta.role
         self.references = nil
+        self.usage = nil
     }
 
     /// Create from a complete stream choice
-    public init(from choice: StreamChoice) {
-        self.init(from: choice.delta, finishReason: choice.finishReason)
+    public init(from choice: StreamChoice, usage: ChatUsage? = nil) {
+        self.text = choice.delta.content
+        self.reasoning = choice.delta.reasoningContent
+        self.toolCallDeltas = choice.delta.toolCalls
+        self.toolRequests = nil
+        self.toolResults = nil
+        self.finishReason = choice.finishReason
+        self.role = choice.delta.role
+        self.references = nil
+        self.usage = usage
     }
 }
 

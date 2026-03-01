@@ -100,12 +100,54 @@ public class OpenAIClient: SKILanguageModelClient, Sendable {
         case gemini_2_5_flash_lite = "gemini-2.5-flash-lite"
     }
 
+    public struct EndpointProfile: Sendable {
+        public var url: URL
+        public var token: String?
+        public var model: String
+        public var headerFields: HTTPFields
+
+        public init(
+            url: URL,
+            token: String? = nil,
+            model: String,
+            headerFields: HTTPFields = .init()
+        ) {
+            self.url = url
+            self.token = token
+            self.model = model
+            self.headerFields = headerFields
+        }
+    }
+
     // MARK: - Properties
 
-    public var token: String = ""
-    public var url: URL = URL(string: EmbeddedURL.openai.rawValue)!
-    public var model: String = ""
-    public var headerFields: HTTPFields = .init()
+    public var profiles: [EndpointProfile] = [
+        .init(url: URL(string: EmbeddedURL.openai.rawValue)!, token: nil, model: "")
+    ]
+
+    @available(*, deprecated, message: "Use profiles[0].token")
+    public var token: String {
+        get { profiles.first?.token ?? "" }
+        set { ensureFirstProfile(); profiles[0].token = newValue }
+    }
+
+    @available(*, deprecated, message: "Use profiles[0].url")
+    public var url: URL {
+        get { profiles.first?.url ?? URL(string: EmbeddedURL.openai.rawValue)! }
+        set { ensureFirstProfile(); profiles[0].url = newValue }
+    }
+
+    @available(*, deprecated, message: "Use profiles[0].model")
+    public var model: String {
+        get { profiles.first?.model ?? "" }
+        set { ensureFirstProfile(); profiles[0].model = newValue }
+    }
+
+    @available(*, deprecated, message: "Use profiles[0].headerFields")
+    public var headerFields: HTTPFields {
+        get { profiles.first?.headerFields ?? .init() }
+        set { ensureFirstProfile(); profiles[0].headerFields = newValue }
+    }
     public var session: Session
 
     /// Request timeout in seconds (default: 600 seconds / 10 minutes)
@@ -137,19 +179,23 @@ public class OpenAIClient: SKILanguageModelClient, Sendable {
         -> sending SKIResponse<ChatResponseBody>
     {
         var lastError: Error?
-        var body = body
-        body.model = model
-        body.stream = false
+        let candidateProfiles = try configuredProfiles()
+        let totalAttempts = max(retryConfiguration.maxRetries + 1, candidateProfiles.count)
 
-        for attempt in 0...retryConfiguration.maxRetries {
+        for attempt in 0..<totalAttempts {
             do {
                 try Task.checkCancellation()
-                return try await performRequest(body)
+                let profile = candidateProfiles[attempt % candidateProfiles.count]
+                var requestBody = body
+                requestBody.model = profile.model
+                requestBody.stream = false
+                return try await performRequest(requestBody, profile: profile)
             } catch {
                 lastError = error
 
                 // Check if we should retry
-                if attempt < retryConfiguration.maxRetries && shouldRetry(error: error) {
+                let hasNextAttempt = attempt < (totalAttempts - 1)
+                if hasNextAttempt && shouldRetry(error: error) {
                     let delay = retryConfiguration.delay(forAttempt: attempt)
                     try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                     continue
@@ -167,17 +213,14 @@ public class OpenAIClient: SKILanguageModelClient, Sendable {
 
     // MARK: - Private Methods
 
-    private func performRequest(_ body: ChatRequestBody) async throws -> SKIResponse<
+    private func performRequest(_ body: ChatRequestBody, profile: EndpointProfile) async throws -> SKIResponse<
         ChatResponseBody
     > {
         let bodyData = try JSONEncoder().encode(body)
-        var httpHeaders = HTTPHeaders()
-        for field in headerFields {
-            httpHeaders.add(name: field.name.rawName, value: field.value)
-        }
+        let httpHeaders = buildHTTPHeaders(profile: profile)
 
         let request = session.request(
-            url,
+            profile.url,
             method: .post,
             headers: httpHeaders
         ) { urlRequest in
@@ -214,8 +257,8 @@ public class OpenAIClient: SKILanguageModelClient, Sendable {
             throw Self.enrichDecodingError(
                 decodingError,
                 data: data,
-                model: model,
-                url: url
+                model: profile.model,
+                url: profile.url
             )
         }
     }
@@ -235,6 +278,15 @@ public class OpenAIClient: SKILanguageModelClient, Sendable {
                 default:
                     return false
                 }
+            }
+        }
+
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut, .networkConnectionLost, .notConnectedToInternet:
+                return true
+            default:
+                return false
             }
         }
 
@@ -336,18 +388,100 @@ public class OpenAIClient: SKILanguageModelClient, Sendable {
     // MARK: - Streaming
 
     public func streamingRespond(_ body: ChatRequestBody) async throws -> SKIResponseStream {
-        var body = body
-        body.model = model
-        body.stream = true
+        let candidateProfiles = try configuredProfiles()
 
-        let bodyData = try JSONEncoder().encode(body)
+        return SKIResponseStream {
+            AsyncThrowingStream { continuation in
+                Task { [self] in
+                    var lastError: Error?
+                    for (index, profile) in candidateProfiles.enumerated() {
+                        var requestBody = body
+                        requestBody.model = profile.model
+                        requestBody.stream = true
+                        var receivedAnyChunk = false
+                        do {
+                            let stream = try self.makeRawStreamChunkStream(
+                                body: requestBody,
+                                profile: profile
+                            )
+                            for try await chunk in stream {
+                                receivedAnyChunk = true
+                                if chunk.choices.isEmpty, let usage = chunk.usage {
+                                    continuation.yield(SKIResponseChunk(usage: usage))
+                                }
+                                for choice in chunk.choices {
+                                    continuation.yield(SKIResponseChunk(from: choice, usage: chunk.usage))
+                                }
+                            }
+                            continuation.finish()
+                            return
+                        } catch {
+                            lastError = error
+                            let hasNextProfile = index + 1 < candidateProfiles.count
+                            if hasNextProfile && !receivedAnyChunk && self.shouldRetry(error: error) {
+                                continue
+                            }
+                            continuation.finish(throwing: error)
+                            return
+                        }
+                    }
+                    continuation.finish(
+                        throwing: lastError
+                            ?? SKIToolError.invalidArguments("OpenAIClient.profiles is empty")
+                    )
+                }
+            }
+        }
+    }
 
-        var request = URLRequest(url: url)
+    private func configuredProfiles() throws -> [EndpointProfile] {
+        if profiles.isEmpty {
+            throw SKIToolError.invalidArguments("OpenAIClient.profiles is empty")
+        }
+        return profiles
+    }
+
+    private func ensureFirstProfile() {
+        if profiles.isEmpty {
+            profiles = [
+                .init(
+                    url: URL(string: EmbeddedURL.openai.rawValue)!,
+                    token: nil,
+                    model: ""
+                )
+            ]
+        }
+    }
+
+    private func buildHTTPHeaders(profile: EndpointProfile) -> HTTPHeaders {
+        var fields = profile.headerFields
+        if fields[.authorization] == nil, let token = profile.token, !token.isEmpty {
+            fields[.authorization] = "Bearer \(token)"
+        }
+        if fields[.contentType] == nil {
+            fields[.contentType] = "application/json"
+        }
+
+        var headers = HTTPHeaders()
+        for field in fields {
+            headers.add(name: field.name.rawName, value: field.value)
+        }
+        return headers
+    }
+
+    private func makeStreamingRequest(profile: EndpointProfile, bodyData: Data) -> URLRequest {
+        var request = URLRequest(url: profile.url)
         request.httpMethod = "POST"
         request.httpBody = bodyData
 
-        for field in headerFields {
+        for field in profile.headerFields {
             request.setValue(field.value, forHTTPHeaderField: field.name.rawName)
+        }
+        if request.value(forHTTPHeaderField: "Authorization") == nil,
+            let token = profile.token,
+            !token.isEmpty
+        {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
@@ -356,50 +490,50 @@ public class OpenAIClient: SKILanguageModelClient, Sendable {
             request.timeoutInterval = timeout
         }
 
-        let finalRequest = request
+        return request
+    }
 
-        return SKIResponseStream {
-            AsyncThrowingStream { continuation in
-                let eventSource = EventSource(request: finalRequest)
-                let decoder = JSONDecoder()
+    private func makeRawStreamChunkStream(
+        body: ChatRequestBody,
+        profile: EndpointProfile
+    ) throws -> AsyncThrowingStream<ChatStreamResponseChunk, Error> {
+        let bodyData = try JSONEncoder().encode(body)
+        let request = makeStreamingRequest(profile: profile, bodyData: bodyData)
 
-                eventSource.onOpen = { @Sendable in
-                    // Connection opened
+        return AsyncThrowingStream { continuation in
+            let decoder = JSONDecoder()
+            let eventSource = EventSource(request: request)
+
+            eventSource.onOpen = { @Sendable in
+                // Connection opened
+            }
+
+            eventSource.onError = { @Sendable error in
+                if let error {
+                    continuation.finish(throwing: error)
                 }
+            }
 
-                eventSource.onError = { @Sendable error in
-                    if let error {
-                        continuation.finish(throwing: error)
-                    } else {
-                        // Reconnection attempt or close
-                    }
-                }
-
-                eventSource.onMessage = { @Sendable event in
-                    if event.data == "[DONE]" {
-                        await eventSource.close()
-                        continuation.finish()
-                        return
-                    }
-
-                    guard let jsonData = event.data.data(using: .utf8),
-                        let chunk = try? decoder.decode(
-                            ChatStreamResponseChunk.self, from: jsonData)
-                    else {
-                        return
-                    }
-
-                    for choice in chunk.choices {
-                        continuation.yield(SKIResponseChunk(from: choice))
-                    }
-                }
-
-                // Connect implicitly via init
-
-                continuation.onTermination = { @Sendable _ in
+            eventSource.onMessage = { @Sendable event in
+                if event.data == "[DONE]" {
                     Task {
                         await eventSource.close()
                     }
+                    continuation.finish()
+                    return
+                }
+
+                guard let jsonData = event.data.data(using: .utf8),
+                    let chunk = try? decoder.decode(ChatStreamResponseChunk.self, from: jsonData)
+                else {
+                    return
+                }
+                continuation.yield(chunk)
+            }
+
+            continuation.onTermination = { @Sendable _ in
+                Task {
+                    await eventSource.close()
                 }
             }
         }
@@ -410,33 +544,82 @@ public class OpenAIClient: SKILanguageModelClient, Sendable {
 
 extension OpenAIClient {
 
+    public func profiles(_ values: [EndpointProfile]) -> OpenAIClient {
+        self.profiles = values
+        return self
+    }
+
+    public func addProfile(_ value: EndpointProfile) -> OpenAIClient {
+        profiles.append(value)
+        return self
+    }
+
+    @available(*, deprecated, message: "Use profiles(_:) / addProfile(_:)")
     public func url(_ value: String) throws -> OpenAIClient {
         if let url = URL(string: value) {
-            self.url = url
+            ensureFirstProfile()
+            profiles[0].url = url
         } else {
             throw URLError(.badURL)
         }
         return self
     }
 
+    @available(*, deprecated, message: "Use profiles(_:) / addProfile(_:)")
     public func url(_ value: EmbeddedURL) -> OpenAIClient {
         return try! url(value.rawValue)
     }
 
+    @available(*, deprecated, message: "Use profiles(_:) / addProfile(_:)")
+    public func fallbackURLs(_ values: [URL]) -> OpenAIClient {
+        ensureFirstProfile()
+        let first = profiles[0]
+        let mapped = values.map {
+            EndpointProfile(
+                url: $0,
+                token: first.token,
+                model: first.model,
+                headerFields: first.headerFields
+            )
+        }
+        profiles = [first] + mapped
+        return self
+    }
+
+    @available(*, deprecated, message: "Use profiles(_:) / addProfile(_:)")
+    public func fallbackURLs(_ values: [String]) throws -> OpenAIClient {
+        let urls = try values.map { value -> URL in
+            guard let url = URL(string: value) else {
+                throw URLError(.badURL)
+            }
+            return url
+        }
+        return fallbackURLs(urls)
+    }
+
+    @available(*, deprecated, message: "Use profiles(_:) / addProfile(_:)")
+    public func addFallbackURL(_ value: URL) -> OpenAIClient {
+        return fallbackURLs((profiles.dropFirst().map(\.url)) + [value])
+    }
+
+    @available(*, deprecated, message: "Use profiles(_:) / addProfile(_:)")
     public func token(_ value: String) -> OpenAIClient {
-        self.token = value
-        headerFields[.contentType] = "application/json"
-        headerFields[.authorization] = "Bearer \(token)"
+        ensureFirstProfile()
+        profiles[0].token = value
         return self
     }
 
+    @available(*, deprecated, message: "Use profiles(_:) / addProfile(_:)")
     public func model(_ value: String) -> OpenAIClient {
-        self.model = value
+        ensureFirstProfile()
+        profiles[0].model = value
         return self
     }
 
+    @available(*, deprecated, message: "Use profiles(_:) / addProfile(_:)")
     public func model(_ value: EmbeddedModel) -> OpenAIClient {
-        self.model = value.rawValue
+        ensureFirstProfile()
+        profiles[0].model = value.rawValue
         return self
     }
 

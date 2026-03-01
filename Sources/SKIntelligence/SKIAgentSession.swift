@@ -83,6 +83,7 @@ public actor SKIAgentSession {
         public var pendingMessages: Int
         public var lastUpdatedAt: Date?
         public var pendingBreakdown: PendingBreakdown
+        public var tokenUsage: SKITokenUsageSnapshot
 
         public init(
             sessionId: String,
@@ -93,7 +94,8 @@ public actor SKIAgentSession {
             totalEntries: Int,
             pendingMessages: Int,
             lastUpdatedAt: Date?,
-            pendingBreakdown: PendingBreakdown
+            pendingBreakdown: PendingBreakdown,
+            tokenUsage: SKITokenUsageSnapshot
         ) {
             self.sessionId = sessionId
             self.userMessages = userMessages
@@ -104,6 +106,7 @@ public actor SKIAgentSession {
             self.pendingMessages = pendingMessages
             self.lastUpdatedAt = lastUpdatedAt
             self.pendingBreakdown = pendingBreakdown
+            self.tokenUsage = tokenUsage
         }
     }
 
@@ -377,6 +380,7 @@ public actor SKIAgentSession {
         let transcript = await modelSession.transcript
         let entries = await transcript.entries
         let lastUpdatedAt = await transcript.lastUpdatedAt
+        let tokenUsage = await modelSession.tokenUsageSnapshot()
         var userMessages = 0
         var assistantMessages = 0
         var toolCalls = 0
@@ -433,7 +437,8 @@ public actor SKIAgentSession {
                 promptFollowUp: promptFollowUpPending,
                 steer: steerPending,
                 followUp: followUpPending
-            )
+            ),
+            tokenUsage: tokenUsage
         )
     }
 
