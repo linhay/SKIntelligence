@@ -7,6 +7,9 @@ import SKIACPTransport
 import SKICLIShared
 import SKIACP
 import SKIntelligence
+#if canImport(SKIMLXClient)
+import SKIMLXClient
+#endif
 
 typealias CLIError = SKICLIValidationError
 
@@ -46,6 +49,11 @@ enum CLIServePermissionMode: String, ExpressibleByArgument {
         case .required: return .required
         }
     }
+}
+
+enum CLIServeModelProvider: String, ExpressibleByArgument {
+    case echo
+    case mlx
 }
 
 enum CLIClientPermissionDecision: String, ExpressibleByArgument {
@@ -107,6 +115,27 @@ struct ACPServeCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Permission request timeout in milliseconds")
     var permissionTimeoutMS: Int = 10_000
 
+    @Option(name: [.customLong("model-provider")], help: "Language model provider: echo | mlx")
+    var modelProvider: CLIServeModelProvider = .echo
+
+    @Option(name: [.customLong("mlx-model-id")], help: "MLX model ID for --model-provider mlx")
+    var mlxModelID: String = "mlx-community/Qwen3-4B-4bit"
+
+    @Option(name: [.customLong("mlx-revision")], help: "MLX model revision for --model-provider mlx")
+    var mlxRevision: String = "main"
+
+    @Flag(name: [.customLong("mlx-disable-tool-call")], help: "Disable MLX tool calling")
+    var mlxDisableToolCall: Bool = false
+
+    @Option(name: [.customLong("mlx-request-timeout-ms")], help: "MLX request timeout in milliseconds")
+    var mlxRequestTimeoutMS: Int = 300_000
+
+    @Option(name: [.customLong("mlx-seed")], help: "Default MLX seed for deterministic sampling")
+    var mlxSeed: Int?
+
+    @Option(name: [.customLong("mlx-stop")], parsing: .upToNextOption, help: "Default MLX stop sequence(s), repeatable")
+    var mlxStop: [String] = []
+
     private func hasExplicitOption(_ option: String) -> Bool {
         CommandLine.arguments.contains { arg in
             arg == option || arg.hasPrefix("\(option)=")
@@ -136,6 +165,27 @@ struct ACPServeCommand: AsyncParsableCommand {
         }
         if permissionTimeoutMS < 0 {
             fputs("Error: --permission-timeout-ms must be >= 0\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+        }
+        if modelProvider == .mlx {
+#if !canImport(SKIMLXClient)
+            fputs("Error: --model-provider mlx is unavailable on this platform\n", stderr)
+            throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+#endif
+        }
+        if modelProvider != .mlx {
+            if hasExplicitOption("--mlx-model-id")
+                || hasExplicitOption("--mlx-revision")
+                || hasExplicitOption("--mlx-disable-tool-call")
+                || hasExplicitOption("--mlx-request-timeout-ms")
+                || hasExplicitOption("--mlx-seed")
+                || hasExplicitOption("--mlx-stop")
+            {
+                fputs("Error: --mlx-* options are only valid when --model-provider is mlx\n", stderr)
+                throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
+            }
+        } else if mlxRequestTimeoutMS < 0 {
+            fputs("Error: --mlx-request-timeout-ms must be >= 0\n", stderr)
             throw ExitCode(Int32(SKICLIExitCode.invalidInput.rawValue))
         }
         if maxInFlightSends <= 0 {
@@ -188,10 +238,45 @@ struct ACPServeCommand: AsyncParsableCommand {
                     }
                 }
             )
+            let serveModelProvider = modelProvider
+            let serveMLXModelID = mlxModelID
+            let serveMLXRevision = mlxRevision
+            let serveMLXToolCallEnabled = !mlxDisableToolCall
+            let serveMLXRequestTimeoutSeconds = Double(mlxRequestTimeoutMS) / 1000
+            let serveMLXSeed = mlxSeed
+            let serveMLXStop = mlxStop
+#if canImport(SKIMLXClient)
+            let sharedMLXClient: MLXClient? = if serveModelProvider == .mlx {
+                MLXClient(
+                    configuration: .init(
+                        modelID: serveMLXModelID,
+                        revision: serveMLXRevision,
+                        toolCallEnabled: serveMLXToolCallEnabled,
+                        requestTimeout: serveMLXRequestTimeoutSeconds,
+                        defaultSeed: serveMLXSeed,
+                        defaultStop: serveMLXStop
+                    )
+                )
+            } else {
+                nil
+            }
+#endif
 
             let service = ACPAgentService(
                 sessionFactory: {
-                    SKILanguageModelSession(client: EchoLanguageModelClient())
+                    switch serveModelProvider {
+                    case .echo:
+                        return SKILanguageModelSession(client: EchoLanguageModelClient())
+                    case .mlx:
+#if canImport(SKIMLXClient)
+                        guard let sharedMLXClient else {
+                            return SKILanguageModelSession(client: EchoLanguageModelClient())
+                        }
+                        return SKILanguageModelSession(client: sharedMLXClient)
+#else
+                        return SKILanguageModelSession(client: EchoLanguageModelClient())
+#endif
+                    }
                 },
                 agentInfo: ACPImplementationInfo(name: "ski", title: "SKI ACP Agent", version: "0.1.0"),
                 capabilities: ACPAgentCapabilities(

@@ -28,6 +28,17 @@ Prefer method-driven execution: define acceptance first, run failing tests, impl
 - Require both focused tests and ACP regression suite before completion.
 - Update docs and memory with decisions and risks.
 
+5. If task requires MLX real-model determinism validation:
+- Run `scripts/mlx_e2e_prepare.sh --run --model-id <model>` for one-command prepare + execute.
+- Keep `MLX_E2E_TEMPERATURE=0` unless intentionally testing sampling variance.
+- If skipped due to missing metallib, follow the repository MLX E2E ops runbook.
+
+6. If task is release orchestration (especially major release):
+- Build release notes under the repository release-note location (`Release-<version>.md`).
+- Require full regression (`swift test --package-path .`) before tagging.
+- Include migration notes for behavioral changes (CLI validation, stop-sequence semantics, ACP session model reuse).
+- Provide release-day command block (`tag`, `push`, optional `gh release create`).
+
 ## Execution Standard
 
 1. Define BDD acceptance in task language before coding.
@@ -68,12 +79,31 @@ skills/skintelligence/scripts/run_codex_connect_smoke.sh
 skills/skintelligence/scripts/run_codex_connect_smoke.sh "hello from skintelligence"
 ```
 
+- MLX real-model E2E:
+```bash
+scripts/mlx_e2e_prepare.sh --model-id mlx-community/Qwen2.5-0.5B-4bit
+scripts/mlx_e2e_prepare.sh --run --model-id mlx-community/Qwen2.5-0.5B-4bit --timeout-seconds 120 --temperature 0
+```
+
+- Major release checklist:
+```bash
+swift test --package-path .
+swift build -c release
+git status --short
+git tag --sort=-v:refname | head -n 5
+git tag <major.minor.patch>
+git push origin <major.minor.patch>
+gh release create <major.minor.patch> --title "SKIntelligence <major.minor.patch>" --notes-file <release-note-path>
+```
+
 ## References
 
 - Methods and acceptance flows: `references/workflows.md`
 - Module-specific playbooks: `references/module-playbooks.md`
 - High-frequency command patterns: `references/commands.md`
 - Failure signatures and triage: `references/troubleshooting.md`
+- MLX runtime/E2E ops: repository MLX E2E runbook
+- Major release baseline: repository major-release note
 
 ## Output and DoD
 

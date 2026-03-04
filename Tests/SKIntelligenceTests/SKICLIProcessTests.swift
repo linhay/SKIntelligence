@@ -258,6 +258,45 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("disabled | permissive | required"))
     }
 
+    func testServeHelpContainsModelProviderAndMLXOptions() throws {
+        let result = try runSKI(arguments: ["acp", "serve", "--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("--model-provider"))
+        XCTAssertTrue(result.stdout.contains("--mlx-model-id"))
+        XCTAssertTrue(result.stdout.contains("--mlx-revision"))
+        XCTAssertTrue(result.stdout.contains("--mlx-seed"))
+        XCTAssertTrue(result.stdout.contains("--mlx-stop"))
+    }
+
+    func testServeRejectsMLXOptionsWithoutMLXProvider() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--mlx-model-id", "mlx-community/Qwen3-1.7B-4bit"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--mlx-* options are only valid when --model-provider is mlx"))
+    }
+
+    func testServeMLXScopeErrorOverridesMLXTimeoutRangeErrorWhenProviderIsNotMLX() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--mlx-request-timeout-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--mlx-* options are only valid when --model-provider is mlx"))
+        XCTAssertFalse(result.stderr.contains("--mlx-request-timeout-ms must be >= 0"))
+    }
+
+    func testServeRejectsNegativeMLXTimeoutWhenProviderIsMLX() throws {
+        let result = try runSKI(arguments: [
+            "acp", "serve",
+            "--model-provider", "mlx",
+            "--mlx-request-timeout-ms=-1"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--mlx-request-timeout-ms must be >= 0"))
+    }
+
     func testServeHelpContainsWSListenAndBackpressureOptions() throws {
         let result = try runSKI(arguments: ["acp", "serve", "--help"])
         XCTAssertEqual(result.exitCode, 0)

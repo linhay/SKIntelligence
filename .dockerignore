@@ -1,0 +1,14 @@
+.git
+.build
+.swiftpm
+DerivedData
+build
+tmp
+screenshots
+references
+memory
+docs-dev
+MEMORY.md
+*.xcworkspace
+*.xcodeproj
+*.playground

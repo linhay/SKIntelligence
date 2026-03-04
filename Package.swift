@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "SKIClip", targets: ["SKIClip"]),
         .library(name: "SKITools", targets: ["SKITools"]),
         .library(name: "SKIClients", targets: ["SKIClients"]),
+        .library(name: "SKIMLXClient", targets: ["SKIMLXClient"]),
         .library(name: "SKIACP", targets: ["SKIACP"]),
         .library(name: "SKIACPTransport", targets: ["SKIACPTransport"]),
         .library(name: "SKIACPClient", targets: ["SKIACPClient"]),
@@ -30,6 +31,8 @@ let package = Package(
         .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.10.2"),
         .package(url: "https://github.com/mattt/EventSource.git", from: "1.3.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm/", exact: "2.30.6"),
+        .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.30.6"),
     ],
     targets: [
         .target(
@@ -73,6 +76,10 @@ let package = Package(
                 "SKIACPClient",
                 "SKIACPTransport",
                 "SKICLIShared",
+                .target(
+                    name: "SKIMLXClient",
+                    condition: .when(platforms: [.macOS, .iOS])
+                ),
                 .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
@@ -99,6 +106,32 @@ let package = Package(
             ]
         ),
         .target(
+            name: "SKIMLXClient",
+            dependencies: [
+                "SKIntelligence",
+                .product(
+                    name: "MLXLMCommon",
+                    package: "mlx-swift-lm",
+                    condition: .when(platforms: [.macOS, .iOS])
+                ),
+                .product(
+                    name: "MLXLLM",
+                    package: "mlx-swift-lm",
+                    condition: .when(platforms: [.macOS, .iOS])
+                ),
+                .product(
+                    name: "MLXVLM",
+                    package: "mlx-swift-lm",
+                    condition: .when(platforms: [.macOS, .iOS])
+                ),
+                .product(
+                    name: "MLX",
+                    package: "mlx-swift",
+                    condition: .when(platforms: [.macOS, .iOS])
+                ),
+            ]
+        ),
+        .target(
             name: "SKITools",
             dependencies: [
                 "SKIntelligence",
@@ -121,6 +154,14 @@ let package = Package(
             ],
             swiftSettings: [
                 .define("ACCELERATE_NEW_LAPACK")
+            ]
+        ),
+        .testTarget(
+            name: "SKIMLXClientTests",
+            dependencies: [
+                "SKIMLXClient",
+                "SKIntelligence",
+                .product(name: "HTTPTypes", package: "swift-http-types"),
             ]
         ),
         .testTarget(

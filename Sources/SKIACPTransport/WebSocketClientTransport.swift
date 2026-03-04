@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import SKIACP
 
 public enum WebSocketIncomingMessage: Sendable, Equatable {

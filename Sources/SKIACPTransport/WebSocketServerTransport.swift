@@ -1,8 +1,11 @@
 import Foundation
+#if canImport(Network)
 import Network
+#endif
 import SKIACP
 @preconcurrency import STJSON
 
+#if canImport(Network)
 public actor WebSocketServerTransport: ACPTransport {
     public struct Options: Sendable, Equatable {
         public var maxInFlightSends: Int
@@ -115,7 +118,39 @@ public actor WebSocketServerTransport: ACPTransport {
         continuations.forEach { $0.resume(returning: nil) }
     }
 }
+#else
+public actor WebSocketServerTransport: ACPTransport {
+    public struct Options: Sendable, Equatable {
+        public var maxInFlightSends: Int
 
+        public init(maxInFlightSends: Int = 64) {
+            self.maxInFlightSends = max(1, maxInFlightSends)
+        }
+    }
+
+    public init(listenAddress: String, options: Options = .init()) {
+        _ = listenAddress
+        _ = options
+    }
+
+    public func connect() async throws {
+        throw ACPTransportError.unsupported("WebSocket server transport is unavailable on this platform")
+    }
+
+    public func send(_ message: JSONRPCMessage) async throws {
+        _ = message
+        throw ACPTransportError.notConnected
+    }
+
+    public func receive() async throws -> JSONRPCMessage? {
+        throw ACPTransportError.notConnected
+    }
+
+    public func close() async {}
+}
+#endif
+
+#if canImport(Network)
 private extension WebSocketServerTransport {
     struct ListenEndpoint {
         let host: NWEndpoint.Host
@@ -406,3 +441,4 @@ private extension WebSocketServerTransport {
         }
     }
 }
+#endif

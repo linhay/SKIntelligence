@@ -33,7 +33,7 @@ final class OpenAIClientFallbackEndpointTests: XCTestCase {
         }
 
         let client = makeClient()
-        client.profiles([
+        _ = client.profiles([
             .init(
                 url: URL(string: "https://primary.example.com/v1/chat/completions")!,
                 token: "primary-token",
@@ -45,7 +45,7 @@ final class OpenAIClientFallbackEndpointTests: XCTestCase {
                 model: "gpt-fallback"
             )
         ])
-        client.retry(.init(maxRetries: 1, baseDelay: 0, maxDelay: 0, useJitter: false))
+        _ = client.retry(.init(maxRetries: 1, baseDelay: 0, maxDelay: 0, useJitter: false))
 
         let response = try await client.respond(ChatRequestBody(messages: [.user(content: .text("hello"))]))
         XCTAssertEqual(response.content.choices.first?.message.content, "fallback-ok")
@@ -64,14 +64,14 @@ final class OpenAIClientFallbackEndpointTests: XCTestCase {
         }
 
         let client = makeClient()
-        client.profiles([
+        _ = client.profiles([
             .init(
                 url: URL(string: "https://primary.example.com/v1/chat/completions")!,
                 token: "primary-token",
                 model: "gpt-primary"
             )
         ])
-        client.retry(.init(maxRetries: 0, baseDelay: 0, maxDelay: 0, useJitter: false))
+        _ = client.retry(.init(maxRetries: 0, baseDelay: 0, maxDelay: 0, useJitter: false))
 
         do {
             _ = try await client.respond(ChatRequestBody(messages: [.user(content: .text("hello"))]))
@@ -103,7 +103,7 @@ final class OpenAIClientFallbackEndpointTests: XCTestCase {
         fields[.authorization] = "Custom test-auth"
 
         let client = makeClient()
-        client.profiles([
+        _ = client.profiles([
             .init(
                 url: URL(string: "https://auth.example.com/v1/chat/completions")!,
                 token: "token-should-not-win",
@@ -111,7 +111,7 @@ final class OpenAIClientFallbackEndpointTests: XCTestCase {
                 headerFields: fields
             )
         ])
-        client.retry(.init(maxRetries: 0, baseDelay: 0, maxDelay: 0, useJitter: false))
+        _ = client.retry(.init(maxRetries: 0, baseDelay: 0, maxDelay: 0, useJitter: false))
 
         let response = try await client.respond(ChatRequestBody(messages: [.user(content: .text("hello"))]))
         XCTAssertEqual(response.content.choices.first?.message.content, "auth-ok")
@@ -119,7 +119,7 @@ final class OpenAIClientFallbackEndpointTests: XCTestCase {
 
     func testEmptyProfilesThrowsInvalidArguments() async throws {
         let client = makeClient()
-        client.profiles([])
+        _ = client.profiles([])
 
         do {
             _ = try await client.respond(ChatRequestBody(messages: [.user(content: .text("hello"))]))

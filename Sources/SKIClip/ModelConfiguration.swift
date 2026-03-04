@@ -10,7 +10,7 @@ import Foundation
 
 public protocol ModelConfigurationProtocol: Sendable {
     var name: String { get }
-    var factory: () -> CLIPEncoder { get }
+    var factory: @Sendable () -> CLIPEncoder { get }
 }
 
 public extension ModelConfigurationProtocol {
@@ -26,13 +26,13 @@ public extension ModelConfigurationProtocol {
 }
 
 
-public class CachedModelConfiguration: ModelConfigurationProtocol {
+public final class CachedModelConfiguration: ModelConfigurationProtocol, @unchecked Sendable {
     
     public let name: String
-    public private(set) var factory: () -> CLIPEncoder
+    public private(set) var factory: @Sendable () -> CLIPEncoder
     private var cache: CLIPEncoder?
     
-    public init(name: String, factory: @escaping () -> CLIPEncoder) {
+    public init(name: String, factory: @Sendable @escaping () -> CLIPEncoder) {
         self.name = name
         self.factory = factory
         
@@ -53,9 +53,9 @@ public class CachedModelConfiguration: ModelConfigurationProtocol {
 public struct ModelConfiguration: ModelConfigurationProtocol {
     
     public let name: String
-    public let factory: () -> CLIPEncoder
+    public let factory: @Sendable () -> CLIPEncoder
     
-    public init(name: String, factory: @escaping () -> CLIPEncoder) {
+    public init(name: String, factory: @Sendable @escaping () -> CLIPEncoder) {
         self.name = name
         self.factory = factory
     }

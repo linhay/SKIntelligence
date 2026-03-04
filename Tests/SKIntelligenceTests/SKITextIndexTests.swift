@@ -213,7 +213,7 @@ final class SKITextIndexTests: XCTestCase {
         XCTAssertEqual(totalResults.first?.text, "Total: $1,078.92")
         
         // 搜索商品
-        let productResults = textIndex.query("iPhone 15")
+        _ = textIndex.query("iPhone 15")
         let topProduct = textIndex.topK("iPhone 15", k: 1)
         XCTAssertGreaterThan(topProduct.first?.score ?? 0, 0.5)
         print("\nTop product match for 'iPhone 15': \(topProduct.first?.text ?? "none")")

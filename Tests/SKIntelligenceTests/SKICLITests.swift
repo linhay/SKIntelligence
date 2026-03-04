@@ -134,12 +134,30 @@ final class SKICLITests: XCTestCase {
     }
 
     func testACPServeBuildsWebSocketServerTransportWithValidListen() throws {
-        let transport = try ACPCLITransportFactory.makeServerTransport(
-            kind: .ws,
-            listen: "127.0.0.1:8900",
-            maxInFlightSends: 8
-        )
-        XCTAssertTrue(transport is WebSocketServerTransport)
+        if ACPCLITransportFactory.isWebSocketServerSupported {
+            let transport = try ACPCLITransportFactory.makeServerTransport(
+                kind: .ws,
+                listen: "127.0.0.1:8900",
+                maxInFlightSends: 8
+            )
+            XCTAssertTrue(transport is WebSocketServerTransport)
+        } else {
+            do {
+                _ = try ACPCLITransportFactory.makeServerTransport(
+                    kind: .ws,
+                    listen: "127.0.0.1:8900",
+                    maxInFlightSends: 8
+                )
+                XCTFail("Expected ws transport unsupported on this platform")
+            } catch let error as SKICLIValidationError {
+                guard case .invalidInput(let message) = error else {
+                    return XCTFail("Unexpected validation error: \(error)")
+                }
+                XCTAssertEqual(message, "ws transport is unavailable on this platform")
+            } catch {
+                XCTFail("Unexpected error: \(error)")
+            }
+        }
     }
 
     func testACPServeRejectsInvalidListenAddress() throws {

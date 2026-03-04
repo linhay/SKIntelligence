@@ -15,6 +15,7 @@
 
 - `references/openai-codex`
 - `references/codex-acp`
+- `https://github.com/ml-explore/mlx-swift-lm`（待纳入 `references/mlx-swift-lm`）
 
 ## 3. 可执行性检查
 

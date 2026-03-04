@@ -41,6 +41,14 @@ public enum ACPCLITransportFactory {
 #endif
     }
 
+    public static var isWebSocketServerSupported: Bool {
+#if canImport(Network)
+        true
+#else
+        false
+#endif
+    }
+
     public static func millisecondsToNanosecondsNonNegative(_ value: Int?) -> UInt64? {
         value.map { UInt64(max($0, 0)) * 1_000_000 }
     }
@@ -101,6 +109,9 @@ public enum ACPCLITransportFactory {
         case .stdio:
             return StdioTransport()
         case .ws:
+            guard isWebSocketServerSupported else {
+                throw SKICLIValidationError.invalidInput("ws transport is unavailable on this platform")
+            }
             guard isValidListenAddress(listen) else {
                 throw SKICLIValidationError.invalidInput("--listen must be in host:port format with port in 1...65535")
             }
