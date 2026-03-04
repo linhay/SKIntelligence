@@ -52,6 +52,8 @@ release_flow() {
   local version="$1"
   local notes_file="$2"
   local title="${RELEASE_TITLE:-SKIntelligence ${version}}"
+  local release_asset_path="skills/dist/skintelligence.skill"
+  local asset_args=""
 
   [[ -f "${notes_file}" ]] || {
     echo "error: notes file not found: ${notes_file}"
@@ -68,9 +70,13 @@ release_flow() {
     run "swift build -c release"
   fi
 
+  if [[ -f "${release_asset_path}" ]]; then
+    asset_args="\"${release_asset_path}#skintelligence.skill\""
+  fi
+
   run "git tag ${version}"
   run "git push ${REMOTE} ${version}"
-  run "gh release create ${version} --title \"${title}\" --notes-file \"${notes_file}\""
+  run "gh release create ${version} --title \"${title}\" --notes-file \"${notes_file}\" ${asset_args}"
 
   cat <<EOF
 release flow finished for ${version}
