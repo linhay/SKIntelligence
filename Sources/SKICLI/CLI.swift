@@ -73,8 +73,12 @@ struct SKI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "ski",
         abstract: "SKIntelligence CLI",
-        subcommands: [ACPCommand.self]
+        subcommands: [TUICommand.self, ACPCommand.self]
     )
+
+    mutating func run() async throws {
+        try await runSKIDefaultChatMode()
+    }
 }
 
 struct ACPCommand: AsyncParsableCommand {
@@ -494,7 +498,7 @@ struct ACPClientConnectStdioCommand: AsyncParsableCommand {
     var json: Bool = false
 
     @Option(name: .long, help: "Request timeout in milliseconds (0 disables)")
-    var requestTimeoutMS: Int = 60_000
+    var requestTimeoutMS: Int = 300_000
 
     @Option(name: .long)
     var logLevel: CLILogLevel = .info
@@ -625,7 +629,7 @@ struct ACPClientConnectWSCommand: AsyncParsableCommand {
     var json: Bool = false
 
     @Option(name: .long, help: "Request timeout in milliseconds (0 disables)")
-    var requestTimeoutMS: Int = 60_000
+    var requestTimeoutMS: Int = 300_000
 
     @Option(name: .long)
     var logLevel: CLILogLevel = .info
@@ -820,7 +824,7 @@ struct ACPClientConnectCommand: AsyncParsableCommand {
     var json: Bool = false
 
     @Option(name: .long, help: "Request timeout in milliseconds (0 disables)")
-    var requestTimeoutMS: Int = 60_000
+    var requestTimeoutMS: Int = 300_000
 
     @Option(name: .long)
     var logLevel: CLILogLevel = .info

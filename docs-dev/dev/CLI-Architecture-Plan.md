@@ -481,3 +481,40 @@ ACP WebSocket 规格：`docs-dev/features/ACP-WebSocket-Serve-Spec.md`
   - `swift test --filter ACPModelsTests/testSessionExportRoundTrip`
   - `swift test --filter ACPProtocolConformanceTests/testProjectExtensionMethodsAreExplicitlyScoped`
   - `swift test --filter ACP --parallel`
+
+## 32. Root TUI Chat Mode（2026-03-05）
+- 目标：把 `ski` 从“仅子命令容器”升级为“默认聊天入口”，同时保留 `acp` 自动化能力。
+- 路由：
+  - `ski`（无子命令）=> 进入 TUI 聊天页
+  - `ski tui` => 显式进入同一 TUI 运行时
+  - `ski acp ...` => 保持原有命令树
+- 非交互保护：
+  - `ski` 与 `ski tui` 在非 TTY 环境直接退出 `2`，并给出引导文案（使用 `ski acp ...`）。
+- TUI 实现分层：
+  - `TUICommand`：参数解析与约束校验。
+  - `SKITUIRuntime`：状态机、Slash 菜单、消息事件处理。
+  - `SKITerminalSession`：raw mode、Alt Screen、终端尺寸读取。
+  - `TUIByteParser`：非阻塞字节流到按键事件解析。
+- 状态与交互：
+  - 默认 profile 为空，启动 `Disconnected`。
+  - 输入首字符 `/` 自动打开 Slash 菜单（唯一配置入口，不保留 `Ctrl+O` Overlay）。
+  - 菜单覆盖连接项、会话项、UI 项（导出 transcript、切 log level 等）。
+- ACP 集成：
+  - 复用 `ACPCLITransportFactory` 建立 stdio/ws 连接。
+  - 复用 `ACPClientService` 完成 `initialize/newSession/prompt`。
+  - 订阅 `session/update` 并将 `agent_message_chunk` 增量写入 assistant 消息。
+- 渲染策略：
+  - 按帧构建行数组，按“宽度/行数变化”和“逐行内容变化”执行差量刷新。
+  - 每帧将硬件光标复位到输入行光标列。
+
+## 33. ACP Terminal Runtime 切换到 SKProcessRunner（2026-03-05）
+- 目标：统一 shell/terminal 执行栈，减少直接 `Process` 维护成本。
+- 变更：`ACPProcessTerminalRuntime` 在 macOS 路径改为基于 `SKProcessPipeSession` 实现。
+- 行为保持：
+  - 仍提供 `terminal/create|output|wait_for_exit|kill|release`。
+  - 保持 output 合并、`outputByteLimit` 截断、wait 多订阅者恢复。
+  - 保持 policy 的 `allowedCommands/deniedCommands/maxRuntimeNanoseconds` 语义。
+- 细节：
+  - 实时输出通过 `session.stdout/stderr` 异步流累积。
+  - 退出时使用 `session.wait()` 的最终 stdout/stderr 做一次覆盖式收敛，保证尾部输出不丢失。
+  - `kill` 与策略超时均走 `session.terminate()`。

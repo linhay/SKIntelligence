@@ -168,6 +168,51 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("stop"))
     }
 
+    func testTUIHelpContainsInteractiveUsage() throws {
+        let result = try runSKI(arguments: ["tui", "--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("Interactive terminal UI"))
+        XCTAssertTrue(result.stdout.contains("--transport"))
+        XCTAssertTrue(result.stdout.contains("--cmd"))
+    }
+
+    func testTUIRejectsEndpointForStdio() throws {
+        let result = try runSKI(arguments: [
+            "tui",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--args", "cat",
+            "--endpoint", "ws://127.0.0.1:8900"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--endpoint is only valid for ws transport"))
+    }
+
+    func testTUIRequiresTTY() throws {
+        let result = try runSKI(arguments: [
+            "tui",
+            "--transport", "stdio",
+            "--cmd", "/usr/bin/env",
+            "--args", "cat"
+        ])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("tui requires an interactive TTY"))
+    }
+
+    func testRootCommandRequiresTTYInDefaultChatMode() throws {
+        let result = try runSKI(arguments: [])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("ski defaults to chat mode and requires an interactive TTY"))
+    }
+
+    func testRootHelpStillAccessible() throws {
+        let result = try runSKI(arguments: ["--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("SKIntelligence CLI"))
+        XCTAssertTrue(result.stdout.contains("tui"))
+        XCTAssertTrue(result.stdout.contains("acp"))
+    }
+
     func testClientConnectStdioHelpHidesWSOnlyOptions() throws {
         let result = try runSKI(arguments: ["acp", "client", "connect-stdio", "--help"])
         XCTAssertEqual(result.exitCode, 0)
@@ -185,6 +230,18 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("--ws-heartbeat-ms"))
         XCTAssertFalse(result.stdout.contains("--cmd"))
         XCTAssertFalse(result.stdout.contains("--args"))
+    }
+
+    func testClientConnectWSHelpShowsFiveMinuteDefaultRequestTimeout() throws {
+        let result = try runSKI(arguments: ["acp", "client", "connect-ws", "--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("default: 300000"))
+    }
+
+    func testTUIHelpShowsFiveMinuteDefaultRequestTimeout() throws {
+        let result = try runSKI(arguments: ["tui", "--help"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("default: 300000"))
     }
 
     func testClientStopStdioHelpHidesWSOnlyOptions() throws {

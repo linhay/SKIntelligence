@@ -280,13 +280,13 @@ brew tap linhay/tap https://github.com/linhay/homebrew-tap
 brew install linhay/tap/ski
 
 # Homebrew（按发布版本安装单文件 formula）
-brew install --formula https://github.com/linhay/SKIntelligence/releases/download/2.0.0/ski.rb
+brew install --formula https://github.com/linhay/SKIntelligence/releases/download/2.0.1/ski.rb
 
 # 安装最新版本（从 GitHub Release 下载对应架构二进制）
 curl -fsSL https://raw.githubusercontent.com/linhay/SKIntelligence/main/scripts/install_ski.sh | bash
 
 # 或安装指定版本
-curl -fsSL https://raw.githubusercontent.com/linhay/SKIntelligence/main/scripts/install_ski.sh | bash -s -- --version 2.0.0
+curl -fsSL https://raw.githubusercontent.com/linhay/SKIntelligence/main/scripts/install_ski.sh | bash -s -- --version 2.0.1
 ```
 
 - 开发态（源码运行）常用命令：
@@ -333,8 +333,8 @@ swift run ski acp client connect \
 - 分发包：`skills/dist/skintelligence.skill`
 - 入口文件：`skills/skintelligence/SKILL.md`
 - Release 下载页：`https://github.com/linhay/SKIntelligence/releases`
-- 2.0.0 直链（发布后可用）：
-  - `https://github.com/linhay/SKIntelligence/releases/download/2.0.0/skintelligence.skill`
+- 2.0.1 直链（发布后可用）：
+  - `https://github.com/linhay/SKIntelligence/releases/download/2.0.1/skintelligence.skill`
 
 适用于支持技能包/`SKILL.md` 机制的 agent 运行环境。  
 可将 `skintelligence.skill` 导入你的 agent 平台，获得面向本仓库的测试、回归、发布编排等标准化工作流。
@@ -344,4 +344,5 @@ swift run ski acp client connect \
 - [Release 2.0.0](docs-dev/ops/Release-2.0.0.md)
 - [Release 2.0.0 GitHub Short](docs-dev/ops/Release-2.0.0-GitHub-Short.md)
 - [Release 2.0.0 GitHub Full](docs-dev/ops/Release-2.0.0-GitHub-Full.md)
+- [Release 2.0.1 GitHub Short](docs-dev/ops/Release-2.0.1-GitHub-Short.md)
 - 发布脚本：`scripts/release_major.sh`

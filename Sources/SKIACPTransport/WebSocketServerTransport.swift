@@ -249,7 +249,11 @@ private extension WebSocketServerTransport {
 
         if let data, !data.isEmpty {
             do {
-                let decoded = try decodeMessage(data: data, context: context)
+                guard let decoded = try decodeMessage(data: data, context: context) else {
+                    guard !isClosed, connections[connectionID] != nil else { return }
+                    scheduleReceive(on: connection)
+                    return
+                }
                 let inbound = routeInboundMessage(decoded, from: connectionID)
                 if let continuation = receiveContinuations.first {
                     receiveContinuations.removeFirst()
@@ -269,7 +273,7 @@ private extension WebSocketServerTransport {
         scheduleReceive(on: connection)
     }
 
-    func decodeMessage(data: Data, context: NWConnection.ContentContext?) throws -> JSONRPCMessage {
+    func decodeMessage(data: Data, context: NWConnection.ContentContext?) throws -> JSONRPCMessage? {
         if let metadata = context?.protocolMetadata(definition: NWProtocolWebSocket.definition) as? NWProtocolWebSocket.Metadata {
             switch metadata.opcode {
             case .binary:
@@ -280,7 +284,9 @@ private extension WebSocketServerTransport {
                 }
                 return try JSONRPCLineFramer().decodeLine(text)
             default:
-                throw ACPTransportError.unsupported("Unsupported websocket frame opcode")
+                // Ignore control/unknown opcodes (ping/pong/close/etc.) instead of
+                // failing the entire connection receive loop.
+                return nil
             }
         }
         return try JSONRPCCodec.decode(data)

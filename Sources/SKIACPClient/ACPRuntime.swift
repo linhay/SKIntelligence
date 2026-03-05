@@ -1,6 +1,9 @@
 import Foundation
 import SKIACP
 import SKIACPTransport
+#if canImport(SKProcessRunner)
+import SKProcessRunner
+#endif
 
 public enum ACPRuntimeError: Error, LocalizedError, Equatable {
     case permissionDenied(path: String)
@@ -206,8 +209,12 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
     }
 #else
     private struct Entry {
-        let process: Process
-        let stdout: Pipe
+#if canImport(SKProcessRunner)
+        let session: SKProcessPipeSession
+        var stdoutTask: Task<Void, Never>?
+        var stderrTask: Task<Void, Never>?
+        var waitTask: Task<Void, Never>?
+#endif
         var output: String
         var truncated: Bool
         let limit: Int?
@@ -228,28 +235,36 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
 
     public func create(_ params: ACPTerminalCreateParams) async throws -> ACPTerminalCreateResult {
         try validateCommand(params.command)
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: params.command)
-        process.arguments = params.args
-        if let cwd = params.cwd {
-            process.currentDirectoryURL = URL(fileURLWithPath: cwd)
+#if canImport(SKProcessRunner)
+        var environment = ProcessInfo.processInfo.environment
+        for item in params.env {
+            environment[item.name] = item.value
         }
-        if !params.env.isEmpty {
-            var env = ProcessInfo.processInfo.environment
-            for item in params.env {
-                env[item.name] = item.value
-            }
-            process.environment = env
-        }
-
-        let stdout = Pipe()
-        process.standardOutput = stdout
-        process.standardError = stdout
-
+        let payload = SKProcessPayload(
+            executable: .url(URL(fileURLWithPath: params.command)),
+            arguments: params.args,
+            stdinData: nil,
+            cwd: params.cwd.map { URL(fileURLWithPath: $0) },
+            environment: SKProcessEnvironment(environment),
+            useUserShellEnvironment: false,
+            userShellPath: nil,
+            userShellMode: .loginInteractive,
+            userShellTimeoutMs: 2_000,
+            timeoutMs: 30 * 60 * 1_000,
+            maxOutputBytes: max(8 * 1_024, min(params.outputByteLimit ?? 64 * 1_024, 2 * 1_024 * 1_024)),
+            terminationGracePeriodMs: 300,
+            spoolFullOutput: false,
+            fullOutputDirectory: nil,
+            throwOnNonZeroExit: false,
+            pty: nil
+        )
+        let session = try SKProcessPipeSession(payload)
         let terminalID = "term_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         entries[terminalID] = Entry(
-            process: process,
-            stdout: stdout,
+            session: session,
+            stdoutTask: nil,
+            stderrTask: nil,
+            waitTask: nil,
             output: "",
             truncated: false,
             limit: params.outputByteLimit,
@@ -258,19 +273,56 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
             waiters: []
         )
 
-        stdout.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            guard !data.isEmpty else { return }
-            Task { await self?.appendOutput(data, terminalID: terminalID) }
+        let stdoutTask = Task { [weak self] in
+            let stream = await session.stdout
+            for await chunk in stream {
+                await self?.appendOutput(chunk, terminalID: terminalID)
+            }
         }
-
-        process.terminationHandler = { [weak self] proc in
-            Task { await self?.markExit(terminalID: terminalID, status: proc.terminationStatus) }
+        let stderrTask = Task { [weak self] in
+            let stream = await session.stderr
+            for await chunk in stream {
+                await self?.appendOutput(chunk, terminalID: terminalID)
+            }
         }
-
-        try process.run()
+        let waitTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let result = try await session.wait()
+                await self.markExit(
+                    terminalID: terminalID,
+                    status: Int32(result.exitCode),
+                    finalOutputData: result.stdoutData + result.stderrData,
+                    truncatedOverride: result.truncated
+                )
+            } catch let error as SKProcessRunError {
+                switch error {
+                case .timedOut(_, let stdoutData, let stderrData, let truncated):
+                    await self.markExit(
+                        terminalID: terminalID,
+                        status: -1,
+                        finalOutputData: stdoutData + stderrData,
+                        truncatedOverride: truncated
+                    )
+                default:
+                    await self.markExit(terminalID: terminalID, status: -1, finalOutputData: nil, truncatedOverride: nil)
+                }
+            } catch {
+                await self.markExit(terminalID: terminalID, status: -1, finalOutputData: nil, truncatedOverride: nil)
+            }
+        }
+        if var entry = entries[terminalID] {
+            entry.stdoutTask = stdoutTask
+            entry.stderrTask = stderrTask
+            entry.waitTask = waitTask
+            entries[terminalID] = entry
+        }
         scheduleTimeoutIfNeeded(terminalID: terminalID)
         return .init(terminalId: terminalID)
+#else
+        _ = params
+        throw ACPTransportError.unsupported("Terminal runtime is unavailable on this platform")
+#endif
     }
 
     public func output(_ params: ACPTerminalRefParams) async throws -> ACPTerminalOutputResult {
@@ -298,9 +350,11 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
         guard let entry = entries[params.terminalId] else {
             throw ACPRuntimeError.unknownTerminal(params.terminalId)
         }
-        if entry.process.isRunning {
-            entry.process.terminate()
+#if canImport(SKProcessRunner)
+        if !entry.didExit {
+            await entry.session.terminate()
         }
+#endif
         return .init()
     }
 
@@ -310,7 +364,14 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
         }
         timeoutTasks[params.terminalId]?.cancel()
         timeoutTasks[params.terminalId] = nil
-        entry.stdout.fileHandleForReading.readabilityHandler = nil
+#if canImport(SKProcessRunner)
+        entry.stdoutTask?.cancel()
+        entry.stderrTask?.cancel()
+        entry.waitTask?.cancel()
+        if !entry.didExit {
+            await entry.session.terminate()
+        }
+#endif
         if !entry.didExit {
             for waiter in entry.waiters {
                 waiter.resume(throwing: ACPTransportError.eof)
@@ -321,32 +382,29 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
 
     private func appendOutput(_ data: Data, terminalID: String) {
         guard var entry = entries[terminalID] else { return }
-        let chunk = String(decoding: data, as: UTF8.self)
-        entry.output += chunk
-        if let limit = entry.limit, limit >= 0 {
-            while entry.output.utf8.count > limit {
-                entry.truncated = true
-                entry.output.removeFirst()
-            }
-        }
+        appendOutputData(data, to: &entry, replace: false)
         entries[terminalID] = entry
     }
 
-    private func markExit(terminalID: String, status: Int32) {
+    private func markExit(
+        terminalID: String,
+        status: Int32,
+        finalOutputData: Data?,
+        truncatedOverride: Bool?
+    ) {
         guard var entry = entries[terminalID] else { return }
+        guard !entry.didExit else { return }
         timeoutTasks[terminalID]?.cancel()
         timeoutTasks[terminalID] = nil
-        entry.stdout.fileHandleForReading.readabilityHandler = nil
-        let tail = entry.stdout.fileHandleForReading.readDataToEndOfFile()
-        if !tail.isEmpty {
-            let chunk = String(decoding: tail, as: UTF8.self)
-            entry.output += chunk
-            if let limit = entry.limit, limit >= 0 {
-                while entry.output.utf8.count > limit {
-                    entry.truncated = true
-                    entry.output.removeFirst()
-                }
-            }
+#if canImport(SKProcessRunner)
+        entry.stdoutTask?.cancel()
+        entry.stderrTask?.cancel()
+#endif
+        if let finalOutputData {
+            appendOutputData(finalOutputData, to: &entry, replace: true)
+        }
+        if let truncatedOverride {
+            entry.truncated = entry.truncated || truncatedOverride
         }
         entry.didExit = true
         entry.terminationStatus = status
@@ -355,6 +413,21 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
         entries[terminalID] = entry
         for waiter in waiters {
             waiter.resume(returning: .init(exitCode: Int(status), signal: nil))
+        }
+    }
+
+    private func appendOutputData(_ data: Data, to entry: inout Entry, replace: Bool) {
+        if replace {
+            entry.output = ""
+            entry.truncated = false
+        }
+        let chunk = String(decoding: data, as: UTF8.self)
+        entry.output += chunk
+        if let limit = entry.limit, limit >= 0 {
+            while entry.output.utf8.count > limit {
+                entry.truncated = true
+                entry.output.removeFirst()
+            }
         }
     }
 
@@ -377,9 +450,11 @@ public actor ACPProcessTerminalRuntime: ACPTerminalRuntime {
         timeoutTasks[terminalID] = task
     }
 
-    private func terminateIfRunning(terminalID: String) {
-        guard let entry = entries[terminalID], entry.process.isRunning else { return }
-        entry.process.terminate()
+    private func terminateIfRunning(terminalID: String) async {
+        guard let entry = entries[terminalID], !entry.didExit else { return }
+#if canImport(SKProcessRunner)
+        await entry.session.terminate()
+#endif
     }
 #endif
 }
