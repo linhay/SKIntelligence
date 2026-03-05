@@ -272,7 +272,24 @@ print(followup)
 ## ACP
 
 - 提供 ACP Agent/Client/Transport 与 `ski acp` CLI 工作流。
-- 常用命令：
+- 终端用户安装（macOS）：
+
+```bash
+# Homebrew Tap（推荐）
+brew tap linhay/tap https://github.com/linhay/homebrew-tap
+brew install linhay/tap/ski
+
+# Homebrew（按发布版本安装单文件 formula）
+brew install --formula https://github.com/linhay/SKIntelligence/releases/download/2.0.0/ski.rb
+
+# 安装最新版本（从 GitHub Release 下载对应架构二进制）
+curl -fsSL https://raw.githubusercontent.com/linhay/SKIntelligence/main/scripts/install_ski.sh | bash
+
+# 或安装指定版本
+curl -fsSL https://raw.githubusercontent.com/linhay/SKIntelligence/main/scripts/install_ski.sh | bash -s -- --version 2.0.0
+```
+
+- 开发态（源码运行）常用命令：
 
 ```bash
 # 启动 ACP 服务端（stdio）
@@ -305,6 +322,7 @@ swift run ski acp client connect \
 - 文档入口：
   - [ACP 规格覆盖矩阵](docs-dev/dev/ACP-Spec-Coverage-Matrix.md)
   - [ACP WebSocket Serve Spec](docs-dev/features/ACP-WebSocket-Serve-Spec.md)
+  - [CLI 分发与安装 Spec](docs-dev/features/CLI-Distribution-Install-Spec.md)
   - [Codex ACP Runbook](docs-dev/dev/Codex-ACP-Runbook.md)
 
 ## Agents Skills 包

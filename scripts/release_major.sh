@@ -11,6 +11,13 @@ Environment:
   DRY_RUN=1|0            default: 1 (safe mode; only prints commands)
   RUN_TESTS=1|0          default: 1
   RUN_BUILD=1|0          default: 1
+  RUN_PACKAGE_CLI=1|0    default: 1
+  RUN_HOMEBREW_FORMULA=1|0 default: 1
+  EXPORT_FORMULA_TO_REPO=1|0 default: 0
+  HOMEBREW_REPO=<owner/name> default: linhay/SKIntelligence
+  HOMEBREW_TAP_REPO=<owner/name> default: linhay/homebrew-tap
+  HOMEBREW_TAP_REF=<branch> default: main
+  HOMEBREW_TAP_FORMULA_PATH=<path> default: Formula/ski.rb
   REMOTE=<name>          default: origin
   RELEASE_TITLE=<title>  default: SKIntelligence <version>
 
@@ -52,8 +59,11 @@ release_flow() {
   local version="$1"
   local notes_file="$2"
   local title="${RELEASE_TITLE:-SKIntelligence ${version}}"
-  local release_asset_path="skills/dist/skintelligence.skill"
+  local release_skill_asset_path="skills/dist/skintelligence.skill"
+  local release_cli_asset_dir="dist/cli"
+  local release_homebrew_dir="dist/homebrew"
   local asset_args=""
+  local cli_asset_count=0
 
   [[ -f "${notes_file}" ]] || {
     echo "error: notes file not found: ${notes_file}"
@@ -70,8 +80,42 @@ release_flow() {
     run "swift build -c release"
   fi
 
-  if [[ -f "${release_asset_path}" ]]; then
-    asset_args="\"${release_asset_path}#skintelligence.skill\""
+  if [[ "${RUN_PACKAGE_CLI}" == "1" ]]; then
+    run "scripts/package_cli.sh --arch all --output-dir ${release_cli_asset_dir}"
+  fi
+
+  if [[ "${RUN_HOMEBREW_FORMULA}" == "1" ]]; then
+    run "scripts/generate_homebrew_formula.sh --version ${version} --repo ${HOMEBREW_REPO} --sha-dir ${release_cli_asset_dir} --output ${release_homebrew_dir}/ski.rb"
+  fi
+
+  if [[ -f "${release_skill_asset_path}" ]]; then
+    asset_args="\"${release_skill_asset_path}#skintelligence.skill\""
+  fi
+
+  for release_asset_path in \
+    "${release_cli_asset_dir}"/ski-macos-*.tar.gz \
+    "${release_cli_asset_dir}"/ski-macos-*.sha256; do
+    if [[ -f "${release_asset_path}" ]]; then
+      asset_args+=" \"${release_asset_path}#$(basename "${release_asset_path}")\""
+      cli_asset_count=$((cli_asset_count + 1))
+    fi
+  done
+
+  if [[ "${RUN_PACKAGE_CLI}" == "1" && "${cli_asset_count}" -eq 0 ]]; then
+    echo "error: no cli assets found under ${release_cli_asset_dir}"
+    exit 2
+  fi
+
+  if [[ "${RUN_HOMEBREW_FORMULA}" == "1" ]]; then
+    local formula_asset="${release_homebrew_dir}/ski.rb"
+    if [[ ! -f "${formula_asset}" ]]; then
+      echo "error: homebrew formula not found: ${formula_asset}"
+      exit 2
+    fi
+    asset_args+=" \"${formula_asset}#ski.rb\""
+    if [[ "${EXPORT_FORMULA_TO_REPO}" == "1" ]]; then
+      run "scripts/sync_homebrew_tap.sh --tap-repo ${HOMEBREW_TAP_REPO} --formula ${formula_asset} --tap-formula-path ${HOMEBREW_TAP_FORMULA_PATH} --ref ${HOMEBREW_TAP_REF} --push 1"
+    fi
   fi
 
   run "git tag ${version}"
@@ -106,6 +150,13 @@ main() {
   DRY_RUN="${DRY_RUN:-1}"
   RUN_TESTS="${RUN_TESTS:-1}"
   RUN_BUILD="${RUN_BUILD:-1}"
+  RUN_PACKAGE_CLI="${RUN_PACKAGE_CLI:-1}"
+  RUN_HOMEBREW_FORMULA="${RUN_HOMEBREW_FORMULA:-1}"
+  EXPORT_FORMULA_TO_REPO="${EXPORT_FORMULA_TO_REPO:-0}"
+  HOMEBREW_REPO="${HOMEBREW_REPO:-linhay/SKIntelligence}"
+  HOMEBREW_TAP_REPO="${HOMEBREW_TAP_REPO:-linhay/homebrew-tap}"
+  HOMEBREW_TAP_REF="${HOMEBREW_TAP_REF:-main}"
+  HOMEBREW_TAP_FORMULA_PATH="${HOMEBREW_TAP_FORMULA_PATH:-Formula/ski.rb}"
   REMOTE="${REMOTE:-origin}"
 
   if [[ -z "${mode}" || -z "${version}" ]]; then
