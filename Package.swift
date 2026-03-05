@@ -176,6 +176,7 @@ let package = Package(
                 "SKIACPTransport",
                 "SKIACPClient",
                 "SKIACPAgent",
+                "SKICLI",
                 "SKICLIShared",
                 "STJSON",
                 .product(name: "HTTPTypesFoundation", package: "swift-http-types"),

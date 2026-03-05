@@ -97,7 +97,7 @@ private struct TUIState {
     var sessionID: String?
 }
 
-private enum TUIKeyEvent {
+enum TUIKeyEvent {
     case character(Character)
     case enter
     case backspace
@@ -147,6 +147,7 @@ private final class SKITerminalSession {
         guard isatty(STDIN_FILENO) == 1, isatty(STDOUT_FILENO) == 1 else {
             throw SKICLIValidationError.invalidInput("tui requires an interactive TTY")
         }
+        _ = setlocale(LC_CTYPE, "")
 
         var term = termios()
         if tcgetattr(STDIN_FILENO, &term) != 0 {
@@ -228,7 +229,7 @@ private final class SKITerminalSession {
     }
 }
 
-private struct TUIByteParser {
+struct TUIByteParser {
     private(set) var buffer: [UInt8] = []
     private var escapeStartedAtMS: UInt64?
 
@@ -239,9 +240,26 @@ private struct TUIByteParser {
     mutating func nextEvent(nowMS: UInt64) -> TUIKeyEvent? {
         guard let first = buffer.first else { return nil }
         if first != 0x1B {
-            _ = buffer.removeFirst()
+            if first < 0x80 {
+                _ = buffer.removeFirst()
+                escapeStartedAtMS = nil
+                return Self.mapSingle(first)
+            }
+            guard let length = Self.utf8SequenceLength(firstByte: first) else {
+                _ = buffer.removeFirst()
+                escapeStartedAtMS = nil
+                return nil
+            }
+            guard buffer.count >= length else { return nil }
+            let chunk = Array(buffer.prefix(length))
+            guard let text = String(bytes: chunk, encoding: .utf8), let char = text.first else {
+                _ = buffer.removeFirst()
+                escapeStartedAtMS = nil
+                return nil
+            }
+            buffer.removeFirst(length)
             escapeStartedAtMS = nil
-            return Self.mapSingle(first)
+            return .character(char)
         }
 
         if buffer.count >= 3, buffer[1] == 0x5B {
@@ -304,6 +322,19 @@ private struct TUIByteParser {
         case 0x7F, 0x08: return .backspace
         case 0x20...0x7E:
             return .character(Character(UnicodeScalar(byte)))
+        default:
+            return nil
+        }
+    }
+
+    private static func utf8SequenceLength(firstByte: UInt8) -> Int? {
+        switch firstByte {
+        case 0xC2...0xDF:
+            return 2
+        case 0xE0...0xEF:
+            return 3
+        case 0xF0...0xF4:
+            return 4
         default:
             return nil
         }
@@ -951,30 +982,32 @@ private final class SKITUIRuntime {
 
     private func renderInputLine(width: Int) -> String {
         let prefix = state.inputMode == .chat ? "> " : "edit> "
-        let available = max(1, width - prefix.count)
-        let start = max(0, state.cursor - available + 1)
-        let visible = substring(state.input, from: start, length: available)
+        let available = max(1, width - terminalColumnWidth(prefix))
+        let viewport = inputViewport(availableColumns: available)
+        let visible = viewport.visible
         return prefix + visible
     }
 
     private func currentInputCursorColumn(width: Int) -> Int {
-        let prefix = state.inputMode == .chat ? 2 : 5
-        let available = max(1, width - prefix)
-        let start = max(0, state.cursor - available + 1)
-        let col = prefix + (state.cursor - start) + 1
+        let prefixWidth = state.inputMode == .chat ? 2 : 5
+        let available = max(1, width - prefixWidth)
+        let viewport = inputViewport(availableColumns: available)
+        let col = prefixWidth + viewport.cursorOffset + 1
         return max(1, min(width, col))
     }
 
     private func pad(_ text: String, width: Int) -> String {
-        if text.count == width { return text }
-        if text.count > width { return String(text.prefix(width)) }
-        return text + String(repeating: " ", count: width - text.count)
+        let columns = terminalColumnWidth(text)
+        if columns == width { return text }
+        if columns > width { return trimToColumns(text, maxColumns: width) }
+        return text + String(repeating: " ", count: width - columns)
     }
 
     private func wrap(text: String, width: Int, prefix: String) -> [String] {
         let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
         let rawLines = normalized.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var output: [String] = []
+        let indent = String(repeating: " ", count: prefix.count)
         for raw in rawLines {
             if raw.isEmpty {
                 output.append(prefix)
@@ -983,8 +1016,9 @@ private final class SKITUIRuntime {
             var remaining = raw
             var first = true
             while !remaining.isEmpty {
-                let chunk = String(remaining.prefix(width))
-                output.append((first ? prefix : String(repeating: " ", count: prefix.count)) + chunk)
+                let chunk = trimToColumns(remaining, maxColumns: width)
+                guard !chunk.isEmpty else { break }
+                output.append((first ? prefix : indent) + chunk)
                 remaining.removeFirst(chunk.count)
                 first = false
             }
@@ -992,11 +1026,70 @@ private final class SKITUIRuntime {
         return output
     }
 
-    private func substring(_ text: String, from: Int, length: Int) -> String {
-        guard !text.isEmpty, from < text.count, length > 0 else { return "" }
-        let start = text.index(text.startIndex, offsetBy: max(0, from))
-        let end = text.index(start, offsetBy: min(length, text.count - from), limitedBy: text.endIndex) ?? text.endIndex
-        return String(text[start..<end])
+    private func inputViewport(availableColumns: Int) -> (visible: String, cursorOffset: Int) {
+        let cursorPrefix = String(state.input.prefix(state.cursor))
+        let cursorColumns = terminalColumnWidth(cursorPrefix)
+        let startColumn = max(0, cursorColumns - availableColumns + 1)
+        let visible = sliceByColumns(state.input, start: startColumn, maxColumns: availableColumns)
+        let cursorOffset = min(availableColumns, max(0, cursorColumns - startColumn))
+        return (visible: visible, cursorOffset: cursorOffset)
+    }
+
+    private func sliceByColumns(_ text: String, start: Int, maxColumns: Int) -> String {
+        guard maxColumns > 0 else { return "" }
+        var result = ""
+        var columns = 0
+        let end = start + maxColumns
+        for char in text {
+            let piece = String(char)
+            let width = terminalColumnWidth(piece)
+            if columns + width <= start {
+                columns += width
+                continue
+            }
+            if columns >= end || columns + width > end {
+                break
+            }
+            result.append(char)
+            columns += width
+        }
+        return result
+    }
+
+    private func trimToColumns(_ text: String, maxColumns: Int) -> String {
+        guard maxColumns > 0 else { return "" }
+        var result = ""
+        var columns = 0
+        for char in text {
+            let piece = String(char)
+            let width = terminalColumnWidth(piece)
+            if columns + width > maxColumns {
+                break
+            }
+            result.append(char)
+            columns += width
+        }
+        return result
+    }
+
+    private func terminalColumnWidth(_ text: String) -> Int {
+        text.unicodeScalars.reduce(0) { partial, scalar in
+            partial + terminalColumnWidth(scalar)
+        }
+    }
+
+    private func terminalColumnWidth(_ scalar: UnicodeScalar) -> Int {
+#if canImport(Darwin)
+        let value = Int32(scalar.value)
+        if value == 0 { return 0 }
+        if value < 32 || (value >= 0x7F && value < 0xA0) { return 0 }
+        let width = Darwin.wcwidth(value)
+        if width > 0 { return Int(width) }
+#endif
+        if scalar.properties.isJoinControl || scalar.properties.generalCategory == .nonspacingMark {
+            return 0
+        }
+        return 1
     }
 
     private static func nowMS() -> UInt64 {
