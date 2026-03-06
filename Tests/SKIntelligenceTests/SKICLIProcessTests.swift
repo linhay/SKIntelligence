@@ -213,6 +213,18 @@ final class SKICLIProcessTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("acp"))
     }
 
+    func testRootVersionFlagShowsVersion() throws {
+        let result = try runSKI(arguments: ["--version"])
+        XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)")
+        XCTAssertFalse(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "stdout: \(result.stdout)")
+    }
+
+    func testVersionSubcommandShowsVersion() throws {
+        let result = try runSKI(arguments: ["version"])
+        XCTAssertEqual(result.exitCode, 0, "stderr: \(result.stderr)")
+        XCTAssertFalse(result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "stdout: \(result.stdout)")
+    }
+
     func testClientConnectStdioHelpHidesWSOnlyOptions() throws {
         let result = try runSKI(arguments: ["acp", "client", "connect-stdio", "--help"])
         XCTAssertEqual(result.exitCode, 0)

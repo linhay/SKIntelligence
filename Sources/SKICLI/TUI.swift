@@ -136,6 +136,27 @@ private actor SKITUIEventQueue {
     }
 }
 
+struct TUITerminalSizing {
+    static func normalize(
+        widthCandidate: Int?,
+        heightCandidate: Int?,
+        environment: [String: String]
+    ) -> (width: Int, height: Int) {
+        let width = positive(widthCandidate)
+            ?? positive(environment["COLUMNS"].flatMap(Int.init))
+            ?? 80
+        let height = positive(heightCandidate)
+            ?? positive(environment["LINES"].flatMap(Int.init))
+            ?? 24
+        return (max(width, 20), max(height, 8))
+    }
+
+    private static func positive(_ value: Int?) -> Int? {
+        guard let value, value > 0 else { return nil }
+        return value
+    }
+}
+
 private final class SKITerminalSession {
 #if canImport(Darwin)
     private var originalTermios: termios?
@@ -220,12 +241,18 @@ private final class SKITerminalSession {
 #if canImport(Darwin)
         var winsize = winsize()
         if ioctl(STDOUT_FILENO, TIOCGWINSZ, &winsize) == 0 {
-            let w = max(Int(winsize.ws_col), 20)
-            let h = max(Int(winsize.ws_row), 8)
-            return (w, h)
+            return TUITerminalSizing.normalize(
+                widthCandidate: Int(winsize.ws_col),
+                heightCandidate: Int(winsize.ws_row),
+                environment: ProcessInfo.processInfo.environment
+            )
         }
 #endif
-        return (80, 24)
+        return TUITerminalSizing.normalize(
+            widthCandidate: nil,
+            heightCandidate: nil,
+            environment: ProcessInfo.processInfo.environment
+        )
     }
 }
 

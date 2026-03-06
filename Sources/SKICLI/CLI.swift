@@ -73,11 +73,23 @@ struct SKI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "ski",
         abstract: "SKIntelligence CLI",
-        subcommands: [TUICommand.self, ACPCommand.self]
+        version: SKICLIVersion.current,
+        subcommands: [VersionCommand.self, TUICommand.self, ACPCommand.self]
     )
 
     mutating func run() async throws {
         try await runSKIDefaultChatMode()
+    }
+}
+
+struct VersionCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "version",
+        abstract: "Print ski version"
+    )
+
+    mutating func run() throws {
+        print(SKICLIVersion.current)
     }
 }
 

@@ -11,6 +11,18 @@ final class CLIDistributionScriptsTests: XCTestCase {
         XCTAssertTrue(content.contains("ski-macos-"), "install script should target macOS binary assets")
     }
 
+    func testSourceInstallScriptExistsAndBuildsFromSwiftPackage() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let scriptURL = root.appendingPathComponent("scripts/install_ski_source.sh")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: scriptURL.path), "missing source install script at \(scriptURL.path)")
+        let content = try String(contentsOf: scriptURL)
+        XCTAssertTrue(content.contains("swift build"), "source install script should build using swift build")
+        XCTAssertTrue(content.contains("--show-bin-path"), "source install script should resolve the build output path via swift build --show-bin-path")
+        XCTAssertTrue(content.contains("install -m 0755"), "source install script should install built binary into prefix/bin")
+        XCTAssertTrue(content.contains("ski.version"), "source install script should persist a sidecar version file")
+        XCTAssertTrue(content.contains("requires a value"), "source install script should validate option values")
+    }
+
     func testPackageScriptExistsAndProducesMacOSAssetNames() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let scriptURL = root.appendingPathComponent("scripts/package_cli.sh")
@@ -86,6 +98,7 @@ final class CLIDistributionScriptsTests: XCTestCase {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
         let scripts = [
             root.appendingPathComponent("scripts/install_ski.sh").path,
+            root.appendingPathComponent("scripts/install_ski_source.sh").path,
             root.appendingPathComponent("scripts/package_cli.sh").path,
             root.appendingPathComponent("scripts/generate_homebrew_formula.sh").path,
             root.appendingPathComponent("scripts/sync_homebrew_tap.sh").path,
