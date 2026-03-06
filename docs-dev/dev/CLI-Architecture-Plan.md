@@ -482,30 +482,18 @@ ACP WebSocket 规格：`docs-dev/features/ACP-WebSocket-Serve-Spec.md`
   - `swift test --filter ACPProtocolConformanceTests/testProjectExtensionMethodsAreExplicitlyScoped`
   - `swift test --filter ACP --parallel`
 
-## 32. Root TUI Chat Mode（2026-03-05）
-- 目标：把 `ski` 从“仅子命令容器”升级为“默认聊天入口”，同时保留 `acp` 自动化能力。
-- 路由：
-  - `ski`（无子命令）=> 进入 TUI 聊天页
-  - `ski tui` => 显式进入同一 TUI 运行时
-  - `ski acp ...` => 保持原有命令树
-- 非交互保护：
-  - `ski` 与 `ski tui` 在非 TTY 环境直接退出 `2`，并给出引导文案（使用 `ski acp ...`）。
-- TUI 实现分层：
-  - `TUICommand`：参数解析与约束校验。
-  - `SKITUIRuntime`：状态机、Slash 菜单、消息事件处理。
-  - `SKITerminalSession`：raw mode、Alt Screen、终端尺寸读取。
-  - `TUIByteParser`：非阻塞字节流到按键事件解析。
-- 状态与交互：
-  - 默认 profile 为空，启动 `Disconnected`。
-  - 输入首字符 `/` 自动打开 Slash 菜单（唯一配置入口，不保留 `Ctrl+O` Overlay）。
-  - 菜单覆盖连接项、会话项、UI 项（导出 transcript、切 log level 等）。
-- ACP 集成：
-  - 复用 `ACPCLITransportFactory` 建立 stdio/ws 连接。
-  - 复用 `ACPClientService` 完成 `initialize/newSession/prompt`。
-  - 订阅 `session/update` 并将 `agent_message_chunk` 增量写入 assistant 消息。
-- 渲染策略：
-  - 按帧构建行数组，按“宽度/行数变化”和“逐行内容变化”执行差量刷新。
-  - 每帧将硬件光标复位到输入行光标列。
+## 32. Root TUI Chat Mode（Retired, 2026-03-06）
+- 状态：已退役，不再作为当前 CLI 架构的一部分。
+- 当前收敛方向：
+  - `ski`（无子命令）=> 显示 help
+  - `ski acp serve` => 服务端入口
+  - `ski acp client ...` => 客户端联调入口
+- 已移除内容：
+  - `ski tui`
+  - 默认聊天页
+  - TUI 相关运行时、解析器与测试
+- 保留理由：
+  - 产品聚焦 ACP 后端服务，避免继续维护终端前端与服务端双栈。
 
 ## 33. ACP Terminal Runtime 切换到 SKProcessRunner（2026-03-05）
 - 目标：统一 shell/terminal 执行栈，减少直接 `Process` 维护成本。

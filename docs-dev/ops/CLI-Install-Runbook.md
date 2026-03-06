@@ -65,3 +65,18 @@ brew install linhay/tap/ski
 ```bash
 brew install --formula https://github.com/linhay/SKIntelligence/releases/download/<version>/ski.rb
 ```
+
+## 安装后验证
+
+```bash
+ski --help
+ski --version
+ski acp serve --help
+ski acp client --help
+```
+
+预期：
+
+1. `ski` 显示 help，不进入交互聊天页。
+2. help 中包含 `acp`，不包含 `tui`。
+3. `ski --version` 返回已安装版本。

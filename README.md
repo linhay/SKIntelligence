@@ -272,6 +272,7 @@ print(followup)
 ## ACP
 
 - 提供 ACP Agent/Client/Transport 与 `ski acp` CLI 工作流。
+- `ski` 根命令显示 help；服务端入口为 `ski acp serve`。
 - 终端用户安装（macOS）：
 
 ```bash
@@ -292,6 +293,9 @@ curl -fsSL https://raw.githubusercontent.com/linhay/SKIntelligence/main/scripts/
 - 开发态（源码运行）常用命令：
 
 ```bash
+# 查看命令帮助
+swift run ski --help
+
 # 启动 ACP 服务端（stdio）
 swift run ski acp serve --transport stdio
 
