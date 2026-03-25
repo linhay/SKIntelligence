@@ -21,8 +21,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-http-types.git", from: "1.1.0"),
-        .package(url: "https://github.com/ajevans99/swift-json-schema", from: "0.11.0"),
-        .package(url: "https://github.com/swiftlang/swift-syntax", from: "602.0.0"),
+        .package(url: "https://github.com/ajevans99/swift-json-schema", from: "0.11.2"),
         .package(url: "https://github.com/apple/swift-crypto.git", from: "3.3.0"),
         .package(url: "https://github.com/linhay/SKProcessRunner", revision: "ca6ebc7d3747507d9f3e71e586e241e9ee246541"),
         .package(url: "https://github.com/linhay/STJSON", from: "1.4.9"),

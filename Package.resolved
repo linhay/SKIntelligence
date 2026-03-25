@@ -1,5 +1,5 @@
 {
-  "originHash" : "9e5208bf5100bb88059e4a2d59b579f436ee36e96d207c3d69212108f06cc538",
+  "originHash" : "fe02c8b936fd94e0d4ebebecc19ff0a80d80af053944fda9eb3cd3352b304377",
   "pins" : [
     {
       "identity" : "alamofire",
@@ -122,8 +122,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ajevans99/swift-json-schema",
       "state" : {
-        "revision" : "c9f125a4fafd7d31abc8491cf176fa1ebf74bc7c",
-        "version" : "0.11.1"
+        "revision" : "c71bf0161454e2950368b3269650eae7967f0c5d",
+        "version" : "0.11.2"
       }
     },
     {
