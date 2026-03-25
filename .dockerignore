@@ -4,11 +4,11 @@
 DerivedData
 build
 tmp
-screenshots
-references
-memory
-docs-dev
-MEMORY.md
+docs-linhay/screenshots
+docs-linhay/references
+docs-linhay/memory
+docs-linhay
+docs-linhay/memory/MEMORY.md
 *.xcworkspace
 *.xcodeproj
 *.playground

@@ -118,28 +118,28 @@ OPENAI_API_KEY=<your_key> swift run
 ## 你可以用它做什么
 
 - 流式输出与增量渲染  
-  - 文档：`docs-dev/dev/Streaming.md`
+  - 文档：`docs-linhay/dev/Streaming.md`
 - 工具调用（Tool Calling）  
-  - 文档：`docs-dev/dev/Getting-Started.md`
+  - 文档：`docs-linhay/dev/Getting-Started.md`
 - MCP 工具接入  
-  - 文档：`docs-dev/dev/MCP.md`
+  - 文档：`docs-linhay/dev/MCP.md`
 - 会话记忆（Memory）  
-  - 文档：`docs-dev/dev/Getting-Started.md`
+  - 文档：`docs-linhay/dev/Getting-Started.md`
 - 文本检索/索引（SKITextIndex）  
-  - 文档：`docs-dev/features/SKITextIndex.md`
+  - 文档：`docs-linhay/features/SKITextIndex.md`
 
 ## 进一步阅读
 
-- [快速上手](docs-dev/dev/Getting-Started.md)
-- [流式输出](docs-dev/dev/Streaming.md)
-- [MCP](docs-dev/dev/MCP.md)
-- [SKITextIndex](docs-dev/features/SKITextIndex.md)
+- [快速上手](docs-linhay/dev/Getting-Started.md)
+- [流式输出](docs-linhay/dev/Streaming.md)
+- [MCP](docs-linhay/dev/MCP.md)
+- [SKITextIndex](docs-linhay/features/SKITextIndex.md)
 
 ## Tools
 
 - 可以在 `SKILanguageModelSession` 中注册工具，让模型按需触发函数调用。
 - 内置工具实现位于：`Sources/SKITools/`
-- 入口文档：`docs-dev/dev/Getting-Started.md`
+- 入口文档：`docs-linhay/dev/Getting-Started.md`
 
 ```swift
 import SKIntelligence
@@ -229,8 +229,8 @@ print(text)
 
 - 支持接入 MCP Server 并把外部能力暴露为模型可调用工具。
 - 文档入口：
-  - [MCP 使用说明](docs-dev/dev/MCP.md)
-  - [快速上手](docs-dev/dev/Getting-Started.md)
+  - [MCP 使用说明](docs-linhay/dev/MCP.md)
+  - [快速上手](docs-linhay/dev/Getting-Started.md)
 
 ```swift
 import SKIntelligence
@@ -324,10 +324,10 @@ swift run ski acp client connect \
 ```
 
 - 文档入口：
-  - [ACP 规格覆盖矩阵](docs-dev/dev/ACP-Spec-Coverage-Matrix.md)
-  - [ACP WebSocket Serve Spec](docs-dev/features/ACP-WebSocket-Serve-Spec.md)
-  - [CLI 分发与安装 Spec](docs-dev/features/CLI-Distribution-Install-Spec.md)
-  - [Codex ACP Runbook](docs-dev/dev/Codex-ACP-Runbook.md)
+  - [ACP 规格覆盖矩阵](docs-linhay/dev/ACP-Spec-Coverage-Matrix.md)
+  - [ACP WebSocket Serve Spec](docs-linhay/features/ACP-WebSocket-Serve-Spec.md)
+  - [CLI 分发与安装 Spec](docs-linhay/features/CLI-Distribution-Install-Spec.md)
+  - [Codex ACP Runbook](docs-linhay/dev/Codex-ACP-Runbook.md)
 
 ## Agents Skills 包
 
@@ -345,9 +345,9 @@ swift run ski acp client connect \
 
 ## 维护者入口（发布/运维）
 
-- [Release 2.0.0](docs-dev/ops/Release-2.0.0.md)
-- [Release 2.0.0 GitHub Short](docs-dev/ops/Release-2.0.0-GitHub-Short.md)
-- [Release 2.0.0 GitHub Full](docs-dev/ops/Release-2.0.0-GitHub-Full.md)
-- [Release 2.0.1 GitHub Short](docs-dev/ops/Release-2.0.1-GitHub-Short.md)
-- [Release 2.0.2 GitHub Short](docs-dev/ops/Release-2.0.2-GitHub-Short.md)
+- [Release 2.0.0](docs-linhay/plans/ops/Release-2.0.0.md)
+- [Release 2.0.0 GitHub Short](docs-linhay/plans/ops/Release-2.0.0-GitHub-Short.md)
+- [Release 2.0.0 GitHub Full](docs-linhay/plans/ops/Release-2.0.0-GitHub-Full.md)
+- [Release 2.0.1 GitHub Short](docs-linhay/plans/ops/Release-2.0.1-GitHub-Short.md)
+- [Release 2.0.2 GitHub Short](docs-linhay/plans/ops/Release-2.0.2-GitHub-Short.md)
 - 发布脚本：`scripts/release_major.sh`

@@ -11,20 +11,20 @@ if [[ ! -d "$SKILL_ROOT" ]]; then
   exit 2
 fi
 
-# Rule: skills must not reference docs-dev paths.
-rg -n "docs-dev/" "$SKILL_ROOT" -S 2>/dev/null \
+# Rule: skills must not reference docs-linhay paths.
+rg -n "docs-linhay/" "$SKILL_ROOT" -S 2>/dev/null \
   | rg -v "scripts/check_skill_boundary.sh" \
   >/tmp/skill_boundary_violations.txt || true
 
 if [[ -s /tmp/skill_boundary_violations.txt ]]; then
-  echo "boundary violation: skills must not reference docs-dev" >&2
+  echo "boundary violation: skills must not reference docs-linhay" >&2
   cat /tmp/skill_boundary_violations.txt >&2
   exit 1
 fi
 
-# Informational check: docs-dev should have at least one forward reference to skill.
-if ! rg -n "skills/skintelligence" docs-dev -S >/tmp/skill_boundary_forward_refs.txt 2>/dev/null; then
-  echo "warning: no docs-dev -> skills/skintelligence forward references found" >&2
+# Informational check: docs-linhay should have at least one forward reference to skill.
+if ! rg -n "skills/skintelligence" docs-linhay -S >/tmp/skill_boundary_forward_refs.txt 2>/dev/null; then
+  echo "warning: no docs-linhay -> skills/skintelligence forward references found" >&2
   exit 3
 fi
 

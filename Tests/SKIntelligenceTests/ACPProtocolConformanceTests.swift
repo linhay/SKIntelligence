@@ -52,7 +52,7 @@ final class ACPProtocolConformanceTests: XCTestCase {
         XCTAssertTrue(ACPMethodCatalog.projectExtensions.isDisjoint(with: ACPMethodCatalog.compatibilityExtensions))
 
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let boundaryURL = root.appendingPathComponent("docs-dev/features/ACP-Protocol-Extension-Boundaries.md")
+        let boundaryURL = root.appendingPathComponent("docs-linhay/features/ACP-Protocol-Extension-Boundaries.md")
         let boundaryContent = try String(contentsOf: boundaryURL, encoding: .utf8)
         for method in ACPMethodCatalog.compatibilityExtensions {
             XCTAssertTrue(

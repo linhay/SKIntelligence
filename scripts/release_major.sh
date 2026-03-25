@@ -22,8 +22,8 @@ Environment:
   RELEASE_TITLE=<title>  default: SKIntelligence <version>
 
 Examples:
-  DRY_RUN=1 scripts/release_major.sh release 2.0.0 docs-dev/ops/Release-2.0.0-GitHub-Short.md
-  DRY_RUN=0 scripts/release_major.sh release 2.0.0 docs-dev/ops/Release-2.0.0-GitHub-Full.md
+  DRY_RUN=1 scripts/release_major.sh release 2.0.0 docs-linhay/plans/ops/Release-2.0.0-GitHub-Short.md
+  DRY_RUN=0 scripts/release_major.sh release 2.0.0 docs-linhay/plans/ops/Release-2.0.0-GitHub-Full.md
   DRY_RUN=0 scripts/release_major.sh rollback 2.0.0
 EOF
 }
@@ -145,7 +145,7 @@ rollback_flow() {
 main() {
   local mode="${1:-}"
   local version="${2:-}"
-  local notes_file="${3:-docs-dev/ops/Release-${version}-GitHub-Short.md}"
+  local notes_file="${3:-docs-linhay/plans/ops/Release-${version}-GitHub-Short.md}"
 
   DRY_RUN="${DRY_RUN:-1}"
   RUN_TESTS="${RUN_TESTS:-1}"

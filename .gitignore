@@ -8,6 +8,7 @@ DerivedData/
 .netrc
 Tests/SKIntelligenceTests/Shared.swift
 External/
-references/
+docs-linhay/references/
 .local/
 default.metallib
+dist/

@@ -6,7 +6,7 @@ import XCTest
 final class ACPSpecCoverageMatrixTests: XCTestCase {
     func testCoverageMatrixReferencesExistingTests() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let matrixURL = root.appendingPathComponent("docs-dev/dev/ACP-Spec-Coverage-Matrix.md")
+        let matrixURL = root.appendingPathComponent("docs-linhay/dev/ACP-Spec-Coverage-Matrix.md")
         let content = try String(contentsOf: matrixURL, encoding: .utf8)
 
         let testIDRegex = try NSRegularExpression(
@@ -33,7 +33,7 @@ final class ACPSpecCoverageMatrixTests: XCTestCase {
 
     func testCoverageMatrixReferencedFilesExist() throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let matrixURL = root.appendingPathComponent("docs-dev/dev/ACP-Spec-Coverage-Matrix.md")
+        let matrixURL = root.appendingPathComponent("docs-linhay/dev/ACP-Spec-Coverage-Matrix.md")
         let content = try String(contentsOf: matrixURL, encoding: .utf8)
 
         let fileRegex = try NSRegularExpression(

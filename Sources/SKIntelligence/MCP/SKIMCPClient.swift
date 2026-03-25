@@ -97,14 +97,33 @@ public actor SKIMCPClient {
 
         // Combine all content parts into a single response string
         // MCP Tool.Content can be text or image. simplified here to just text parts or description.
-        let textContent = result.content.compactMap { content -> String? in
-            if case .text(let text) = content {
-                return text
-            }
-            return nil
-        }.joined(separator: "\n")
+        let textContent = result.content.compactMap(Self.extractText).joined(separator: "\n")
 
         return textContent
+    }
+
+    static func extractText(_ content: MCP.Tool.Content) -> String? {
+        guard case .text(let payload) = content else { return nil }
+        return extractTextPayload(payload)
+    }
+
+    static func extractTextPayload<T>(_ payload: T) -> String? {
+        if let text = payload as? String {
+            return text
+        }
+
+        let mirror = Mirror(reflecting: payload)
+        guard mirror.displayStyle == .tuple else { return nil }
+
+        if let textByName = mirror.children.first(where: { $0.label == "text" })?.value as? String {
+            return textByName
+        }
+
+        if let first = mirror.children.first?.value as? String {
+            return first
+        }
+
+        return nil
     }
 }
 

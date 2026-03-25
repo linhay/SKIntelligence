@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-OUT_FILE="${ACP_UPSTREAM_DAILY_FILE:-docs-dev/ops/acp-upstream-daily.md}"
+OUT_FILE="${ACP_UPSTREAM_DAILY_FILE:-docs-linhay/plans/ops/acp-upstream-daily.md}"
 SINCE_DAYS="${ACP_UPSTREAM_SINCE_DAYS:-1}"
 ORG="${ACP_UPSTREAM_ORG:-agentclientprotocol}"
 UPSTREAM_REPOS="${ACP_UPSTREAM_REPOS:-}"
