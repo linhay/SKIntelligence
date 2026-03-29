@@ -27,7 +27,7 @@ let package = Package(
         .package(url: "https://github.com/linhay/STJSON", from: "1.4.9"),
         .package(url: "https://github.com/linhay/STFilePath", from: "1.3.4"),
         .package(url: "https://github.com/Alamofire/Alamofire.git", .upToNextMajor(from: "5.11.0")),
-        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.10.2"),
+        .package(url: "https://github.com/modelcontextprotocol/swift-sdk.git", from: "0.12.0"),
         .package(url: "https://github.com/mattt/EventSource.git", from: "1.3.0"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm/", exact: "2.30.6"),
